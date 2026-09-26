@@ -1,12 +1,8 @@
 import { app } from "./app.js";
-import { DEFAULT_PORT } from "./common/constants/app.constants.js";
+import { appConfig } from "./config/app.config.js";
 
-const configuredPort = Number(process.env.PORT ?? DEFAULT_PORT);
-
-if (!Number.isInteger(configuredPort) || configuredPort <= 0 || configuredPort > 65535) {
-  throw new Error("PORT must be a valid TCP port between 1 and 65535.");
-}
-
-app.listen(configuredPort, () => {
-  console.log(`LAJE API listening on http://localhost:${configuredPort}/api/v1`);
+app.listen(appConfig.port, () => {
+  console.log(
+    `LAJE API listening on http://localhost:${appConfig.port}/api/v1 (${appConfig.environment})`,
+  );
 });
