@@ -37,5 +37,25 @@ com backend e banco de dados hospedados na AWS.
 
 ## Desenvolvimento
 
-Documentação de instalação e execução será adicionada durante a evolução
-da API.
+Requer Node.js 22 ou superior.
+
+Principais comandos:
+
+```bash
+npm run dev
+npm run build
+npm start
+npm run typecheck
+npm run lint
+npm run format:check
+npm test
+npm run test:unit
+npm run test:e2e
+npm run test:coverage
+```
+
+`npm start` executa o build automaticamente antes de iniciar `dist/server.js`.
+Os testes usam o runner nativo do Node com suporte TypeScript via `tsx`.
+
+A documentação completa de instalação, arquitetura e estratégia de migração
+será consolidada na tarefa específica de documentação da API.
