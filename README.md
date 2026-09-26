@@ -7,12 +7,12 @@ infraestrutura PostgreSQL.
 ## Arquitetura
 
 Frontend (React)
-        ↓
-     REST API
-        ↓
- LAJE API (Node.js + Express)
-        ↓
-   PostgreSQL
+↓
+REST API
+↓
+LAJE API (Node.js + Express)
+↓
+PostgreSQL
 
 ## Ambientes
 
