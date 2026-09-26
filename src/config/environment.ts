@@ -1,5 +1,7 @@
 import "dotenv/config";
 
+import { createRedactedConfig } from "./redacted-config.js";
+
 export type NodeEnvironment = "development" | "test" | "production";
 
 type RawValue = string | undefined;
@@ -18,11 +20,10 @@ function raw(name: string): RawValue {
   return value && value.length > 0 ? value : undefined;
 }
 
-function required(name: string): string {
+function required(name: string): string | undefined {
   const value = raw(name);
   if (!value) {
     issues.push(`${name} is required.`);
-    return "";
   }
   return value;
 }
@@ -31,16 +32,23 @@ function optional(name: string): string | undefined {
   return raw(name);
 }
 
-function enumValue<T extends readonly string[]>(name: string, values: T): T[number] {
+function enumValue<T extends readonly string[]>(
+  name: string,
+  values: T,
+): T[number] | undefined {
   const value = required(name);
-  if (value && !(values as readonly string[]).includes(value)) {
+  if (!value) return undefined;
+
+  if (!(values as readonly string[]).includes(value)) {
     issues.push(`${name} must be one of: ${values.join(", ")}.`);
   }
   return value as T[number];
 }
 
-function integer(name: string, min: number, max: number): number {
+function integer(name: string, min: number, max: number): number | undefined {
   const value = required(name);
+  if (!value) return undefined;
+
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed < min || parsed > max) {
     issues.push(`${name} must be an integer between ${min} and ${max}.`);
@@ -68,20 +76,22 @@ function booleanValue(name: string, fallback: boolean): boolean {
   return value === "true";
 }
 
-function url(name: string): string {
+function url(name: string): string | undefined {
   const value = required(name);
-  if (value) {
-    try {
-      new URL(value);
-    } catch {
-      issues.push(`${name} must be a valid URL.`);
-    }
+  if (!value) return undefined;
+
+  try {
+    new URL(value);
+  } catch {
+    issues.push(`${name} must be a valid URL.`);
   }
   return value;
 }
 
-function csvUrls(name: string): string[] {
+function csvOrigins(name: string): string[] | undefined {
   const value = required(name);
+  if (!value) return undefined;
+
   const entries = value
     .split(",")
     .map((entry) => entry.trim())
@@ -89,20 +99,32 @@ function csvUrls(name: string): string[] {
 
   if (entries.length === 0) {
     issues.push(`${name} must contain at least one origin.`);
+    return [];
   }
+
+  const origins = new Set<string>();
 
   for (const entry of entries) {
     try {
-      new URL(entry);
+      const parsed = new URL(entry);
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+        issues.push(`${name} contains an unsupported origin protocol: ${entry}.`);
+        continue;
+      }
+      origins.add(parsed.origin);
     } catch {
       issues.push(`${name} contains an invalid origin: ${entry}.`);
     }
   }
 
-  return entries;
+  return [...origins];
 }
 
 const nodeEnv = enumValue("NODE_ENV", ["development", "test", "production"] as const);
+const port = integer("PORT", 1, 65535);
+const databaseUrl = url("DATABASE_URL");
+const corsOrigins = csvOrigins("CORS_ORIGINS");
+
 const authEnabled = booleanValue("AUTH_ENABLED", false);
 const awsEnabled = booleanValue("AWS_ENABLED", false);
 const mailEnabled = booleanValue("MAIL_ENABLED", false);
@@ -111,7 +133,9 @@ const authJwtSecret = optional("AUTH_JWT_SECRET");
 const authJwtExpiresIn = optional("AUTH_JWT_EXPIRES_IN");
 if (authEnabled) {
   if (!authJwtSecret || authJwtSecret.length < 32) {
-    issues.push("AUTH_JWT_SECRET is required when AUTH_ENABLED=true and must contain at least 32 characters.");
+    issues.push(
+      "AUTH_JWT_SECRET is required when AUTH_ENABLED=true and must contain at least 32 characters.",
+    );
   }
   if (!authJwtExpiresIn) {
     issues.push("AUTH_JWT_EXPIRES_IN is required when AUTH_ENABLED=true.");
@@ -124,6 +148,8 @@ if (awsEnabled && !awsRegion) {
 }
 
 const mailHost = optional("MAIL_HOST");
+const mailPort = optionalInteger("MAIL_PORT", 587, 1, 65535);
+const mailSecure = booleanValue("MAIL_SECURE", false);
 const mailUser = optional("MAIL_USER");
 const mailPassword = optional("MAIL_PASSWORD");
 const mailFrom = optional("MAIL_FROM");
@@ -134,32 +160,51 @@ if (mailEnabled) {
   if (!mailFrom) issues.push("MAIL_FROM is required when MAIL_ENABLED=true.");
 }
 
-export const environment = Object.freeze({
-  nodeEnv,
-  port: integer("PORT", 1, 65535),
-  databaseUrl: url("DATABASE_URL"),
-  corsOrigins: csvUrls("CORS_ORIGINS"),
-  auth: Object.freeze({
+if (
+  issues.length > 0 ||
+  !nodeEnv ||
+  port === undefined ||
+  !databaseUrl ||
+  corsOrigins === undefined
+) {
+  throw new ConfigurationError(issues);
+}
+
+const auth = createRedactedConfig(
+  {
     enabled: authEnabled,
     jwtSecret: authJwtSecret,
     jwtExpiresIn: authJwtExpiresIn,
-  }),
-  aws: Object.freeze({
-    enabled: awsEnabled,
-    region: awsRegion,
-    secretsPrefix: optional("AWS_SECRETS_PREFIX"),
-  }),
-  mail: Object.freeze({
+  },
+  ["jwtSecret"] as const,
+);
+
+const mail = createRedactedConfig(
+  {
     enabled: mailEnabled,
     host: mailHost,
-    port: optionalInteger("MAIL_PORT", 587, 1, 65535),
-    secure: booleanValue("MAIL_SECURE", false),
+    port: mailPort,
+    secure: mailSecure,
     user: mailUser,
     password: mailPassword,
     from: mailFrom,
-  }),
-});
+  },
+  ["password"] as const,
+);
 
-if (issues.length > 0) {
-  throw new ConfigurationError(issues);
-}
+export const environment = createRedactedConfig(
+  {
+    nodeEnv,
+    port,
+    databaseUrl,
+    corsOrigins,
+    auth,
+    aws: Object.freeze({
+      enabled: awsEnabled,
+      region: awsRegion,
+      secretsPrefix: optional("AWS_SECRETS_PREFIX"),
+    }),
+    mail,
+  },
+  ["databaseUrl"] as const,
+);
