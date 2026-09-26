@@ -12,7 +12,7 @@ process.env.MAIL_ENABLED = "false";
 
 const { app } = await import("../../src/app.js");
 
-function getRoot(port: number): Promise<{ statusCode?: number; body: string }> {
+function getRoot(port: number): Promise<{ statusCode: number | undefined; body: string }> {
   return new Promise((resolve, reject) => {
     const req = request(
       {
