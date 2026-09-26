@@ -32,10 +32,7 @@ function optional(name: string): string | undefined {
   return raw(name);
 }
 
-function enumValue<T extends readonly string[]>(
-  name: string,
-  values: T,
-): T[number] | undefined {
+function enumValue<T extends readonly string[]>(name: string, values: T): T[number] | undefined {
   const value = required(name);
   if (!value) return undefined;
 

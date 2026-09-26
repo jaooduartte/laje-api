@@ -3,11 +3,21 @@
   "version": "1.0.0",
   "description": "API dedicada da Liga das Atléticas de Joinville (LAJE).",
   "type": "module",
-  "main": "src/server.ts",
+  "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "start": "tsx src/server.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc -p tsconfig.build.json",
+    "prestart": "npm run build",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings=0",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
+    "test": "npm run test:unit && npm run test:e2e",
+    "test:unit": "node --import tsx --test tests/unit/*.test.ts",
+    "test:e2e": "node --import tsx --test tests/e2e/*.test.ts",
+    "test:coverage": "node --import tsx --test --experimental-test-coverage tests/unit/*.test.ts tests/e2e/*.test.ts"
   },
   "repository": {
     "type": "git",
@@ -20,16 +30,24 @@
     "url": "https://github.com/jaooduartte/laje-api/issues"
   },
   "homepage": "https://github.com/jaooduartte/laje-api#readme",
+  "engines": {
+    "node": ">=22"
+  },
   "dependencies": {
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^22.20.3",
-    "tsx": "^4.23.13",
-    "typescript": "^7.0.2"
+    "eslint": "^10.0.1",
+    "globals": "^17.12.0",
+    "prettier": "^3.9.9",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.70.0"
   }
 }
