@@ -1,0 +1,32 @@
+# LAJE-129
+#
+# Este workflow é deliberadamente um scaffold manual e NÃO realiza deploy.
+# A arquitetura AWS alvo foi definida na LAJE-82.
+# O provisionamento do ambiente de integration/staging é responsabilidade da LAJE-127.
+# A automação final de CI/CD multi-repositório é acompanhada pela LAJE-33.
+#
+# Enquanto a infraestrutura AWS e a imagem da laje-api não estiverem prontas,
+# este arquivo não deve executar automaticamente em pushes/merges da main nem
+# exigir credenciais AWS. O deploy real substituirá este scaffold quando as
+# dependências de infraestrutura estiverem concluídas.
+
+name: Deploy AWS
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deployment-not-configured:
+    name: AWS deployment scaffold
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report deployment status
+        run: |
+          echo "AWS deployment is intentionally disabled at this stage."
+          echo "Architecture: LAJE-82"
+          echo "AWS integration/staging provisioning: LAJE-127"
+          echo "Final CI/CD automation: LAJE-33"
+          echo "No AWS credentials or production resources are required by this scaffold."
