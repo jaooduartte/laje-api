@@ -43,18 +43,18 @@ Por isso:
 
 ## 3. Decisão de serviços AWS
 
-| Responsabilidade | Serviço / tecnologia escolhida | Decisão |
-| --- | --- | --- |
-| Runtime da API | Amazon ECS com AWS Fargate | Executar containers sem manter servidor EC2, preservando controle de imagem, rede, task definition e deploy. |
-| Registry | Amazon ECR | Armazenar imagens versionadas da `laje-api`. |
-| Entrada HTTP/HTTPS | Application Load Balancer | Terminar TLS, executar health checks e encaminhar somente tráfego permitido para as tasks ECS. |
-| Certificado TLS da API | AWS Certificate Manager | Certificado gerenciado para o domínio/subdomínio da API. |
-| Persistência | Amazon RDS for PostgreSQL 17 | Compatibilidade direta com o baseline PostgreSQL 17 e menor complexidade operacional que manter PostgreSQL em container. |
-| Segredos | AWS Secrets Manager | Credenciais de banco e segredos de integração ficam fora do GitHub e fora de variáveis públicas. |
-| Logs e métricas | Amazon CloudWatch | Logs da API, métricas de ECS/ALB/RDS e alarmes operacionais mínimos. |
-| Processamento assíncrono futuro | Amazon SQS + DLQ | Alvo da LAJE-126 para substituir filas/pgmq. |
-| Agendamentos futuros | Amazon EventBridge Scheduler | Alvo da LAJE-126 para substituir `pg_cron` operacional. |
-| CI/CD | GitHub Actions + OIDC para AWS | Evitar access keys AWS de longa duração no GitHub; build, push da imagem e deploy automatizado. |
+| Responsabilidade                | Serviço / tecnologia escolhida | Decisão                                                                                                                  |
+| ------------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| Runtime da API                  | Amazon ECS com AWS Fargate     | Executar containers sem manter servidor EC2, preservando controle de imagem, rede, task definition e deploy.             |
+| Registry                        | Amazon ECR                     | Armazenar imagens versionadas da `laje-api`.                                                                             |
+| Entrada HTTP/HTTPS              | Application Load Balancer      | Terminar TLS, executar health checks e encaminhar somente tráfego permitido para as tasks ECS.                           |
+| Certificado TLS da API          | AWS Certificate Manager        | Certificado gerenciado para o domínio/subdomínio da API.                                                                 |
+| Persistência                    | Amazon RDS for PostgreSQL 17   | Compatibilidade direta com o baseline PostgreSQL 17 e menor complexidade operacional que manter PostgreSQL em container. |
+| Segredos                        | AWS Secrets Manager            | Credenciais de banco e segredos de integração ficam fora do GitHub e fora de variáveis públicas.                         |
+| Logs e métricas                 | Amazon CloudWatch              | Logs da API, métricas de ECS/ALB/RDS e alarmes operacionais mínimos.                                                     |
+| Processamento assíncrono futuro | Amazon SQS + DLQ               | Alvo da LAJE-126 para substituir filas/pgmq.                                                                             |
+| Agendamentos futuros            | Amazon EventBridge Scheduler   | Alvo da LAJE-126 para substituir `pg_cron` operacional.                                                                  |
+| CI/CD                           | GitHub Actions + OIDC para AWS | Evitar access keys AWS de longa duração no GitHub; build, push da imagem e deploy automatizado.                          |
 
 ### Por que ECS/Fargate
 
@@ -317,14 +317,14 @@ Não se fixa um valor mensal neste ADR porque preços e classes disponíveis mud
 
 ## 13. Riscos e trade-offs
 
-| Risco / trade-off | Mitigação |
-| --- | --- |
-| Exceção de Vercel diverge do Playbook público | Registrar explicitamente a autorização externa específica e manter evidência disponível para banca. |
-| Single-AZ não oferece failover automático de banco | Backups, snapshots, restore testado; avaliar Multi-AZ quando disponibilidade justificar. |
-| Uma única task de produção reduz redundância | ECS repõe task não saudável; aumentar `desiredCount` para 2 em eventos críticos ou conforme orçamento. |
-| NAT/VPC endpoints adicionam custo fixo | Dimensionar na LAJE-127 e selecionar a opção mais econômica que mantenha tasks privadas. |
-| Migração pode introduzir divergência entre Supabase e RDS | Ensaios repetíveis, validação de contagens/integridade e cutover/rollback na LAJE-88. |
-| CORS/configuração incorreta pode bloquear frontend | Allowlist por ambiente, testes integrados e healthchecks antes do cutover. |
+| Risco / trade-off                                         | Mitigação                                                                                              |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Exceção de Vercel diverge do Playbook público             | Registrar explicitamente a autorização externa específica e manter evidência disponível para banca.   |
+| Single-AZ não oferece failover automático de banco        | Backups, snapshots, restore testado; avaliar Multi-AZ quando disponibilidade justificar.               |
+| Uma única task de produção reduz redundância              | ECS repõe task não saudável; aumentar `desiredCount` para 2 em eventos críticos ou conforme orçamento. |
+| NAT/VPC endpoints adicionam custo fixo                    | Dimensionar na LAJE-127 e selecionar a opção mais econômica que mantenha tasks privadas.               |
+| Migração pode introduzir divergência entre Supabase e RDS | Ensaios repetíveis, validação de contagens/integridade e cutover/rollback na LAJE-88.                  |
+| CORS/configuração incorreta pode bloquear frontend        | Allowlist por ambiente, testes integrados e healthchecks antes do cutover.                             |
 
 ## 14. Dependências de implementação
 
