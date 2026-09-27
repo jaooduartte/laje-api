@@ -247,9 +247,9 @@ resource "aws_db_instance" "staging" {
   maintenance_window      = "sun:04:00-sun:05:00"
 
   auto_minor_version_upgrade = true
-  deletion_protection         = false
-  skip_final_snapshot         = true
-  copy_tags_to_snapshot       = true
+  deletion_protection        = false
+  skip_final_snapshot        = true
+  copy_tags_to_snapshot      = true
 
   enabled_cloudwatch_logs_exports = ["postgresql"]
 
