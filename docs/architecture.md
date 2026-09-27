@@ -319,7 +319,7 @@ Não se fixa um valor mensal neste ADR porque preços e classes disponíveis mud
 
 | Risco / trade-off                                         | Mitigação                                                                                              |
 | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Exceção de Vercel diverge do Playbook público             | Registrar explicitamente a autorização externa específica e manter evidência disponível para banca.   |
+| Exceção de Vercel diverge do Playbook público             | Registrar explicitamente a autorização externa específica e manter evidência disponível para banca.    |
 | Single-AZ não oferece failover automático de banco        | Backups, snapshots, restore testado; avaliar Multi-AZ quando disponibilidade justificar.               |
 | Uma única task de produção reduz redundância              | ECS repõe task não saudável; aumentar `desiredCount` para 2 em eventos críticos ou conforme orçamento. |
 | NAT/VPC endpoints adicionam custo fixo                    | Dimensionar na LAJE-127 e selecionar a opção mais econômica que mantenha tasks privadas.               |
