@@ -1,0 +1,40 @@
+-- LAJE-112 — enums do schema public
+-- Snapshot estrutural do Supabase em 2026-09-27.
+
+CREATE TYPE public.admin_action_type AS ENUM ('INSERT', 'UPDATE', 'DELETE', 'PASSWORD_CHANGED', 'LOGIN');
+CREATE TYPE public.admin_panel_permission_level AS ENUM ('NONE', 'VIEW', 'EDIT');
+CREATE TYPE public.admin_panel_tab AS ENUM ('matches', 'control', 'teams', 'sports', 'events', 'links', 'logs', 'users', 'settings', 'account', 'championship_status', 'score_sheet_review', 'tie_breaks', 'standings', 'championship_schedule', 'individual_events', 'opening_ceremony_bonus');
+CREATE TYPE public.admin_user_password_status AS ENUM ('PENDING', 'ACTIVE');
+CREATE TYPE public.app_role AS ENUM ('admin', 'mesa', 'eventos');
+CREATE TYPE public.bracket_court_priority_mode AS ENUM ('NONE', 'NAIPE', 'DIVISION');
+CREATE TYPE public.bracket_court_sequence_mode AS ENUM ('FLEXIBLE', 'GROUP_NAIPE', 'ALTERNATE_NAIPE', 'GROUP_DIVISION');
+CREATE TYPE public.bracket_day_break_scope_type AS ENUM ('ALL_COURTS', 'COURT');
+CREATE TYPE public.bracket_edition_status AS ENUM ('DRAFT', 'GROUPS_GENERATED', 'KNOCKOUT_GENERATED');
+CREATE TYPE public.bracket_knockout_division_scope AS ENUM ('DIVISAO_PRINCIPAL', 'DIVISAO_ACESSO', 'ALL');
+CREATE TYPE public.bracket_knockout_priority_phase AS ENUM ('SEMIFINAL', 'FINAL');
+CREATE TYPE public.bracket_phase AS ENUM ('GROUP_STAGE', 'KNOCKOUT');
+CREATE TYPE public.bracket_third_place_mode AS ENUM ('NONE', 'MATCH', 'CHAMPION_SEMIFINAL_LOSER');
+CREATE TYPE public.championship_award_type AS ENUM ('TOP_SCORER', 'BEST_GOALKEEPER');
+CREATE TYPE public.championship_bracket_tie_break_context_type AS ENUM ('GROUP', 'QUALIFICATION_POOL');
+CREATE TYPE public.championship_code AS ENUM ('CLV', 'SOCIETY', 'INTERLAJE');
+CREATE TYPE public.championship_individual_entry_status AS ENUM ('PENDING', 'CONFIRMED', 'DNS', 'DSQ', 'CANCELLED', 'DSQ_OVER_LIMIT', 'WALKOVER');
+CREATE TYPE public.championship_individual_event_kind AS ENUM ('INDIVIDUAL', 'RELAY');
+CREATE TYPE public.championship_individual_event_status AS ENUM ('DRAFT', 'SCHEDULED', 'FINISHED', 'CANCELLED');
+CREATE TYPE public.championship_individual_session_status AS ENUM ('DRAFT', 'SCHEDULED', 'LIVE', 'FINISHED', 'CANCELLED');
+CREATE TYPE public.championship_schedule_period AS ENUM ('MATUTINO', 'VESPERTINO');
+CREATE TYPE public.championship_season_division_format AS ENUM ('SEPARATED', 'UNIFIED');
+CREATE TYPE public.championship_season_division_settlement_mode AS ENUM ('NONE', 'PROMOTION_RELEGATION', 'TOP_N_TO_PRINCIPAL');
+CREATE TYPE public.championship_sport_naipe_mode AS ENUM ('MISTO', 'MASCULINO_FEMININO');
+CREATE TYPE public.championship_sport_result_rule AS ENUM ('POINTS', 'SETS');
+CREATE TYPE public.championship_sport_tie_breaker_rule AS ENUM ('STANDARD', 'POINTS_AVERAGE', 'BEACH_SOCCER', 'BEACH_TENNIS', 'FUTEBOL_SOCIETY', 'HANDEBOL');
+CREATE TYPE public.championship_status AS ENUM ('PLANNING', 'UPCOMING', 'REVIEW', 'IN_PROGRESS', 'FINISHED');
+CREATE TYPE public.league_calendar_holiday_day_kind AS ENUM ('HOLIDAY', 'OPTIONAL');
+CREATE TYPE public.league_calendar_holiday_scope AS ENUM ('NATIONAL', 'JOINVILLE');
+CREATE TYPE public.league_event_organizer_type AS ENUM ('ATHLETIC', 'LAJE');
+CREATE TYPE public.league_event_reservation_request_status AS ENUM ('PENDING', 'APPROVED', 'REJECTED');
+CREATE TYPE public.league_event_type AS ENUM ('HH', 'OPEN_BAR', 'CHAMPIONSHIP', 'LAJE_EVENT');
+CREATE TYPE public.match_naipe AS ENUM ('FEMININO', 'MASCULINO', 'MISTO');
+CREATE TYPE public.match_status AS ENUM ('SCHEDULED', 'LIVE', 'FINISHED');
+CREATE TYPE public.public_link_filter_mode AS ENUM ('GLOBAL', 'BY_CHAMPIONSHIP_YEAR');
+CREATE TYPE public.team_division AS ENUM ('DIVISAO_PRINCIPAL', 'DIVISAO_ACESSO');
+CREATE TYPE public.theme_mode_preference AS ENUM ('auto', 'light', 'dark');
