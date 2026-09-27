@@ -31,7 +31,9 @@ jobs:
           terraform_version: "1.9.8"
 
       - name: Check formatting
-        run: terraform fmt -check -recursive infra/aws/terraform
+        run: |
+          terraform fmt -recursive infra/aws/terraform
+          git diff --exit-code -- infra/aws/terraform
 
       - name: Initialize Terraform without backend
         working-directory: infra/aws/terraform
