@@ -5,3 +5,14 @@ dist/
 !.env.example
 coverage/
 .DS_Store
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+!*.tfvars.example
+.terraform.lock.hcl
+crash.log
+crash.*.log
