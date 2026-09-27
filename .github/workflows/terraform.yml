@@ -1,0 +1,42 @@
+name: Terraform
+
+on:
+  pull_request:
+    paths:
+      - "infra/aws/terraform/**"
+      - ".github/workflows/terraform.yml"
+  push:
+    branches:
+      - main
+      - "LAJE-*"
+    paths:
+      - "infra/aws/terraform/**"
+      - ".github/workflows/terraform.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Terraform validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+
+      - name: Check formatting
+        run: terraform fmt -check -recursive infra/aws/terraform
+
+      - name: Initialize Terraform without backend
+        working-directory: infra/aws/terraform
+        run: terraform init -backend=false -input=false
+
+      - name: Validate Terraform
+        working-directory: infra/aws/terraform
+        run: terraform validate
