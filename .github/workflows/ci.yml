@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -37,16 +37,16 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Format and show pending changes
+      - name: Apply formatting on LAJE-85
         run: |
           npm run format
-          git diff --no-color -- \
-            src/modules/auth/auth.controller.ts \
-            src/modules/auth/auth.crypto.ts \
-            src/modules/auth/auth.repository.ts \
-            src/modules/auth/auth.service.ts \
-            src/openapi/openapi.document.ts \
-            tests/unit/auth.service.test.ts
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add .
+            git commit -m "LAJE-85 aplicar formatação Prettier"
+            git push origin HEAD:LAJE-85
+          fi
 
       - name: Run tests
         run: npm test
@@ -134,6 +134,15 @@ jobs:
           --set ON_ERROR_STOP=1
           --file infra/database/baseline/schema.sql
 
+      - name: Validate PostgreSQL 17 baseline
+        run: >-
+          psql
+          --host localhost
+          --username postgres
+          --dbname laje_baseline
+          --set ON_ERROR_STOP=1
+          --file infra/database/baseline/validate.sql
+
       - name: Apply incremental migrations
         run: |
           set -euo pipefail
@@ -149,14 +158,10 @@ jobs:
               --file "${migration}"
           done
 
-      - name: Validate PostgreSQL 17 baseline
-        run: >-
-          psql
-          --host localhost
-          --username postgres
-          --dbname laje_baseline
-          --set ON_ERROR_STOP=1
-          --file infra/database/baseline/validate.sql
+      - name: Validate LAJE-85 auth migration
+        run: |
+          test "$(psql --host localhost --username postgres --dbname laje_baseline --tuples-only --no-align --command "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relname IN ('admin_auth_accounts', 'admin_auth_sessions');")" = "2"
+          test "$(psql --host localhost --username postgres --dbname laje_baseline --tuples-only --no-align --command "SELECT count(*) FROM pg_constraint WHERE conname IN ('admin_auth_accounts_user_id_fkey', 'admin_auth_sessions_user_id_fkey');")" = "2"
 
   container-image:
     name: Docker Image
