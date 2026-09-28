@@ -28,10 +28,18 @@ export function requireInteger(
     ]);
   }
   if (options.min != null && parsed < options.min) {
-    throw new ApiError(422, "VALIDATION_ERROR", `O campo ${field} deve ser maior ou igual a ${options.min}.`);
+    throw new ApiError(
+      422,
+      "VALIDATION_ERROR",
+      `O campo ${field} deve ser maior ou igual a ${options.min}.`,
+    );
   }
   if (options.max != null && parsed > options.max) {
-    throw new ApiError(422, "VALIDATION_ERROR", `O campo ${field} deve ser menor ou igual a ${options.max}.`);
+    throw new ApiError(
+      422,
+      "VALIDATION_ERROR",
+      `O campo ${field} deve ser menor ou igual a ${options.max}.`,
+    );
   }
   return parsed;
 }
@@ -47,7 +55,11 @@ export function optionalInteger(
 
 export function requireString(value: unknown, field: string, maxLength = 255): string {
   if (typeof value != "string" || value.trim().length == 0 || value.length > maxLength) {
-    throw new ApiError(422, "VALIDATION_ERROR", `O campo ${field} deve ser um texto não vazio com até ${maxLength} caracteres.`);
+    throw new ApiError(
+      422,
+      "VALIDATION_ERROR",
+      `O campo ${field} deve ser um texto não vazio com até ${maxLength} caracteres.`,
+    );
   }
   return value.trim();
 }
@@ -102,7 +114,10 @@ export function optionalEnum<const Values extends readonly string[]>(
   return requireEnum(value, field, values);
 }
 
-export function requireRecord(value: unknown, message = "Payload JSON inválido."): Record<string, unknown> {
+export function requireRecord(
+  value: unknown,
+  message = "Payload JSON inválido.",
+): Record<string, unknown> {
   if (!value || typeof value != "object" || Array.isArray(value)) {
     throw new ApiError(422, "VALIDATION_ERROR", message);
   }

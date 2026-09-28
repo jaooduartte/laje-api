@@ -138,22 +138,38 @@ function ratio(forValue: number, againstValue: number): number {
 
 function numericValue(criterion: TieBreakCriterion, row: StandingRankingRow): number {
   switch (criterion) {
-    case "POINTS": return row.points;
-    case "WINS": return row.wins;
-    case "POINTS_AVERAGE": return ratio(row.goalsFor, row.goalsAgainst);
-    case "SETS_AVERAGE": return ratio(row.setsFor, row.setsAgainst);
-    case "SETS_FOR": return row.setsFor;
-    case "SETS_AGAINST_ASC": return row.setsAgainst;
-    case "RALLY_POINTS_FOR": return row.rallyPointsFor;
-    case "RALLY_POINTS_AGAINST_ASC": return row.rallyPointsAgainst;
-    case "GOAL_DIFF": return row.goalDiff;
-    case "GOALS_FOR": return row.goalsFor;
-    case "GOALS_AGAINST_ASC": return row.goalsAgainst;
-    case "YELLOW_CARDS_ASC": return row.yellowCards;
-    case "RED_CARDS_ASC": return row.redCards;
-    case "BLUE_CARDS_ASC": return row.blueCards;
-    case "TWO_MINUTE_PENALTIES_ASC": return row.twoMinutePenalties;
-    default: return 0;
+    case "POINTS":
+      return row.points;
+    case "WINS":
+      return row.wins;
+    case "POINTS_AVERAGE":
+      return ratio(row.goalsFor, row.goalsAgainst);
+    case "SETS_AVERAGE":
+      return ratio(row.setsFor, row.setsAgainst);
+    case "SETS_FOR":
+      return row.setsFor;
+    case "SETS_AGAINST_ASC":
+      return row.setsAgainst;
+    case "RALLY_POINTS_FOR":
+      return row.rallyPointsFor;
+    case "RALLY_POINTS_AGAINST_ASC":
+      return row.rallyPointsAgainst;
+    case "GOAL_DIFF":
+      return row.goalDiff;
+    case "GOALS_FOR":
+      return row.goalsFor;
+    case "GOALS_AGAINST_ASC":
+      return row.goalsAgainst;
+    case "YELLOW_CARDS_ASC":
+      return row.yellowCards;
+    case "RED_CARDS_ASC":
+      return row.redCards;
+    case "BLUE_CARDS_ASC":
+      return row.blueCards;
+    case "TWO_MINUTE_PENALTIES_ASC":
+      return row.twoMinutePenalties;
+    default:
+      return 0;
   }
 }
 
@@ -168,7 +184,8 @@ function partitionByValue<T>(rows: T[], valueOf: (row: T) => number): T[][] {
     const previous = valueOf(rows[index - 1]!);
     const current = valueOf(rows[index]!);
     const same =
-      (!Number.isFinite(previous) && !Number.isFinite(current)) || Math.abs(previous - current) < 1e-9;
+      (!Number.isFinite(previous) && !Number.isFinite(current)) ||
+      Math.abs(previous - current) < 1e-9;
     if (same) partitions[partitions.length - 1]!.push(rows[index]!);
     else partitions.push([rows[index]!]);
   }
@@ -196,7 +213,10 @@ function headToHeadCompare(
     secondScore += secondGoals;
     if (firstGoals > secondGoals) firstPoints += 3;
     else if (secondGoals > firstGoals) secondPoints += 3;
-    else { firstPoints += 1; secondPoints += 1; }
+    else {
+      firstPoints += 1;
+      secondPoints += 1;
+    }
   }
   if (!found) return 0;
   if (firstPoints !== secondPoints) return secondPoints - firstPoints;
@@ -213,9 +233,15 @@ export function rankStandings<Row extends StandingRankingRow>(
   for (const criterion of cascade) {
     const next: Row[][] = [];
     for (const bucket of buckets) {
-      if (bucket.length <= 1) { next.push(bucket); continue; }
+      if (bucket.length <= 1) {
+        next.push(bucket);
+        continue;
+      }
       if (criterion === "HEAD_TO_HEAD") {
-        if (bucket.length !== 2) { next.push(bucket); continue; }
+        if (bucket.length !== 2) {
+          next.push(bucket);
+          continue;
+        }
         const [first, second] = bucket as [Row, Row];
         const comparison = headToHeadCompare(first.teamId, second.teamId, matches);
         next.push(comparison < 0 ? [first, second] : comparison > 0 ? [second, first] : bucket);
@@ -225,7 +251,8 @@ export function rankStandings<Row extends StandingRankingRow>(
         const sorted = [...bucket].sort((a, b) => {
           const aOrder = manualDrawOrder.get(a.teamId);
           const bOrder = manualDrawOrder.get(b.teamId);
-          if (aOrder == null && bOrder == null) return a.teamName.localeCompare(b.teamName, "pt-BR");
+          if (aOrder == null && bOrder == null)
+            return a.teamName.localeCompare(b.teamName, "pt-BR");
           if (aOrder == null) return 1;
           if (bOrder == null) return -1;
           return aOrder - bOrder;

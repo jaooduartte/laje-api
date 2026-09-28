@@ -59,93 +59,82 @@ function parseGenerationBody(body: unknown) {
     );
   }
 
-  const competitions: CompetitionInput[] = payload.competitions.map(
-    (raw, competitionIndex) => {
-      const item = requireRecord(raw, `Competição ${competitionIndex + 1} inválida.`);
-      const groupsCount = requireInteger(
-        item.groupsCount,
-        `competitions[${competitionIndex}].groupsCount`,
-        { min: 1, max: 32 },
+  const competitions: CompetitionInput[] = payload.competitions.map((raw, competitionIndex) => {
+    const item = requireRecord(raw, `Competição ${competitionIndex + 1} inválida.`);
+    const groupsCount = requireInteger(
+      item.groupsCount,
+      `competitions[${competitionIndex}].groupsCount`,
+      { min: 1, max: 32 },
+    );
+    const qualifiersPerGroup = requireInteger(
+      item.qualifiersPerGroup,
+      `competitions[${competitionIndex}].qualifiersPerGroup`,
+      { min: 1, max: 16 },
+    );
+    if (!Array.isArray(item.groups) || item.groups.length !== groupsCount) {
+      throw new ApiError(
+        422,
+        "VALIDATION_ERROR",
+        `A competição ${competitionIndex + 1} deve conter exatamente ${groupsCount} grupos.`,
       );
-      const qualifiersPerGroup = requireInteger(
-        item.qualifiersPerGroup,
-        `competitions[${competitionIndex}].qualifiersPerGroup`,
-        { min: 1, max: 16 },
-      );
-      if (!Array.isArray(item.groups) || item.groups.length !== groupsCount) {
+    }
+    const seenTeams = new Set<string>();
+    const groups = item.groups.map((rawGroup, groupIndex) => {
+      const group = requireRecord(rawGroup, `Grupo ${groupIndex + 1} inválido.`);
+      const groupNumber = requireInteger(group.groupNumber, `groups[${groupIndex}].groupNumber`, {
+        min: 1,
+        max: 64,
+      });
+      if (!Array.isArray(group.teamIds) || group.teamIds.length < 2) {
         throw new ApiError(
           422,
           "VALIDATION_ERROR",
-          `A competição ${competitionIndex + 1} deve conter exatamente ${groupsCount} grupos.`,
+          `O grupo ${groupNumber} deve possuir pelo menos dois times.`,
         );
       }
-      const seenTeams = new Set<string>();
-      const groups = item.groups.map((rawGroup, groupIndex) => {
-        const group = requireRecord(rawGroup, `Grupo ${groupIndex + 1} inválido.`);
-        const groupNumber = requireInteger(
-          group.groupNumber,
-          `groups[${groupIndex}].groupNumber`,
-          { min: 1, max: 64 },
-        );
-        if (!Array.isArray(group.teamIds) || group.teamIds.length < 2) {
+      const teamIds = group.teamIds.map((teamId, teamIndex) =>
+        requireUuid(teamId, `groups[${groupIndex}].teamIds[${teamIndex}]`),
+      );
+      for (const teamId of teamIds) {
+        if (seenTeams.has(teamId)) {
           throw new ApiError(
             422,
             "VALIDATION_ERROR",
-            `O grupo ${groupNumber} deve possuir pelo menos dois times.`,
+            "Um time não pode aparecer em mais de um grupo da mesma competição.",
           );
         }
-        const teamIds = group.teamIds.map((teamId, teamIndex) =>
-          requireUuid(teamId, `groups[${groupIndex}].teamIds[${teamIndex}]`),
-        );
-        for (const teamId of teamIds) {
-          if (seenTeams.has(teamId)) {
-            throw new ApiError(
-              422,
-              "VALIDATION_ERROR",
-              "Um time não pode aparecer em mais de um grupo da mesma competição.",
-            );
-          }
-          seenTeams.add(teamId);
-        }
-        return { groupNumber, teamIds };
-      });
-      return {
-        sportId: requireUuid(item.sportId, `competitions[${competitionIndex}].sportId`),
-        naipe: requireEnum(
-          item.naipe,
-          `competitions[${competitionIndex}].naipe`,
-          NAIPES,
-        ),
-        division:
-          item.division == null
-            ? null
-            : requireEnum(
-                item.division,
-                `competitions[${competitionIndex}].division`,
-                DIVISIONS,
-              ),
-        groupsCount,
-        qualifiersPerGroup,
-        thirdPlaceMode:
-          item.thirdPlaceMode == null
-            ? "NONE"
-            : requireEnum(
-                item.thirdPlaceMode,
-                `competitions[${competitionIndex}].thirdPlaceMode`,
-                THIRD_PLACE_MODES,
-              ),
-        shouldCompleteKnockoutWithBestSecondPlacedTeams:
-          optionalBoolean(
-            item.shouldCompleteKnockoutWithBestSecondPlacedTeams,
-            "shouldCompleteKnockoutWithBestSecondPlacedTeams",
-          ) ?? false,
-        knockoutPairingMode:
-          optionalEnum(item.knockoutPairingMode, "knockoutPairingMode", PAIRING_MODES) ??
-          "CLASSIC_SEEDED",
-        groups,
-      };
-    },
-  );
+        seenTeams.add(teamId);
+      }
+      return { groupNumber, teamIds };
+    });
+    return {
+      sportId: requireUuid(item.sportId, `competitions[${competitionIndex}].sportId`),
+      naipe: requireEnum(item.naipe, `competitions[${competitionIndex}].naipe`, NAIPES),
+      division:
+        item.division == null
+          ? null
+          : requireEnum(item.division, `competitions[${competitionIndex}].division`, DIVISIONS),
+      groupsCount,
+      qualifiersPerGroup,
+      thirdPlaceMode:
+        item.thirdPlaceMode == null
+          ? "NONE"
+          : requireEnum(
+              item.thirdPlaceMode,
+              `competitions[${competitionIndex}].thirdPlaceMode`,
+              THIRD_PLACE_MODES,
+            ),
+      shouldCompleteKnockoutWithBestSecondPlacedTeams:
+        optionalBoolean(
+          item.shouldCompleteKnockoutWithBestSecondPlacedTeams,
+          "shouldCompleteKnockoutWithBestSecondPlacedTeams",
+        ) ?? false,
+      knockoutPairingMode:
+        optionalEnum(item.knockoutPairingMode, "knockoutPairingMode", PAIRING_MODES) ??
+        "CLASSIC_SEEDED",
+      groups,
+    };
+  });
 
   const payloadSnapshot =
     payload.payloadSnapshot &&
@@ -162,19 +151,16 @@ async function ensureChampionshipAndTeams(
   championshipId: string,
   competitions: CompetitionInput[],
 ): Promise<void> {
-  const championship = await executor.query(
-    "SELECT id FROM public.championships WHERE id = $1",
-    [championshipId],
-  );
+  const championship = await executor.query("SELECT id FROM public.championships WHERE id = $1", [
+    championshipId,
+  ]);
   if (!championship.rows[0]) {
     throw new ApiError(404, "CHAMPIONSHIP_NOT_FOUND", "Campeonato não encontrado.");
   }
 
   const teamIds = [
     ...new Set(
-      competitions.flatMap((competition) =>
-        competition.groups.flatMap((group) => group.teamIds),
-      ),
+      competitions.flatMap((competition) => competition.groups.flatMap((group) => group.teamIds)),
     ),
   ];
   const teams = await executor.query(
@@ -322,13 +308,9 @@ async function loadBracketView(championshipId: string, seasonYear: number) {
             ),
         })),
       knockoutMatches: bracketMatches.rows
-        .filter(
-          (match) =>
-            match.competitionId === competition.id && match.phase === "KNOCKOUT",
-        )
+        .filter((match) => match.competitionId === competition.id && match.phase === "KNOCKOUT")
         .map(
-          ({ competitionId: _competitionId, groupId: _groupId, phase: _phase, ...match }) =>
-            match,
+          ({ competitionId: _competitionId, groupId: _groupId, phase: _phase, ...match }) => match,
         ),
     })),
   };
@@ -368,10 +350,7 @@ export function createBracketRouter(authService: AuthService): Router {
     async (request, response, next) => {
       try {
         const inheritedParams = request.params as Record<string, unknown>;
-        const championshipId = requireUuid(
-          inheritedParams.championshipId,
-          "championshipId",
-        );
+        const championshipId = requireUuid(inheritedParams.championshipId, "championshipId");
         const input = parseGenerationBody(request.body);
         await database.transaction(async (tx) => {
           await ensureChampionshipAndTeams(tx, championshipId, input.competitions);
@@ -388,8 +367,7 @@ export function createBracketRouter(authService: AuthService): Router {
             );
           }
 
-          const actorUserId =
-            (request as AuthenticatedRequest).authPrincipal?.userId ?? null;
+          const actorUserId = (request as AuthenticatedRequest).authPrincipal?.userId ?? null;
           const editionResult = await tx.query(
             `INSERT INTO public.championship_bracket_editions
               (championship_id, season_year, status, payload_snapshot, created_by, updated_by)
@@ -398,12 +376,7 @@ export function createBracketRouter(authService: AuthService): Router {
                season_year AS "seasonYear", status,
                payload_snapshot AS "payloadSnapshot",
                created_at AS "createdAt", updated_at AS "updatedAt"`,
-            [
-              championshipId,
-              input.seasonYear,
-              JSON.stringify(input.payloadSnapshot),
-              actorUserId,
-            ],
+            [championshipId, input.seasonYear, JSON.stringify(input.payloadSnapshot), actorUserId],
           );
           const edition = editionResult.rows[0]!;
 
@@ -448,11 +421,7 @@ export function createBracketRouter(authService: AuthService): Router {
               }
 
               let slotNumber = 1;
-              for (
-                let homeIndex = 0;
-                homeIndex < groupInput.teamIds.length - 1;
-                homeIndex += 1
-              ) {
+              for (let homeIndex = 0; homeIndex < groupInput.teamIds.length - 1; homeIndex += 1) {
                 for (
                   let awayIndex = homeIndex + 1;
                   awayIndex < groupInput.teamIds.length;

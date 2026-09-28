@@ -12,7 +12,13 @@ export async function recalculateCollectiveStandings(
   executor: DatabaseQueryExecutor,
   scope: StandingsScope,
 ): Promise<void> {
-  const scopeParameters = [scope.championshipId, scope.seasonYear, scope.sportId, scope.naipe, scope.division];
+  const scopeParameters = [
+    scope.championshipId,
+    scope.seasonYear,
+    scope.sportId,
+    scope.naipe,
+    scope.division,
+  ];
   const participants = await executor.query(
     `SELECT DISTINCT team_id AS "teamId" FROM (
        SELECT st.team_id

@@ -94,27 +94,17 @@ function parseMatchFilters(request: Request): MatchFilters {
   const query = request.query as Record<string, unknown>;
   const pagination = parsePagination(query);
   const rawStatuses = readQueryValues(query.status);
-  const statuses = rawStatuses?.map((status) =>
-    optionalEnum(status, "status", MATCH_STATUSES),
-  );
+  const statuses = rawStatuses?.map((status) => optionalEnum(status, "status", MATCH_STATUSES));
   const rawMatchIds = readQueryValues(query.matchId ?? query.matchIds);
   const matchIds = rawMatchIds?.map((id) => requireUuid(id, "matchId"));
   const sort =
-    optionalEnum(
-      query.sort,
-      "sort",
-      ["scheduledDate", "queuePosition", "createdAt"] as const,
-    ) ?? "scheduledDate";
-  const order =
-    optionalEnum(query.order, "order", ["asc", "desc"] as const) ?? "asc";
+    optionalEnum(query.sort, "sort", ["scheduledDate", "queuePosition", "createdAt"] as const) ??
+    "scheduledDate";
+  const order = optionalEnum(query.order, "order", ["asc", "desc"] as const) ?? "asc";
   const from = parseDate(query.from, "from");
   const to = parseDate(query.to, "to");
   if (from && to && from > to) {
-    throw new ApiError(
-      422,
-      "VALIDATION_ERROR",
-      "O filtro from não pode ser posterior a to.",
-    );
+    throw new ApiError(422, "VALIDATION_ERROR", "O filtro from não pode ser posterior a to.");
   }
 
   const championshipId = optionalUuid(query.championshipId, "championshipId");
@@ -153,10 +143,7 @@ function parseMatchFilters(request: Request): MatchFilters {
   };
 }
 
-function nullableNonNegativeInteger(
-  value: unknown,
-  field: string,
-): number | null | undefined {
+function nullableNonNegativeInteger(value: unknown, field: string): number | null | undefined {
   if (value === null) return null;
   if (value === undefined) return undefined;
   return requireInteger(value, field, { min: 0 });
@@ -227,12 +214,7 @@ function parseScoreboardPayload(body: unknown, requireMutation = true): Scoreboa
   }
 
   const sets = parseSets(payload.sets);
-  if (
-    sets &&
-    sets.length > 0 &&
-    patch.homeScore === undefined &&
-    patch.awayScore === undefined
-  ) {
+  if (sets && sets.length > 0 && patch.homeScore === undefined && patch.awayScore === undefined) {
     patch.homeScore = sets.filter((set) => set.homePoints > set.awayPoints).length;
     patch.awayScore = sets.filter((set) => set.awayPoints > set.homePoints).length;
   }
@@ -338,10 +320,9 @@ const MATCH_FROM = `
   LEFT JOIN public.championship_bracket_groups bg ON bg.id = bm.group_id`;
 
 async function getMatch(executor: DatabaseQueryExecutor, matchId: string) {
-  const result = await executor.query(
-    `SELECT ${MATCH_COLUMNS}${MATCH_FROM} WHERE m.id = $1`,
-    [matchId],
-  );
+  const result = await executor.query(`SELECT ${MATCH_COLUMNS}${MATCH_FROM} WHERE m.id = $1`, [
+    matchId,
+  ]);
   return result.rows[0] ?? null;
 }
 
@@ -390,32 +371,22 @@ function buildListStatement(filters: MatchFilters) {
     add((parameter) => `m.season_year = ${parameter}`, filters.seasonYear);
   }
   if (filters.statuses) {
-    add(
-      (parameter) => `m.status = ANY(${parameter}::public.match_status[])`,
-      filters.statuses,
-    );
+    add((parameter) => `m.status = ANY(${parameter}::public.match_status[])`, filters.statuses);
   }
   if (filters.sportId) {
     add((parameter) => `m.sport_id = ${parameter}`, filters.sportId);
   }
   if (filters.teamId) {
     add(
-      (parameter) =>
-        `(m.home_team_id = ${parameter}::uuid OR m.away_team_id = ${parameter}::uuid)`,
+      (parameter) => `(m.home_team_id = ${parameter}::uuid OR m.away_team_id = ${parameter}::uuid)`,
       filters.teamId,
     );
   }
   if (filters.naipe) {
-    add(
-      (parameter) => `m.naipe = ${parameter}::public.match_naipe`,
-      filters.naipe,
-    );
+    add((parameter) => `m.naipe = ${parameter}::public.match_naipe`, filters.naipe);
   }
   if (filters.division) {
-    add(
-      (parameter) => `m.division = ${parameter}::public.team_division`,
-      filters.division,
-    );
+    add((parameter) => `m.division = ${parameter}::public.team_division`, filters.division);
   }
   if (filters.groupNumber) {
     add((parameter) => `bg.group_number = ${parameter}`, filters.groupNumber);
@@ -512,21 +483,14 @@ async function persistScoreboardPatch(
     [matchId, ...entries.map(([, value]) => value), expectedStatus],
   );
   if (result.rows.length === 0) {
-    throw new ApiError(
-      409,
-      "MATCH_UPDATE_CONFLICT",
-      "O jogo foi alterado concorrentemente.",
-    );
+    throw new ApiError(409, "MATCH_UPDATE_CONFLICT", "O jogo foi alterado concorrentemente.");
   }
 }
 
 export function createMatchesRouter(authService: AuthService): Router {
   const router = Router();
   const requireAuthentication = createRequireAuthentication(authService);
-  const requireControlEdit = [
-    requireAuthentication,
-    requirePermission("control", "EDIT"),
-  ] as const;
+  const requireControlEdit = [requireAuthentication, requirePermission("control", "EDIT")] as const;
 
   router.get("/", async (request, response, next) => {
     try {
@@ -562,217 +526,177 @@ export function createMatchesRouter(authService: AuthService): Router {
     }
   });
 
-  router.post(
-    "/:matchId/start",
-    ...requireControlEdit,
-    async (request, response, next) => {
-      try {
-        const matchId = requireUuid(request.params.matchId, "matchId");
-        const updated = await database.transaction(async (transaction) => {
-          const oldMatch = await getMatch(transaction, matchId);
-          if (!oldMatch) {
-            throw new ApiError(404, "MATCH_NOT_FOUND", "Jogo não encontrado.");
-          }
-          if (oldMatch.status !== "SCHEDULED") {
-            throw new ApiError(
-              409,
-              "MATCH_STATE_CONFLICT",
-              "Somente jogos agendados podem ser iniciados.",
-            );
-          }
-          const result = await transaction.query(
-            `UPDATE public.matches
+  router.post("/:matchId/start", ...requireControlEdit, async (request, response, next) => {
+    try {
+      const matchId = requireUuid(request.params.matchId, "matchId");
+      const updated = await database.transaction(async (transaction) => {
+        const oldMatch = await getMatch(transaction, matchId);
+        if (!oldMatch) {
+          throw new ApiError(404, "MATCH_NOT_FOUND", "Jogo não encontrado.");
+        }
+        if (oldMatch.status !== "SCHEDULED") {
+          throw new ApiError(
+            409,
+            "MATCH_STATE_CONFLICT",
+            "Somente jogos agendados podem ser iniciados.",
+          );
+        }
+        const result = await transaction.query(
+          `UPDATE public.matches
              SET status = 'LIVE', start_time = COALESCE(start_time, now()), updated_at = now()
              WHERE id = $1 AND status = 'SCHEDULED'
              RETURNING id`,
-            [matchId],
-          );
-          if (result.rows.length === 0) {
-            throw new ApiError(
-              409,
-              "MATCH_UPDATE_CONFLICT",
-              "O jogo foi alterado concorrentemente.",
-            );
-          }
-          const newMatch = await getMatch(transaction, matchId);
-          if (!newMatch) {
-            throw new ApiError(404, "MATCH_NOT_FOUND", "Jogo não encontrado.");
-          }
-          await insertAudit(
-            transaction,
-            request as AuthenticatedRequest,
-            matchId,
-            "Jogo iniciado via laje-api.",
-            oldMatch,
-            newMatch,
-          );
-          return newMatch;
-        });
-        response.status(200).json({ data: updated });
-      } catch (error) {
-        next(error);
-      }
-    },
-  );
-
-  router.patch(
-    "/:matchId/scoreboard",
-    ...requireControlEdit,
-    async (request, response, next) => {
-      try {
-        const matchId = requireUuid(request.params.matchId, "matchId");
-        const payload = parseScoreboardPayload(request.body);
-        const updated = await database.transaction(async (transaction) => {
-          const oldMatch = await getMatch(transaction, matchId);
-          if (!oldMatch) {
-            throw new ApiError(404, "MATCH_NOT_FOUND", "Jogo não encontrado.");
-          }
-          if (oldMatch.status !== "LIVE") {
-            throw new ApiError(
-              409,
-              "MATCH_STATE_CONFLICT",
-              "O placar operacional só pode ser alterado enquanto o jogo estiver ao vivo.",
-            );
-          }
-          await persistScoreboardPatch(
-            transaction,
-            matchId,
-            payload.patch,
-            "LIVE",
-          );
-          await persistMatchSets(transaction, matchId, payload.sets);
-          const newMatch = await getMatch(transaction, matchId);
-          if (!newMatch) {
-            throw new ApiError(404, "MATCH_NOT_FOUND", "Jogo não encontrado.");
-          }
-          await insertAudit(
-            transaction,
-            request as AuthenticatedRequest,
-            matchId,
-            "Placar atualizado via laje-api.",
-            oldMatch,
-            newMatch,
-          );
-          return newMatch;
-        });
-        response.status(200).json({ data: updated });
-      } catch (error) {
-        next(error);
-      }
-    },
-  );
-
-  router.post(
-    "/:matchId/finish",
-    ...requireControlEdit,
-    async (request, response, next) => {
-      try {
-        const matchId = requireUuid(request.params.matchId, "matchId");
-        const rawPayload = request.body == null ? {} : requireRecord(request.body);
-        const scoreboardPayload = Object.fromEntries(
-          Object.entries(rawPayload).filter(
-            ([key]) =>
-              !["isWalkover", "walkoverLoserTeamId", "isDoubleWalkover"].includes(
-                key,
-              ),
-          ),
+          [matchId],
         );
-        const scoreboard = parseScoreboardPayload(scoreboardPayload, false);
-        const isWalkover = optionalBoolean(rawPayload.isWalkover, "isWalkover");
-        const isDoubleWalkover = optionalBoolean(
-          rawPayload.isDoubleWalkover,
-          "isDoubleWalkover",
+        if (result.rows.length === 0) {
+          throw new ApiError(409, "MATCH_UPDATE_CONFLICT", "O jogo foi alterado concorrentemente.");
+        }
+        const newMatch = await getMatch(transaction, matchId);
+        if (!newMatch) {
+          throw new ApiError(404, "MATCH_NOT_FOUND", "Jogo não encontrado.");
+        }
+        await insertAudit(
+          transaction,
+          request as AuthenticatedRequest,
+          matchId,
+          "Jogo iniciado via laje-api.",
+          oldMatch,
+          newMatch,
         );
-        const walkoverLoserTeamId =
-          rawPayload.walkoverLoserTeamId === null
-            ? null
-            : optionalUuid(rawPayload.walkoverLoserTeamId, "walkoverLoserTeamId");
+        return newMatch;
+      });
+      response.status(200).json({ data: updated });
+    } catch (error) {
+      next(error);
+    }
+  });
 
-        const updated = await database.transaction(async (transaction) => {
-          const oldMatch = await getMatch(transaction, matchId);
-          if (!oldMatch) {
-            throw new ApiError(404, "MATCH_NOT_FOUND", "Jogo não encontrado.");
-          }
-          if (oldMatch.status !== "LIVE") {
-            throw new ApiError(
-              409,
-              "MATCH_STATE_CONFLICT",
-              "Somente jogos ao vivo podem ser encerrados.",
-            );
-          }
-
-          await persistScoreboardPatch(
-            transaction,
-            matchId,
-            scoreboard.patch,
-            "LIVE",
+  router.patch("/:matchId/scoreboard", ...requireControlEdit, async (request, response, next) => {
+    try {
+      const matchId = requireUuid(request.params.matchId, "matchId");
+      const payload = parseScoreboardPayload(request.body);
+      const updated = await database.transaction(async (transaction) => {
+        const oldMatch = await getMatch(transaction, matchId);
+        if (!oldMatch) {
+          throw new ApiError(404, "MATCH_NOT_FOUND", "Jogo não encontrado.");
+        }
+        if (oldMatch.status !== "LIVE") {
+          throw new ApiError(
+            409,
+            "MATCH_STATE_CONFLICT",
+            "O placar operacional só pode ser alterado enquanto o jogo estiver ao vivo.",
           );
-          await persistMatchSets(transaction, matchId, scoreboard.sets);
+        }
+        await persistScoreboardPatch(transaction, matchId, payload.patch, "LIVE");
+        await persistMatchSets(transaction, matchId, payload.sets);
+        const newMatch = await getMatch(transaction, matchId);
+        if (!newMatch) {
+          throw new ApiError(404, "MATCH_NOT_FOUND", "Jogo não encontrado.");
+        }
+        await insertAudit(
+          transaction,
+          request as AuthenticatedRequest,
+          matchId,
+          "Placar atualizado via laje-api.",
+          oldMatch,
+          newMatch,
+        );
+        return newMatch;
+      });
+      response.status(200).json({ data: updated });
+    } catch (error) {
+      next(error);
+    }
+  });
 
-          const assignments = [
-            "status = 'FINISHED'",
-            "end_time = COALESCE(end_time, now())",
-            "updated_at = now()",
-          ];
-          const parameters: unknown[] = [matchId];
-          if (isWalkover !== undefined) {
-            parameters.push(isWalkover);
-            assignments.push(`is_walkover = $${parameters.length}`);
-          }
-          if (isDoubleWalkover !== undefined) {
-            parameters.push(isDoubleWalkover);
-            assignments.push(`is_double_walkover = $${parameters.length}`);
-          }
-          if (
-            walkoverLoserTeamId !== undefined ||
-            rawPayload.walkoverLoserTeamId === null
-          ) {
-            parameters.push(walkoverLoserTeamId ?? null);
-            assignments.push(`walkover_loser_team_id = $${parameters.length}`);
-          }
-          const finishResult = await transaction.query(
-            `UPDATE public.matches SET ${assignments.join(", ")}
+  router.post("/:matchId/finish", ...requireControlEdit, async (request, response, next) => {
+    try {
+      const matchId = requireUuid(request.params.matchId, "matchId");
+      const rawPayload = request.body == null ? {} : requireRecord(request.body);
+      const scoreboardPayload = Object.fromEntries(
+        Object.entries(rawPayload).filter(
+          ([key]) => !["isWalkover", "walkoverLoserTeamId", "isDoubleWalkover"].includes(key),
+        ),
+      );
+      const scoreboard = parseScoreboardPayload(scoreboardPayload, false);
+      const isWalkover = optionalBoolean(rawPayload.isWalkover, "isWalkover");
+      const isDoubleWalkover = optionalBoolean(rawPayload.isDoubleWalkover, "isDoubleWalkover");
+      const walkoverLoserTeamId =
+        rawPayload.walkoverLoserTeamId === null
+          ? null
+          : optionalUuid(rawPayload.walkoverLoserTeamId, "walkoverLoserTeamId");
+
+      const updated = await database.transaction(async (transaction) => {
+        const oldMatch = await getMatch(transaction, matchId);
+        if (!oldMatch) {
+          throw new ApiError(404, "MATCH_NOT_FOUND", "Jogo não encontrado.");
+        }
+        if (oldMatch.status !== "LIVE") {
+          throw new ApiError(
+            409,
+            "MATCH_STATE_CONFLICT",
+            "Somente jogos ao vivo podem ser encerrados.",
+          );
+        }
+
+        await persistScoreboardPatch(transaction, matchId, scoreboard.patch, "LIVE");
+        await persistMatchSets(transaction, matchId, scoreboard.sets);
+
+        const assignments = [
+          "status = 'FINISHED'",
+          "end_time = COALESCE(end_time, now())",
+          "updated_at = now()",
+        ];
+        const parameters: unknown[] = [matchId];
+        if (isWalkover !== undefined) {
+          parameters.push(isWalkover);
+          assignments.push(`is_walkover = $${parameters.length}`);
+        }
+        if (isDoubleWalkover !== undefined) {
+          parameters.push(isDoubleWalkover);
+          assignments.push(`is_double_walkover = $${parameters.length}`);
+        }
+        if (walkoverLoserTeamId !== undefined || rawPayload.walkoverLoserTeamId === null) {
+          parameters.push(walkoverLoserTeamId ?? null);
+          assignments.push(`walkover_loser_team_id = $${parameters.length}`);
+        }
+        const finishResult = await transaction.query(
+          `UPDATE public.matches SET ${assignments.join(", ")}
              WHERE id = $1 AND status = 'LIVE' RETURNING id`,
-            parameters,
-          );
-          if (finishResult.rows.length === 0) {
-            throw new ApiError(
-              409,
-              "MATCH_UPDATE_CONFLICT",
-              "O jogo foi alterado concorrentemente.",
-            );
-          }
+          parameters,
+        );
+        if (finishResult.rows.length === 0) {
+          throw new ApiError(409, "MATCH_UPDATE_CONFLICT", "O jogo foi alterado concorrentemente.");
+        }
 
-          const newMatch = await getMatch(transaction, matchId);
-          if (!newMatch) {
-            throw new ApiError(404, "MATCH_NOT_FOUND", "Jogo não encontrado.");
-          }
+        const newMatch = await getMatch(transaction, matchId);
+        if (!newMatch) {
+          throw new ApiError(404, "MATCH_NOT_FOUND", "Jogo não encontrado.");
+        }
 
-          await recalculateCollectiveStandings(transaction, {
-            championshipId: String(newMatch.championshipId),
-            seasonYear: Number(newMatch.seasonYear),
-            sportId: String(newMatch.sportId),
-            naipe: String(newMatch.naipe),
-            division:
-              typeof newMatch.division == "string" ? newMatch.division : null,
-          });
-
-          await insertAudit(
-            transaction,
-            request as AuthenticatedRequest,
-            matchId,
-            "Jogo encerrado e classificação consolidada via laje-api.",
-            oldMatch,
-            newMatch,
-          );
-          return newMatch;
+        await recalculateCollectiveStandings(transaction, {
+          championshipId: String(newMatch.championshipId),
+          seasonYear: Number(newMatch.seasonYear),
+          sportId: String(newMatch.sportId),
+          naipe: String(newMatch.naipe),
+          division: typeof newMatch.division == "string" ? newMatch.division : null,
         });
-        response.status(200).json({ data: updated });
-      } catch (error) {
-        next(error);
-      }
-    },
-  );
+
+        await insertAudit(
+          transaction,
+          request as AuthenticatedRequest,
+          matchId,
+          "Jogo encerrado e classificação consolidada via laje-api.",
+          oldMatch,
+          newMatch,
+        );
+        return newMatch;
+      });
+      response.status(200).json({ data: updated });
+    } catch (error) {
+      next(error);
+    }
+  });
 
   return router;
 }

@@ -116,9 +116,7 @@ export function createStandingsRouter(): Router {
       const sportId = optionalUuid(request.query.sportId, "sportId");
       const naipe = optionalEnum(request.query.naipe, "naipe", MATCH_NAIPES);
       const division = optionalEnum(request.query.division, "division", TEAM_DIVISIONS);
-      const { page, pageSize, offset } = parsePagination(
-        request.query as Record<string, unknown>,
-      );
+      const { page, pageSize, offset } = parsePagination(request.query as Record<string, unknown>);
 
       const championship = await database.query(
         "SELECT id FROM public.championships WHERE id = $1",
@@ -257,12 +255,10 @@ export function createStandingsRouter(): Router {
           reference.legacyRule,
           reference.classificationPolicy,
         );
-        return rankStandings(rows, cascade, groupMatches, manualDrawOrder).map(
-          (row, index) => {
-            const { legacyRule: _legacyRule, classificationPolicy: _policy, ...publicRow } = row;
-            return { ...publicRow, position: index + 1, tieBreakCascade: cascade };
-          },
-        );
+        return rankStandings(rows, cascade, groupMatches, manualDrawOrder).map((row, index) => {
+          const { legacyRule: _legacyRule, classificationPolicy: _policy, ...publicRow } = row;
+          return { ...publicRow, position: index + 1, tieBreakCascade: cascade };
+        });
       });
 
       const individualParameters: unknown[] = [championshipId, seasonYear];
@@ -273,9 +269,7 @@ export function createStandingsRouter(): Router {
       }
       if (naipe) {
         individualParameters.push(naipe);
-        individualConditions.push(
-          `st.naipe = $${individualParameters.length}::public.match_naipe`,
-        );
+        individualConditions.push(`st.naipe = $${individualParameters.length}::public.match_naipe`);
       }
       if (division) {
         individualParameters.push(division);
