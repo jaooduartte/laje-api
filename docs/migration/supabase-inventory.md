@@ -12,6 +12,7 @@ Esta entrega não cria recursos na AWS, não exporta dados e não altera o Supab
 
 ## Fotografia do catálogo
 
+<!-- prettier-ignore -->
 | Objeto | Quantidade | Destino |
 | --- | ---: | --- |
 | Tabelas no schema `public` | 67 | Copiar para o PostgreSQL no RDS |
@@ -27,6 +28,7 @@ Todas as tabelas públicas estão com RLS habilitado. Esse modelo não será cop
 
 As tabelas, enums, chaves primárias e estrangeiras, constraints e índices pertencem ao baseline estrutural do PostgreSQL. A ordem abaixo organiza as 67 tabelas em domínios para as próximas tarefas; todas têm classificação **copiar para PostgreSQL**, com a ressalva de que referências a usuários do Supabase deverão apontar para a identidade administrada pela API.
 
+<!-- prettier-ignore -->
 | Domínio | Tabelas |
 | --- | --- |
 | Fundação esportiva | `sports`, `teams`, `championships`, `championship_sports`, `matches`, `standings`, `match_sets` |
@@ -41,6 +43,7 @@ As tabelas, enums, chaves primárias e estrangeiras, constraints e índices pert
 
 O schema `public` possui 330 rotinas e 75 triggers. A migração não será um dump dessas definições: cada grupo abaixo tem um destino explícito.
 
+<!-- prettier-ignore -->
 | Grupo | Evidência | Destino |
 | --- | --- | --- |
 | Cálculos determinísticos, validações de integridade e projeções relacionais sem contexto de usuário | Rotinas e triggers sem dependência de Auth | Copiar para PostgreSQL quando a regra pertencer à integridade persistida |
@@ -53,6 +56,7 @@ O inventário detalhado de cada rotina, trigger e policy será usado por domíni
 
 ## Dependências Supabase e substituições
 
+<!-- prettier-ignore -->
 | Dependência atual | Uso identificado | Destino |
 | --- | --- | --- |
 | Supabase Auth e `auth.uid()` | Identidade em RLS, RPCs e trilhas administrativas | Autenticação e autorização da `laje-api`; modelo de usuários próprio no PostgreSQL |
@@ -64,6 +68,7 @@ O inventário detalhado de cada rotina, trigger e policy será usado por domíni
 
 ## Edge Functions
 
+<!-- prettier-ignore -->
 | Função | Dependências identificadas | Destino |
 | --- | --- | --- |
 | `send-reservation-email` | Brevo, `BREVO_API_KEY`, URLs e destinatários configurados por ambiente | Serviço de e-mail da `laje-api`; segredos no Secrets Manager |
