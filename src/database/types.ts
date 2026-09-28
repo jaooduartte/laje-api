@@ -14,7 +14,7 @@ export interface DatabaseQueryExecutor {
   ): Promise<DatabaseQueryResult<Row>>;
 }
 
-export interface DatabaseQueryAdapter extends DatabaseQueryExecutor {}
+export type DatabaseQueryAdapter = DatabaseQueryExecutor;
 
 export interface DatabaseAdapter extends DatabaseQueryAdapter {
   transaction<T>(work: (adapter: DatabaseQueryAdapter) => Promise<T>): Promise<T>;
