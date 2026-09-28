@@ -40,6 +40,7 @@ Repositories de domínio não devem importar o driver `postgres`, criar conexõe
 
 A aplicação usa as seguintes variáveis:
 
+<!-- prettier-ignore -->
 | Variável | Padrão | Finalidade |
 | --- | ---: | --- |
 | `DATABASE_URL` | obrigatório | URI PostgreSQL completa. |
