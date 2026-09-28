@@ -18,7 +18,9 @@ export class AuthController {
   readonly resolveLoginState: RequestHandler = async (request, response, next) => {
     try {
       const { loginIdentifier } = parseLoginIdentifierBody(request.body);
-      response.status(200).json({ data: await this.authService.resolveLoginState(loginIdentifier) });
+      response
+        .status(200)
+        .json({ data: await this.authService.resolveLoginState(loginIdentifier) });
     } catch (error) {
       next(error);
     }

@@ -1,10 +1,4 @@
-import {
-  createHmac,
-  createHash,
-  randomBytes,
-  scrypt,
-  timingSafeEqual,
-} from "node:crypto";
+import { createHmac, createHash, randomBytes, scrypt, timingSafeEqual } from "node:crypto";
 
 const SCRYPT_KEY_LENGTH = 64;
 const SCRYPT_N = 16_384;
@@ -140,7 +134,9 @@ export function verifyAccessToken(
   }
 
   try {
-    const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as Partial<AccessTokenClaims>;
+    const claims = JSON.parse(
+      Buffer.from(payload, "base64url").toString("utf8"),
+    ) as Partial<AccessTokenClaims>;
     if (
       claims.iss !== ACCESS_TOKEN_ISSUER ||
       claims.aud !== ACCESS_TOKEN_AUDIENCE ||

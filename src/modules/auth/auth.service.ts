@@ -190,13 +190,21 @@ export class AuthService {
 
   private validateNewPassword(password: string): void {
     if (password.length < 8 || password.length > 128) {
-      throw new ApiError(422, "INVALID_PASSWORD", "Password must contain between 8 and 128 characters.");
+      throw new ApiError(
+        422,
+        "INVALID_PASSWORD",
+        "Password must contain between 8 and 128 characters.",
+      );
     }
   }
 
   private ensureEnabled(): void {
     if (!this.config.enabled) {
-      throw new ApiError(503, "AUTH_DISABLED", "Dedicated authentication is not enabled in this environment.");
+      throw new ApiError(
+        503,
+        "AUTH_DISABLED",
+        "Dedicated authentication is not enabled in this environment.",
+      );
     }
   }
 

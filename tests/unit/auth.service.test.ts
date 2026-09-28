@@ -66,12 +66,18 @@ class FakeAuthRepository implements AuthRepositoryPort {
     nextExpiresAt: Date,
   ): Promise<boolean> {
     if (!this.session || this.session.refreshTokenHash !== currentRefreshTokenHash) return false;
-    this.session = { ...this.session, refreshTokenHash: nextRefreshTokenHash, expiresAt: nextExpiresAt };
+    this.session = {
+      ...this.session,
+      refreshTokenHash: nextRefreshTokenHash,
+      expiresAt: nextExpiresAt,
+    };
     return true;
   }
 
   async isSessionActive(sessionId: string, userId: string): Promise<boolean> {
-    return this.session?.id === sessionId && this.session.userId === userId && !this.session.revokedAt;
+    return (
+      this.session?.id === sessionId && this.session.userId === userId && !this.session.revokedAt
+    );
   }
 
   async revokeSession(): Promise<void> {

@@ -218,7 +218,10 @@ export const openApiDocument = {
         properties: {
           field: { type: "string", description: "Campo relacionado ao erro quando aplicável." },
           code: { type: "string", description: "Código estável e legível por máquina." },
-          message: { type: "string", description: "Mensagem segura para diagnóstico pelo consumidor." },
+          message: {
+            type: "string",
+            description: "Mensagem segura para diagnóstico pelo consumidor.",
+          },
         },
       },
       ApiError: {

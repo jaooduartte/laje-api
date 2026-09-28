@@ -168,8 +168,14 @@ export class AuthRepository implements AuthRepositoryPort {
          WHERE user_id = $1::uuid`,
         [userId],
       );
-      await this.writeAudit(executor, userId, "PASSWORD_CHANGED", "admin_auth_accounts", userId,
-        "Senha administrativa definida na arquitetura dedicada.");
+      await this.writeAudit(
+        executor,
+        userId,
+        "PASSWORD_CHANGED",
+        "admin_auth_accounts",
+        userId,
+        "Senha administrativa definida na arquitetura dedicada.",
+      );
     });
   }
 
@@ -191,8 +197,14 @@ export class AuthRepository implements AuthRepositoryPort {
          WHERE user_id = $1::uuid AND id <> $2::uuid AND revoked_at IS NULL`,
         [userId, currentSessionId],
       );
-      await this.writeAudit(executor, userId, "PASSWORD_CHANGED", "admin_auth_accounts", userId,
-        "Senha administrativa alterada na arquitetura dedicada.");
+      await this.writeAudit(
+        executor,
+        userId,
+        "PASSWORD_CHANGED",
+        "admin_auth_accounts",
+        userId,
+        "Senha administrativa alterada na arquitetura dedicada.",
+      );
     });
   }
 
@@ -210,8 +222,14 @@ export class AuthRepository implements AuthRepositoryPort {
       );
       const row = result.rows[0];
       if (!row) throw new Error("Failed to persist administrative session.");
-      await this.writeAudit(executor, userId, "LOGIN", "admin_auth_sessions", row.id,
-        "Login administrativo realizado pela laje-api.");
+      await this.writeAudit(
+        executor,
+        userId,
+        "LOGIN",
+        "admin_auth_sessions",
+        row.id,
+        "Login administrativo realizado pela laje-api.",
+      );
       return mapSession(row);
     });
   }
