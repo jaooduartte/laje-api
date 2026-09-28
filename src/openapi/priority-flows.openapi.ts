@@ -40,12 +40,13 @@ const idParameter = (name: string, description: string) => ({
   schema: { type: "string", format: "uuid" },
 });
 
-const queryParameter = (
-  name: string,
-  description: string,
-  schema: object,
-  required = false,
-) => ({ name, in: "query", required, description, schema });
+const queryParameter = (name: string, description: string, schema: object, required = false) => ({
+  name,
+  in: "query",
+  required,
+  description,
+  schema,
+});
 
 export const priorityFlowTags = [
   {

@@ -35,12 +35,12 @@ O frontend atual autentica diretamente no Supabase Auth, acompanha a sessão no 
 
 ### Endpoints
 
-| Método | Endpoint | Autenticação | Finalidade |
-| --- | --- | --- | --- |
-| `POST` | `/api/v1/auth/sessions` | pública | autenticar e criar sessão administrativa |
-| `POST` | `/api/v1/auth/sessions/refresh` | refresh cookie | renovar access token |
-| `DELETE` | `/api/v1/auth/sessions/current` | Bearer JWT | encerrar a sessão atual |
-| `GET` | `/api/v1/auth/me` | Bearer JWT | obter identidade, perfil e permissões atuais |
+| Método   | Endpoint                        | Autenticação   | Finalidade                                   |
+| -------- | ------------------------------- | -------------- | -------------------------------------------- |
+| `POST`   | `/api/v1/auth/sessions`         | pública        | autenticar e criar sessão administrativa     |
+| `POST`   | `/api/v1/auth/sessions/refresh` | refresh cookie | renovar access token                         |
+| `DELETE` | `/api/v1/auth/sessions/current` | Bearer JWT     | encerrar a sessão atual                      |
+| `GET`    | `/api/v1/auth/me`               | Bearer JWT     | obter identidade, perfil e permissões atuais |
 
 ### Login
 
@@ -93,12 +93,12 @@ Os scopes seguem as áreas existentes do painel: `bracket_setup`, `matches`, `co
 
 ### Erros contratuais
 
-| HTTP | `error.code` | Situação |
-| --- | --- | --- |
-| `401` | `INVALID_CREDENTIALS` | e-mail/senha não conferem |
-| `401` | `SESSION_EXPIRED` | access/refresh token inválido ou expirado |
+| HTTP  | `error.code`          | Situação                                    |
+| ----- | --------------------- | ------------------------------------------- |
+| `401` | `INVALID_CREDENTIALS` | e-mail/senha não conferem                   |
+| `401` | `SESSION_EXPIRED`     | access/refresh token inválido ou expirado   |
 | `403` | `ADMIN_ACCESS_DENIED` | identidade válida sem acesso administrativo |
-| `422` | `VALIDATION_ERROR` | payload semanticamente inválido |
+| `422` | `VALIDATION_ERROR`    | payload semanticamente inválido             |
 
 A API não diferencia publicamente “e-mail inexistente” de “senha incorreta”.
 
@@ -110,13 +110,13 @@ O frontend atual lê `matches` diretamente via Supabase, aplica filtros no clien
 
 ### Endpoints
 
-| Método | Endpoint | Autenticação | Finalidade |
-| --- | --- | --- | --- |
-| `GET` | `/api/v1/matches` | pública | listar jogos com filtros/paginação |
-| `GET` | `/api/v1/matches/{matchId}` | pública | consultar um jogo |
-| `POST` | `/api/v1/matches/{matchId}/start` | Bearer JWT + `control:EDIT` | iniciar jogo |
+| Método  | Endpoint                               | Autenticação                | Finalidade                               |
+| ------- | -------------------------------------- | --------------------------- | ---------------------------------------- |
+| `GET`   | `/api/v1/matches`                      | pública                     | listar jogos com filtros/paginação       |
+| `GET`   | `/api/v1/matches/{matchId}`            | pública                     | consultar um jogo                        |
+| `POST`  | `/api/v1/matches/{matchId}/start`      | Bearer JWT + `control:EDIT` | iniciar jogo                             |
 | `PATCH` | `/api/v1/matches/{matchId}/scoreboard` | Bearer JWT + `control:EDIT` | atualizar placar/cartões/estado corrente |
-| `POST` | `/api/v1/matches/{matchId}/finish` | Bearer JWT + `control:EDIT` | encerrar jogo |
+| `POST`  | `/api/v1/matches/{matchId}/finish`     | Bearer JWT + `control:EDIT` | encerrar jogo                            |
 
 ### Consulta de jogos
 
@@ -177,14 +177,14 @@ Comandos operacionais exigem Bearer JWT e permissão efetiva `control:EDIT`. A L
 
 ### Erros contratuais
 
-| HTTP | `error.code` | Situação |
-| --- | --- | --- |
-| `401` | `SESSION_EXPIRED` | sessão ausente/inválida |
-| `403` | `PERMISSION_DENIED` | usuário sem `control:EDIT` |
-| `404` | `MATCH_NOT_FOUND` | jogo inexistente |
-| `409` | `MATCH_STATE_CONFLICT` | transição incompatível com estado atual |
+| HTTP  | `error.code`            | Situação                                             |
+| ----- | ----------------------- | ---------------------------------------------------- |
+| `401` | `SESSION_EXPIRED`       | sessão ausente/inválida                              |
+| `403` | `PERMISSION_DENIED`     | usuário sem `control:EDIT`                           |
+| `404` | `MATCH_NOT_FOUND`       | jogo inexistente                                     |
+| `409` | `MATCH_STATE_CONFLICT`  | transição incompatível com estado atual              |
 | `409` | `MATCH_UPDATE_CONFLICT` | conflito de atualização concorrente quando detectado |
-| `422` | `VALIDATION_ERROR` | placar/payload incompatível com regras do jogo |
+| `422` | `VALIDATION_ERROR`      | placar/payload incompatível com regras do jogo       |
 
 ## 3. Fluxo público de campeonatos, classificação e calendário
 
@@ -194,12 +194,12 @@ As telas públicas atuais consultam tabelas/RPCs do Supabase diretamente. O cont
 
 ### Endpoints
 
-| Método | Endpoint | Autenticação | Finalidade |
-| --- | --- | --- | --- |
-| `GET` | `/api/v1/championships` | pública | listar campeonatos visíveis |
-| `GET` | `/api/v1/championships/{championshipId}` | pública | consultar campeonato |
-| `GET` | `/api/v1/championships/{championshipId}/standings` | pública | classificação por temporada/modalidade/naipe/divisão |
-| `GET` | `/api/v1/championships/{championshipId}/calendar` | pública | agenda de jogos do campeonato |
+| Método | Endpoint                                           | Autenticação | Finalidade                                           |
+| ------ | -------------------------------------------------- | ------------ | ---------------------------------------------------- |
+| `GET`  | `/api/v1/championships`                            | pública      | listar campeonatos visíveis                          |
+| `GET`  | `/api/v1/championships/{championshipId}`           | pública      | consultar campeonato                                 |
+| `GET`  | `/api/v1/championships/{championshipId}/standings` | pública      | classificação por temporada/modalidade/naipe/divisão |
+| `GET`  | `/api/v1/championships/{championshipId}/calendar`  | pública      | agenda de jogos do campeonato                        |
 
 ### Campeonato
 
@@ -233,24 +233,24 @@ A entrada de calendário usa `MatchDto`, preservando status e dados de agenda ne
 
 ### Erros contratuais
 
-| HTTP | `error.code` | Situação |
-| --- | --- | --- |
+| HTTP  | `error.code`             | Situação                               |
+| ----- | ------------------------ | -------------------------------------- |
 | `404` | `CHAMPIONSHIP_NOT_FOUND` | campeonato inexistente/não consultável |
-| `422` | `VALIDATION_ERROR` | filtros semanticamente inválidos |
+| `422` | `VALIDATION_ERROR`       | filtros semanticamente inválidos       |
 
 Endpoints públicos nunca retornam informações administrativas, credenciais ou metadados internos de infraestrutura.
 
 ## Matriz de transição frontend -> API
 
-| Fluxo | Dependência atual | Contrato alvo | Implementação |
-| --- | --- | --- | --- |
-| login/sessão | Supabase Auth no frontend | `/auth/sessions`, `/auth/sessions/refresh`, `/auth/sessions/current` | LAJE-85 |
-| contexto/permissões | RPC `get_current_user_admin_context` | `/auth/me` | LAJE-85 |
-| leitura de jogos | acesso direto a `matches` | `GET /matches` e `GET /matches/{id}` | LAJE-86 |
-| controle ao vivo | update direto de `matches` | `/start`, `/scoreboard`, `/finish` | LAJE-86 |
-| campeonatos públicos | consulta direta ao Supabase | `GET /championships` | LAJE-86/LAJE-87 conforme domínio final |
-| classificação | tabelas/RPCs de standings | `GET /championships/{id}/standings` | LAJE-86 |
-| agenda pública | consulta direta de partidas/configuração | `GET /championships/{id}/calendar` | LAJE-86 |
+| Fluxo                | Dependência atual                        | Contrato alvo                                                        | Implementação                          |
+| -------------------- | ---------------------------------------- | -------------------------------------------------------------------- | -------------------------------------- |
+| login/sessão         | Supabase Auth no frontend                | `/auth/sessions`, `/auth/sessions/refresh`, `/auth/sessions/current` | LAJE-85                                |
+| contexto/permissões  | RPC `get_current_user_admin_context`     | `/auth/me`                                                           | LAJE-85                                |
+| leitura de jogos     | acesso direto a `matches`                | `GET /matches` e `GET /matches/{id}`                                 | LAJE-86                                |
+| controle ao vivo     | update direto de `matches`               | `/start`, `/scoreboard`, `/finish`                                   | LAJE-86                                |
+| campeonatos públicos | consulta direta ao Supabase              | `GET /championships`                                                 | LAJE-86/LAJE-87 conforme domínio final |
+| classificação        | tabelas/RPCs de standings                | `GET /championships/{id}/standings`                                  | LAJE-86                                |
+| agenda pública       | consulta direta de partidas/configuração | `GET /championships/{id}/calendar`                                   | LAJE-86                                |
 
 ## Compatibilidade e evolução
 

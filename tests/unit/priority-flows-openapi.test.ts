@@ -33,18 +33,14 @@ test("priority flows are present in OpenAPI and explicitly marked as planned", (
 });
 
 test("administrative commands require bearer authentication while public reads do not", () => {
-  assert.deepEqual(openApiDocument.paths["/api/v1/auth/me"].get.security, [
+  assert.deepEqual(openApiDocument.paths["/api/v1/auth/me"].get.security, [{ bearerAuth: [] }]);
+  assert.deepEqual(openApiDocument.paths["/api/v1/matches/{matchId}/scoreboard"].patch.security, [
     { bearerAuth: [] },
   ]);
-  assert.deepEqual(
-    openApiDocument.paths["/api/v1/matches/{matchId}/scoreboard"].patch.security,
-    [{ bearerAuth: [] }],
-  );
 
   assert.equal("security" in openApiDocument.paths["/api/v1/matches"].get, false);
   assert.equal(
-    "security" in
-      openApiDocument.paths["/api/v1/championships/{championshipId}/standings"].get,
+    "security" in openApiDocument.paths["/api/v1/championships/{championshipId}/standings"].get,
     false,
   );
 });
@@ -52,14 +48,10 @@ test("administrative commands require bearer authentication while public reads d
 test("authentication contract defines bearer access and refresh-cookie transport", () => {
   assert.equal(openApiDocument.components.securitySchemes.bearerAuth.scheme, "bearer");
   assert.equal(openApiDocument.components.securitySchemes.refreshCookie.in, "cookie");
-  assert.equal(
-    openApiDocument.components.securitySchemes.refreshCookie.name,
-    "laje_refresh_token",
-  );
-  assert.deepEqual(
-    openApiDocument.paths["/api/v1/auth/sessions/refresh"].post.security,
-    [{ refreshCookie: [] }],
-  );
+  assert.equal(openApiDocument.components.securitySchemes.refreshCookie.name, "laje_refresh_token");
+  assert.deepEqual(openApiDocument.paths["/api/v1/auth/sessions/refresh"].post.security, [
+    { refreshCookie: [] },
+  ]);
 });
 
 test("priority DTOs and domain enums are versioned in the OpenAPI document", () => {
@@ -85,11 +77,9 @@ test("priority DTOs and domain enums are versioned in the OpenAPI document", () 
 
 test("standings and calendar require an explicit season year", () => {
   const standingsParameters =
-    openApiDocument.paths["/api/v1/championships/{championshipId}/standings"].get
-      .parameters;
+    openApiDocument.paths["/api/v1/championships/{championshipId}/standings"].get.parameters;
   const calendarParameters =
-    openApiDocument.paths["/api/v1/championships/{championshipId}/calendar"].get
-      .parameters;
+    openApiDocument.paths["/api/v1/championships/{championshipId}/calendar"].get.parameters;
 
   const standingsSeason = standingsParameters.find(
     (parameter) => "name" in parameter && parameter.name === "seasonYear",
