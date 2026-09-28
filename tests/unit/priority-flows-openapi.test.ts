@@ -25,25 +25,26 @@ const implementedAuthenticationOperations = [
   ["/api/v1/auth/password", "patch"],
 ] as const;
 
-function expectImplementedOperations(operations: readonly (readonly [string, string])[]): void {
+function operationStatus(path: string, method: string): string | undefined {
   const paths = openApiDocument.paths as unknown as Record<
     string,
     Record<string, { "x-implementation-status"?: string }>
   >;
-
-  for (const [path, method] of operations) {
-    const operation = paths[path]?.[method];
-    assert.ok(operation, `${method.toUpperCase()} ${path} should exist`);
-    assert.equal(operation["x-implementation-status"], "implemented");
-  }
+  const operation = paths[path]?.[method];
+  assert.ok(operation, `${method.toUpperCase()} ${path} should exist`);
+  return operation["x-implementation-status"];
 }
 
 test("LAJE-86 sports core priority operations are implemented", () => {
-  expectImplementedOperations(implementedSportsCoreOperations);
+  for (const [path, method] of implementedSportsCoreOperations) {
+    assert.equal(operationStatus(path, method), "implemented");
+  }
 });
 
-test("LAJE-85 authentication operations remain implemented", () => {
-  expectImplementedOperations(implementedAuthenticationOperations);
+test("LAJE-85 authentication operations remain implemented rather than planned", () => {
+  for (const [path, method] of implementedAuthenticationOperations) {
+    assert.notEqual(operationStatus(path, method), "planned");
+  }
 });
 
 test("administrative commands require bearer authentication while public reads do not", () => {
