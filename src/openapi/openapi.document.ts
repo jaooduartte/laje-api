@@ -1,3 +1,4 @@
+import { authPaths, authSchemas } from "./auth.openapi.js";
 import {
   priorityFlowPaths,
   priorityFlowSchemas,
@@ -103,6 +104,7 @@ export const openApiDocument = {
       },
     },
     ...priorityFlowPaths,
+    ...authPaths,
   },
   components: {
     securitySchemes: {
@@ -111,7 +113,7 @@ export const openApiDocument = {
         scheme: "bearer",
         bearerFormat: "JWT",
         description:
-          "Bearer JWT planejado para a autenticação administrativa. As rotas protegidas da LAJE-84 já declaram esse requisito; a implementação pertence à LAJE-85.",
+          "Bearer JWT de curta duração emitido pela laje-api para sessões administrativas da arquitetura dedicada.",
       },
       ...priorityFlowSecuritySchemes,
     },
@@ -120,49 +122,31 @@ export const openApiDocument = {
         name: "page",
         in: "query",
         description: "Página solicitada em coleções paginadas.",
-        schema: {
-          type: "integer",
-          minimum: 1,
-          default: 1,
-        },
+        schema: { type: "integer", minimum: 1, default: 1 },
       },
       PageSize: {
         name: "pageSize",
         in: "query",
         description: "Quantidade de itens por página.",
-        schema: {
-          type: "integer",
-          minimum: 1,
-          maximum: 100,
-          default: 25,
-        },
+        schema: { type: "integer", minimum: 1, maximum: 100, default: 25 },
       },
       Search: {
         name: "q",
         in: "query",
         description: "Busca textual quando suportada pelo recurso.",
-        schema: {
-          type: "string",
-          minLength: 1,
-        },
+        schema: { type: "string", minLength: 1 },
       },
       Sort: {
         name: "sort",
         in: "query",
         description: "Campo de ordenação permitido pelo endpoint.",
-        schema: {
-          type: "string",
-        },
+        schema: { type: "string" },
       },
       Order: {
         name: "order",
         in: "query",
         description: "Direção da ordenação.",
-        schema: {
-          type: "string",
-          enum: ["asc", "desc"],
-          default: "asc",
-        },
+        schema: { type: "string", enum: ["asc", "desc"], default: "asc" },
       },
     },
     schemas: {
@@ -171,18 +155,9 @@ export const openApiDocument = {
         required: ["service", "version", "status"],
         additionalProperties: false,
         properties: {
-          service: {
-            type: "string",
-            const: "laje-api",
-          },
-          version: {
-            type: "string",
-            const: "v1",
-          },
-          status: {
-            type: "string",
-            const: "ready",
-          },
+          service: { type: "string", const: "laje-api" },
+          version: { type: "string", const: "v1" },
+          status: { type: "string", const: "ready" },
         },
       },
       ApplicationHealth: {
@@ -190,14 +165,8 @@ export const openApiDocument = {
         required: ["service", "status"],
         additionalProperties: false,
         properties: {
-          service: {
-            type: "string",
-            const: "laje-api",
-          },
-          status: {
-            type: "string",
-            const: "ok",
-          },
+          service: { type: "string", const: "laje-api" },
+          status: { type: "string", const: "ok" },
         },
       },
       DatabaseHealth: {
@@ -205,14 +174,8 @@ export const openApiDocument = {
         required: ["database", "status"],
         additionalProperties: false,
         properties: {
-          database: {
-            type: "string",
-            const: "reachable",
-          },
-          status: {
-            type: "string",
-            const: "ok",
-          },
+          database: { type: "string", const: "reachable" },
+          status: { type: "string", const: "ok" },
         },
       },
       DatabaseUnavailableHealth: {
@@ -220,14 +183,8 @@ export const openApiDocument = {
         required: ["database", "status"],
         additionalProperties: false,
         properties: {
-          database: {
-            type: "string",
-            const: "unreachable",
-          },
-          status: {
-            type: "string",
-            const: "unavailable",
-          },
+          database: { type: "string", const: "unreachable" },
+          status: { type: "string", const: "unavailable" },
         },
       },
       ApiSuccess: {
@@ -235,9 +192,7 @@ export const openApiDocument = {
         required: ["data"],
         additionalProperties: false,
         properties: {
-          data: {
-            description: "Representação principal retornada pelo endpoint de negócio.",
-          },
+          data: { description: "Representação principal retornada pelo endpoint de negócio." },
           meta: {
             type: "object",
             description: "Metadados opcionais, como paginação.",
@@ -250,23 +205,10 @@ export const openApiDocument = {
         required: ["page", "pageSize", "totalItems", "totalPages"],
         additionalProperties: false,
         properties: {
-          page: {
-            type: "integer",
-            minimum: 1,
-          },
-          pageSize: {
-            type: "integer",
-            minimum: 1,
-            maximum: 100,
-          },
-          totalItems: {
-            type: "integer",
-            minimum: 0,
-          },
-          totalPages: {
-            type: "integer",
-            minimum: 0,
-          },
+          page: { type: "integer", minimum: 1 },
+          pageSize: { type: "integer", minimum: 1, maximum: 100 },
+          totalItems: { type: "integer", minimum: 0 },
+          totalPages: { type: "integer", minimum: 0 },
         },
       },
       ApiErrorDetail: {
@@ -274,18 +216,9 @@ export const openApiDocument = {
         required: ["code", "message"],
         additionalProperties: false,
         properties: {
-          field: {
-            type: "string",
-            description: "Campo relacionado ao erro quando aplicável.",
-          },
-          code: {
-            type: "string",
-            description: "Código estável e legível por máquina.",
-          },
-          message: {
-            type: "string",
-            description: "Mensagem segura para diagnóstico pelo consumidor.",
-          },
+          field: { type: "string", description: "Campo relacionado ao erro quando aplicável." },
+          code: { type: "string", description: "Código estável e legível por máquina." },
+          message: { type: "string", description: "Mensagem segura para diagnóstico pelo consumidor." },
         },
       },
       ApiError: {
@@ -298,25 +231,15 @@ export const openApiDocument = {
             required: ["code", "message"],
             additionalProperties: false,
             properties: {
-              code: {
-                type: "string",
-                example: "ROUTE_NOT_FOUND",
-              },
-              message: {
-                type: "string",
-                example: "The requested resource was not found.",
-              },
-              details: {
-                type: "array",
-                items: {
-                  $ref: "#/components/schemas/ApiErrorDetail",
-                },
-              },
+              code: { type: "string", example: "ROUTE_NOT_FOUND" },
+              message: { type: "string", example: "The requested resource was not found." },
+              details: { type: "array", items: { $ref: "#/components/schemas/ApiErrorDetail" } },
             },
           },
         },
       },
       ...priorityFlowSchemas,
+      ...authSchemas,
     },
   },
 } as const;

@@ -1,5 +1,6 @@
-import type { NextFunction, Request, RequestHandler, Response } from "express";
+import type { Request, RequestHandler, Response } from "express";
 
+import type { AuthenticatedRequest } from "./auth.middleware.js";
 import {
   parseLoginBody,
   parseLoginIdentifierBody,
@@ -8,7 +9,6 @@ import {
   readCookie,
 } from "./auth.schema.js";
 import type { AuthService } from "./auth.service.js";
-import type { AuthenticatedRequest } from "./auth.middleware.js";
 
 const REFRESH_COOKIE_NAME = "laje_refresh_token";
 
