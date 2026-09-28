@@ -43,6 +43,7 @@ No frontend, `VITE_API_URL` seleciona a API correspondente ao ambiente. No backe
 - TypeScript
 - Express
 - PostgreSQL 17
+- OpenAPI 3.1 / Swagger UI para documentação de desenvolvimento
 - Docker
 - Amazon ECS / AWS Fargate
 - Amazon ECR
@@ -134,6 +135,19 @@ curl --fail http://127.0.0.1:3000/api/v1/health/database
 
 Os detalhes de semântica e respostas estão em [docs/healthchecks.md](docs/healthchecks.md).
 
+## OpenAPI e convenções HTTP
+
+Com `NODE_ENV=development`, a documentação é montada somente para o ambiente local de desenvolvimento:
+
+```text
+http://127.0.0.1:3000/api-docs
+http://127.0.0.1:3000/api-docs/openapi.json
+```
+
+`/api-docs` fornece a interface Swagger UI e `/api-docs/openapi.json` expõe a especificação OpenAPI 3.1 servida pela própria aplicação. Os healthchecks existentes fazem parte do documento OpenAPI.
+
+A documentação não é montada automaticamente em `test` nem em `production`. As convenções de sucesso, erro, status codes, paginação, filtros, versionamento e autenticação futura estão em [docs/api-conventions.md](docs/api-conventions.md) e devem orientar a LAJE-84 e os módulos de negócio seguintes.
+
 ## Scripts
 
 <!-- prettier-ignore -->
@@ -179,10 +193,12 @@ O container recebe configuração em runtime, executa como usuário não-root e 
 
 ```text
 src/
+  common/       constantes e middlewares compartilhados
   config/       validação e acesso às configurações
   database/     client, adapter PostgreSQL, transações e abstrações de repository
-  health/       serviços e rotas de healthcheck
-  http/         aplicação HTTP, rotas e infraestrutura Express
+  modules/      módulos de domínio e infraestrutura, incluindo healthchecks
+  openapi/      documento OpenAPI e rotas da documentação de desenvolvimento
+  routes/       composição das rotas versionadas
   server.ts     bootstrap e lifecycle do processo
 
 tests/
@@ -193,21 +209,23 @@ tests/
 docs/
   adr/          decisões arquiteturais
   migration/    inventário, baseline e estratégia de migração
-  *.md          arquitetura, banco, healthchecks e containerização
+  *.md          arquitetura, contratos HTTP, banco, healthchecks e containerização
 
 infra/
   database/     baseline e migrations PostgreSQL
   aws/          estrutura reservada para infraestrutura AWS
 ```
 
-## Documentação de migração
+## Documentação técnica e de migração
 
 A migração deve ser tratada como uma sequência rastreável, não como um dump direto do Supabase para produção:
 
+- [Convenções HTTP](docs/api-conventions.md): formato de contratos, status codes, paginação, filtros, versionamento e autenticação futura;
 - [Inventário do Supabase](docs/migration/supabase-inventory.md): fotografia dos objetos e dependências do backend atual;
 - [Baseline PostgreSQL](docs/migration/database-baseline.md): estrutura reproduzível para PostgreSQL 17;
 - [Estratégia de migração](docs/migration/migration-strategy.md): fases, coexistência, cutover e responsabilidades;
 - [Acesso PostgreSQL](docs/database-access.md): contratos da camada de persistência e requisitos de conexão;
+- [Healthchecks](docs/healthchecks.md): semântica dos endpoints operacionais;
 - [Arquitetura operacional](docs/architecture.md): estado-alvo Vercel + AWS + RDS;
 - [ADR da arquitetura](docs/adr/0001-arquitetura-operacional-final.md): decisão formal e trade-offs.
 
@@ -234,8 +252,9 @@ Tarefas principais relacionadas no Jira:
 - usar AWS Secrets Manager/IAM para secrets e permissões no ambiente AWS;
 - não alterar retroativamente o baseline consolidado: mudanças futuras de schema devem ser novas migrations em `infra/database/migrations/`;
 - não executar cutover ou alterar a produção Supabase sem a tarefa de migração correspondente, plano de validação e rollback;
-- não reintroduzir acesso direto do frontend ao banco no estado final.
+- não reintroduzir acesso direto do frontend ao banco no estado final;
+- não publicar exemplos OpenAPI contendo tokens, credenciais ou dados pessoais reais.
 
 ## Situação atual
 
-A base técnica da `laje-api` já possui runtime Express, configuração validada, camada PostgreSQL, healthchecks, quality gate, baseline PostgreSQL 17, arquitetura AWS documentada e containerização. Os contratos HTTP e os módulos de negócio continuam sendo migrados nas tarefas subsequentes.
+A base técnica da `laje-api` já possui runtime Express, configuração validada, camada PostgreSQL, healthchecks, quality gate, baseline PostgreSQL 17, arquitetura AWS documentada, containerização e base OpenAPI 3.1 com convenções HTTP. Os contratos dos fluxos de negócio e os módulos funcionais continuam sendo migrados nas tarefas subsequentes.

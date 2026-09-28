@@ -41,6 +41,19 @@ Resposta indisponível (`503`):
 
 O endpoint não retorna a exceção do driver, `DATABASE_URL`, hostname, usuário, credenciais ou outros detalhes internos de conexão.
 
+## Documentação OpenAPI
+
+A partir da LAJE-115, os dois healthchecks também fazem parte da especificação OpenAPI 3.1.
+
+Em `NODE_ENV=development`:
+
+```text
+http://127.0.0.1:3000/api-docs
+http://127.0.0.1:3000/api-docs/openapi.json
+```
+
+A documentação não é montada automaticamente em `test` ou `production`. As convenções HTTP gerais estão em [api-conventions.md](api-conventions.md).
+
 ## Uso futuro na AWS
 
 Na etapa de containerização e deploy, o healthcheck da aplicação pode ser usado para liveness do container/serviço. A verificação de banco pode compor readiness ou diagnóstico operacional quando for necessário confirmar a dependência do Amazon RDS.
