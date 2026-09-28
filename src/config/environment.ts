@@ -120,7 +120,32 @@ function csvOrigins(name: string): string[] | undefined {
 const nodeEnv = enumValue("NODE_ENV", ["development", "test", "production"] as const);
 const port = integer("PORT", 1, 65535);
 const databaseUrl = url("DATABASE_URL");
+const databasePoolMax = optionalInteger("DATABASE_POOL_MAX", 10, 1, 50);
+const databaseIdleTimeoutSeconds = optionalInteger("DATABASE_IDLE_TIMEOUT_SECONDS", 20, 1, 300);
+const databaseConnectTimeoutSeconds = optionalInteger(
+  "DATABASE_CONNECT_TIMEOUT_SECONDS",
+  10,
+  1,
+  60,
+);
+const databaseShutdownTimeoutSeconds = optionalInteger(
+  "DATABASE_SHUTDOWN_TIMEOUT_SECONDS",
+  5,
+  1,
+  30,
+);
 const corsOrigins = csvOrigins("CORS_ORIGINS");
+
+if (databaseUrl) {
+  try {
+    const parsedDatabaseUrl = new URL(databaseUrl);
+    if (parsedDatabaseUrl.protocol !== "postgres:" && parsedDatabaseUrl.protocol !== "postgresql:") {
+      issues.push("DATABASE_URL must use the postgres:// or postgresql:// protocol.");
+    }
+  } catch {
+    // The generic URL validation above already records this issue.
+  }
+}
 
 const authEnabled = booleanValue("AUTH_ENABLED", false);
 const awsEnabled = booleanValue("AWS_ENABLED", false);
@@ -194,6 +219,10 @@ export const environment = createRedactedConfig(
     nodeEnv,
     port,
     databaseUrl,
+    databasePoolMax,
+    databaseIdleTimeoutSeconds,
+    databaseConnectTimeoutSeconds,
+    databaseShutdownTimeoutSeconds,
     corsOrigins,
     auth,
     aws: Object.freeze({
