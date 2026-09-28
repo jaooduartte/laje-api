@@ -45,14 +45,18 @@ test("head-to-head resolves a tie between exactly two teams", () => {
   const first = standing("team-a", "A", { points: 6, wins: 2 });
   const second = standing("team-b", "B", { points: 6, wins: 2 });
 
-  const ranked = rankStandings([first, second], ["POINTS", "HEAD_TO_HEAD"], [
-    {
-      homeTeamId: "team-a",
-      awayTeamId: "team-b",
-      homeScore: 1,
-      awayScore: 3,
-    },
-  ]);
+  const ranked = rankStandings(
+    [first, second],
+    ["POINTS", "HEAD_TO_HEAD"],
+    [
+      {
+        homeTeamId: "team-a",
+        awayTeamId: "team-b",
+        homeScore: 1,
+        awayScore: 3,
+      },
+    ],
+  );
 
   assert.deepEqual(
     ranked.map((row) => row.teamId),

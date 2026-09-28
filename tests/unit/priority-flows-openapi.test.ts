@@ -25,9 +25,7 @@ const implementedAuthenticationOperations = [
   ["/api/v1/auth/password", "patch"],
 ] as const;
 
-function expectImplementedOperations(
-  operations: readonly (readonly [string, string])[],
-): void {
+function expectImplementedOperations(operations: readonly (readonly [string, string])[]): void {
   const paths = openApiDocument.paths as unknown as Record<
     string,
     Record<string, { "x-implementation-status"?: string }>
