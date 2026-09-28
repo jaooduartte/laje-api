@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { openApiDocument } from "../../src/openapi/openapi.document.js";
 
-const expectedPlannedOperations = [
+const implementedSportsCoreOperations = [
   ["/api/v1/matches", "get"],
   ["/api/v1/matches/{matchId}", "get"],
   ["/api/v1/matches/{matchId}/start", "post"],
@@ -25,30 +25,27 @@ const implementedAuthenticationOperations = [
   ["/api/v1/auth/password", "patch"],
 ] as const;
 
-test("priority flows that are not migrated remain explicitly marked as planned", () => {
+function expectImplementedOperations(
+  operations: readonly (readonly [string, string])[],
+): void {
   const paths = openApiDocument.paths as unknown as Record<
     string,
     Record<string, { "x-implementation-status"?: string }>
   >;
 
-  for (const [path, method] of expectedPlannedOperations) {
+  for (const [path, method] of operations) {
     const operation = paths[path]?.[method];
     assert.ok(operation, `${method.toUpperCase()} ${path} should exist`);
-    assert.equal(operation["x-implementation-status"], "planned");
+    assert.equal(operation["x-implementation-status"], "implemented");
   }
+}
+
+test("LAJE-86 sports core priority operations are implemented", () => {
+  expectImplementedOperations(implementedSportsCoreOperations);
 });
 
-test("LAJE-85 authentication operations are implemented rather than marked as planned", () => {
-  const paths = openApiDocument.paths as unknown as Record<
-    string,
-    Record<string, { "x-implementation-status"?: string }>
-  >;
-
-  for (const [path, method] of implementedAuthenticationOperations) {
-    const operation = paths[path]?.[method];
-    assert.ok(operation, `${method.toUpperCase()} ${path} should exist`);
-    assert.notEqual(operation["x-implementation-status"], "planned");
-  }
+test("LAJE-85 authentication operations remain implemented", () => {
+  expectImplementedOperations(implementedAuthenticationOperations);
 });
 
 test("administrative commands require bearer authentication while public reads do not", () => {
