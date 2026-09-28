@@ -8,6 +8,7 @@ A migração é incremental e deve preservar a produção atual até que cada do
 
 ## Princípios
 
+<!-- prettier-ignore -->
 1. A produção atual permanece estável durante a migração.
 2. Nenhum domínio é migrado apenas por cópia de SQL sem classificar regras, autenticação, jobs e integrações.
 3. O frontend não acessa diretamente o RDS no estado final.
@@ -132,6 +133,7 @@ A solução deve preservar o fluxo controlado pela `laje-api`, sem reintroduzir 
 
 `LAJE-88` concentra o processo de migração dos dados produtivos e deve incluir:
 
+<!-- prettier-ignore -->
 1. snapshot/backup da origem;
 2. aplicação do baseline e migrations no RDS de destino;
 3. exportação dos dados por ferramenta PostgreSQL adequada;
