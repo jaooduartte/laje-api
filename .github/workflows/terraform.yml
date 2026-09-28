@@ -35,9 +35,9 @@ jobs:
 
       - name: Initialize Terraform without backend
         working-directory: infra/aws/terraform
-        run: terraform init -backend=false -input=false
+        run: terraform init -backend=false -input=false -lockfile=readonly
 
-      - name: Generate provider lock file for supported developer platforms
+      - name: Verify provider lock file for supported developer platforms
         working-directory: infra/aws/terraform
         run: |
           terraform providers lock \
@@ -45,7 +45,7 @@ jobs:
             -platform=linux_arm64 \
             -platform=darwin_amd64 \
             -platform=darwin_arm64
-          cat .terraform.lock.hcl
+          git diff --exit-code -- .terraform.lock.hcl
 
       - name: Validate Terraform
         working-directory: infra/aws/terraform
