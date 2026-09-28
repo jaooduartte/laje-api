@@ -431,12 +431,10 @@ export function createChampionshipsRouter(authService: AuthService): Router {
         parameters,
       );
       const total = Number(result.rows[0]?.totalCount ?? 0);
-      response
-        .status(200)
-        .json({
-          data: result.rows.map(({ totalCount: _totalCount, ...row }) => row),
-          meta: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
-        });
+      response.status(200).json({
+        data: result.rows.map(({ totalCount: _totalCount, ...row }) => row),
+        meta: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
+      });
     } catch (error) {
       next(error);
     }
