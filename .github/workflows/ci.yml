@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -36,19 +36,6 @@ jobs:
 
       - name: Lint
         run: npm run lint
-
-      - name: Normalize formatting
-        run: npm run format
-
-      - name: Commit normalized formatting
-        run: |
-          if ! git diff --quiet; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add .
-            git commit -m "LAJE-84 normalizar formatação"
-            git push
-          fi
 
       - name: Check formatting
         run: npm run format:check
