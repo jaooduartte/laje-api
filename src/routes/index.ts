@@ -16,7 +16,7 @@ const authService = new AuthService(authRepository, {
   enabled: environment.auth.enabled,
   jwtSecret: environment.auth.jwtSecret,
   jwtExpiresIn: environment.auth.jwtExpiresIn,
-  refreshExpiresInDays: 30,
+  refreshExpiresInDays: environment.auth.refreshExpiresInDays,
   secureCookies: environment.nodeEnv === "production",
 });
 
