@@ -31,6 +31,17 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Diagnose championship route formatting
+        run: |
+          cp src/modules/championships/championships.routes.ts /tmp/championships-before.ts
+          npx prettier src/modules/championships/championships.routes.ts --write
+          echo "--- diff after one additional Prettier pass ---"
+          git diff -- src/modules/championships/championships.routes.ts || true
+          cp src/modules/championships/championships.routes.ts /tmp/championships-once.ts
+          npx prettier src/modules/championships/championships.routes.ts --write
+          echo "--- diff between first and second diagnostic passes ---"
+          diff -u /tmp/championships-once.ts src/modules/championships/championships.routes.ts || true
+
       - name: Typecheck
         run: npm run typecheck
 
