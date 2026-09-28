@@ -1,0 +1,52 @@
+name: Terraform
+
+on:
+  pull_request:
+    paths:
+      - "infra/aws/terraform/**"
+      - ".github/workflows/terraform.yml"
+  push:
+    branches:
+      - main
+      - "LAJE-*"
+    paths:
+      - "infra/aws/terraform/**"
+      - ".github/workflows/terraform.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Terraform validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.16.4"
+
+      - name: Check formatting
+        run: terraform fmt -check -recursive infra/aws/terraform
+
+      - name: Initialize Terraform without backend
+        working-directory: infra/aws/terraform
+        run: terraform init -backend=false -input=false -lockfile=readonly
+
+      - name: Verify provider lock file for supported developer platforms
+        working-directory: infra/aws/terraform
+        run: |
+          terraform providers lock \
+            -platform=linux_amd64 \
+            -platform=linux_arm64 \
+            -platform=darwin_amd64 \
+            -platform=darwin_arm64
+          git diff --exit-code -- .terraform.lock.hcl
+
+      - name: Validate Terraform
+        working-directory: infra/aws/terraform
+        run: terraform validate
