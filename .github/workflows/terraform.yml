@@ -28,16 +28,24 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.9.8"
+          terraform_version: "1.16.4"
 
       - name: Check formatting
-        run: |
-          terraform fmt -recursive infra/aws/terraform
-          git diff --exit-code -- infra/aws/terraform
+        run: terraform fmt -check -recursive infra/aws/terraform
 
       - name: Initialize Terraform without backend
         working-directory: infra/aws/terraform
         run: terraform init -backend=false -input=false
+
+      - name: Generate provider lock file for supported developer platforms
+        working-directory: infra/aws/terraform
+        run: |
+          terraform providers lock \
+            -platform=linux_amd64 \
+            -platform=linux_arm64 \
+            -platform=darwin_amd64 \
+            -platform=darwin_arm64
+          cat .terraform.lock.hcl
 
       - name: Validate Terraform
         working-directory: infra/aws/terraform
