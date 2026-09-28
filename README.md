@@ -28,6 +28,7 @@ A Vercel permanece somente como hospedagem do frontend por uma exceção especí
 
 ## Estados operacionais da migração
 
+<!-- prettier-ignore -->
 | Estado | Frontend | Backend principal | Banco principal | Finalidade |
 | --- | --- | --- | --- | --- |
 | Produção atual durante a migração | Vercel, repositório `laje` | Supabase | PostgreSQL do Supabase | Preservar a operação real até o cutover |
@@ -135,6 +136,7 @@ Os detalhes de semântica e respostas estão em [docs/healthchecks.md](docs/heal
 
 ## Scripts
 
+<!-- prettier-ignore -->
 | Comando | Finalidade |
 | --- | --- |
 | `npm run dev` | Executa o servidor TypeScript em modo watch |
