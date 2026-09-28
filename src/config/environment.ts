@@ -139,7 +139,10 @@ const corsOrigins = csvOrigins("CORS_ORIGINS");
 if (databaseUrl) {
   try {
     const parsedDatabaseUrl = new URL(databaseUrl);
-    if (parsedDatabaseUrl.protocol !== "postgres:" && parsedDatabaseUrl.protocol !== "postgresql:") {
+    if (
+      parsedDatabaseUrl.protocol !== "postgres:" &&
+      parsedDatabaseUrl.protocol !== "postgresql:"
+    ) {
       issues.push("DATABASE_URL must use the postgres:// or postgresql:// protocol.");
     }
   } catch {

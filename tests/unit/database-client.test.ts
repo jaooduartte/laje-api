@@ -61,7 +61,9 @@ test("DatabaseClient validates connectivity with a lightweight query", async () 
 
   await database.checkConnection();
 
-  assert.deepEqual(adapter.statements, [{ statement: "SELECT 1 AS connection_ok", parameters: [] }]);
+  assert.deepEqual(adapter.statements, [
+    { statement: "SELECT 1 AS connection_ok", parameters: [] },
+  ]);
 });
 
 test("DatabaseClient propagates connection failures", async () => {

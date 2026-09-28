@@ -40,13 +40,13 @@ Repositories de domínio não devem importar o driver `postgres`, criar conexõe
 
 A aplicação usa as seguintes variáveis:
 
-| Variável | Padrão | Finalidade |
-| --- | ---: | --- |
-| `DATABASE_URL` | obrigatório | URI PostgreSQL completa. |
-| `DATABASE_POOL_MAX` | `10` | Número máximo de conexões abertas pelo processo da API. |
-| `DATABASE_IDLE_TIMEOUT_SECONDS` | `20` | Tempo máximo de ociosidade antes de liberar uma conexão. |
-| `DATABASE_CONNECT_TIMEOUT_SECONDS` | `10` | Limite para estabelecimento de uma nova conexão. |
-| `DATABASE_SHUTDOWN_TIMEOUT_SECONDS` | `5` | Janela de encerramento gracioso do pool. |
+| Variável                            |      Padrão | Finalidade                                               |
+| ----------------------------------- | ----------: | -------------------------------------------------------- |
+| `DATABASE_URL`                      | obrigatório | URI PostgreSQL completa.                                 |
+| `DATABASE_POOL_MAX`                 |        `10` | Número máximo de conexões abertas pelo processo da API.  |
+| `DATABASE_IDLE_TIMEOUT_SECONDS`     |        `20` | Tempo máximo de ociosidade antes de liberar uma conexão. |
+| `DATABASE_CONNECT_TIMEOUT_SECONDS`  |        `10` | Limite para estabelecimento de uma nova conexão.         |
+| `DATABASE_SHUTDOWN_TIMEOUT_SECONDS` |         `5` | Janela de encerramento gracioso do pool.                 |
 
 Exemplo local:
 
