@@ -23,7 +23,7 @@ class FakeQueryAdapter implements DatabaseQueryAdapter {
     if (this.error) throw this.error;
 
     return {
-      rows: [{ ok: 1 } as Row],
+      rows: [{ ok: 1 } as unknown as Row],
       count: 1,
     };
   }
@@ -45,6 +45,10 @@ class FakeAdapter extends FakeQueryAdapter implements DatabaseAdapter {
 }
 
 class TestRepository extends BaseRepository {
+  constructor(database: DatabaseQueryExecutor) {
+    super(database);
+  }
+
   async findMarker(): Promise<number> {
     const result = await this.database.query<{ marker: number }>("SELECT $1::int AS marker", [7]);
     return result.rows[0]?.marker ?? 0;
@@ -103,7 +107,7 @@ test("BaseRepository receives a query executor instead of importing a global con
     ): Promise<DatabaseQueryResult<Row>> {
       assert.equal(statement, "SELECT $1::int AS marker");
       assert.deepEqual(parameters, [7]);
-      return { rows: [{ marker: 7 } as Row], count: 1 };
+      return { rows: [{ marker: 7 } as unknown as Row], count: 1 };
     },
   };
 
