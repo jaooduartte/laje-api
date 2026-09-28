@@ -5,10 +5,7 @@ import { API_PREFIX } from "./common/constants/app.constants.js";
 import { errorHandler } from "./common/middlewares/error-handler.middleware.js";
 import { notFoundHandler } from "./common/middlewares/not-found.middleware.js";
 import { appConfig } from "./config/app.config.js";
-import {
-  createOpenApiRouter,
-  isApiDocumentationEnabled,
-} from "./openapi/openapi.routes.js";
+import { createOpenApiRouter, isApiDocumentationEnabled } from "./openapi/openapi.routes.js";
 import { apiRouter } from "./routes/index.js";
 
 export const app = express();
