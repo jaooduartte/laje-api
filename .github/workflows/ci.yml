@@ -31,15 +31,25 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Normalize championship route
+      - name: Normalize LAJE-86 files
         if: github.event_name == 'push' && github.ref == 'refs/heads/LAJE-86'
         run: |
-          npx prettier src/modules/championships/championships.routes.ts --write
-          if ! git diff --quiet -- src/modules/championships/championships.routes.ts; then
+          npx prettier \
+            src/modules/championships/championships.routes.ts \
+            tests/unit/priority-flows-openapi.test.ts \
+            tests/unit/standings.service.test.ts \
+            --write
+          if ! git diff --quiet -- \
+            src/modules/championships/championships.routes.ts \
+            tests/unit/priority-flows-openapi.test.ts \
+            tests/unit/standings.service.test.ts; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add src/modules/championships/championships.routes.ts
-            git commit -m "LAJE-86 normalize championship route formatting"
+            git add \
+              src/modules/championships/championships.routes.ts \
+              tests/unit/priority-flows-openapi.test.ts \
+              tests/unit/standings.service.test.ts
+            git commit -m "LAJE-86 normalize sports core tests"
             git push origin HEAD:LAJE-86
           fi
 
