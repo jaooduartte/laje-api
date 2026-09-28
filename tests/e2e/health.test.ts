@@ -84,10 +84,7 @@ test("GET /api/v1/health returns application health without checking PostgreSQL"
 });
 
 test("GET /api/v1/health/database returns 200 when PostgreSQL is reachable", async () => {
-  const response = await get(
-    createTestApp(new HealthyDatabase()),
-    "/api/v1/health/database",
-  );
+  const response = await get(createTestApp(new HealthyDatabase()), "/api/v1/health/database");
 
   assert.equal(response.statusCode, 200);
   assert.deepEqual(response.body, {
@@ -96,18 +93,12 @@ test("GET /api/v1/health/database returns 200 when PostgreSQL is reachable", asy
   });
 });
 
-test(
-  "GET /api/v1/health/database returns 503 without internal details when PostgreSQL is unavailable",
-  async () => {
-    const response = await get(
-      createTestApp(new UnavailableDatabase()),
-      "/api/v1/health/database",
-    );
+test("GET /api/v1/health/database returns 503 without internal details when PostgreSQL is unavailable", async () => {
+  const response = await get(createTestApp(new UnavailableDatabase()), "/api/v1/health/database");
 
-    assert.equal(response.statusCode, 503);
-    assert.deepEqual(response.body, {
-      database: "unreachable",
-      status: "unavailable",
-    });
-  },
-);
+  assert.equal(response.statusCode, 503);
+  assert.deepEqual(response.body, {
+    database: "unreachable",
+    status: "unavailable",
+  });
+});

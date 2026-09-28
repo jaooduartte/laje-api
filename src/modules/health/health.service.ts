@@ -1,7 +1,4 @@
-import type {
-  ApplicationHealthResponse,
-  DatabaseHealthResponse,
-} from "./health.schema.js";
+import type { ApplicationHealthResponse, DatabaseHealthResponse } from "./health.schema.js";
 
 export interface HealthDatabase {
   checkConnection(): Promise<void>;
