@@ -20,11 +20,13 @@ const expectedPlannedOperations = [
 ] as const;
 
 test("priority flows are present in OpenAPI and explicitly marked as planned", () => {
-  for (const [path, method] of expectedPlannedOperations) {
-    const pathItem = openApiDocument.paths[path];
-    assert.ok(pathItem, `${path} should exist`);
+  const paths = openApiDocument.paths as unknown as Record<
+    string,
+    Record<string, { "x-implementation-status"?: string }>
+  >;
 
-    const operation = pathItem[method];
+  for (const [path, method] of expectedPlannedOperations) {
+    const operation = paths[path]?.[method];
     assert.ok(operation, `${method.toUpperCase()} ${path} should exist`);
     assert.equal(operation["x-implementation-status"], "planned");
   }
