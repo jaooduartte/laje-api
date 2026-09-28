@@ -4,16 +4,18 @@ import test from "node:test";
 import { DatabaseClient } from "../../src/database/client.js";
 import { createPostgresAdapter } from "../../src/database/postgres-adapter.js";
 
-const databaseUrl = process.env.DATABASE_URL;
-
-if (!databaseUrl) {
-  throw new Error("DATABASE_URL is required to run PostgreSQL integration tests.");
+function getDatabaseUrl(): string {
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    throw new Error("DATABASE_URL is required to run PostgreSQL integration tests.");
+  }
+  return databaseUrl;
 }
 
 function createTestDatabase(): DatabaseClient {
   return new DatabaseClient(
     createPostgresAdapter({
-      url: databaseUrl,
+      url: getDatabaseUrl(),
       maxConnections: 2,
       idleTimeoutSeconds: 5,
       connectTimeoutSeconds: 5,
