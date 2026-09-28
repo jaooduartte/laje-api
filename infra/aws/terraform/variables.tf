@@ -55,5 +55,5 @@ variable "db_master_username" {
 variable "backup_retention_days" {
   description = "Automated backup retention for staging."
   type        = number
-  default     = 7
+  default     = 1
 }
