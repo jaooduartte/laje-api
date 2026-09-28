@@ -79,6 +79,21 @@ export function requireEnum<const Values extends readonly string[]>(
 }
 
 export function optionalEnum<const Values extends readonly string[]>(
+  value: string,
+  field: string,
+  values: Values,
+): Values[number];
+export function optionalEnum<const Values extends readonly string[]>(
+  value: null | undefined,
+  field: string,
+  values: Values,
+): undefined;
+export function optionalEnum<const Values extends readonly string[]>(
+  value: unknown,
+  field: string,
+  values: Values,
+): Values[number] | undefined;
+export function optionalEnum<const Values extends readonly string[]>(
   value: unknown,
   field: string,
   values: Values,
