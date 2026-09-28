@@ -40,21 +40,22 @@ Repositories de domínio não devem importar o driver `postgres`, criar conexõe
 
 A aplicação usa as seguintes variáveis:
 
-| Variável                            |      Padrão | Finalidade                                               |
-| ----------------------------------- | ----------: | -------------------------------------------------------- |
-| `DATABASE_URL`                      | obrigatório | URI PostgreSQL completa.                                 |
-| `DATABASE_POOL_MAX`                 |        `10` | Número máximo de conexões abertas pelo processo da API.  |
-| `DATABASE_IDLE_TIMEOUT_SECONDS`     |        `20` | Tempo máximo de ociosidade antes de liberar uma conexão. |
-| `DATABASE_CONNECT_TIMEOUT_SECONDS`  |        `10` | Limite para estabelecimento de uma nova conexão.         |
-| `DATABASE_SHUTDOWN_TIMEOUT_SECONDS` |         `5` | Janela de encerramento gracioso do pool.                 |
+<!-- prettier-ignore -->
+| Variável | Padrão | Finalidade |
+| --- | ---: | --- |
+| `DATABASE_URL` | obrigatório | URI PostgreSQL completa. |
+| `DATABASE_POOL_MAX` | `10` | Número máximo de conexões abertas pelo processo da API. |
+| `DATABASE_IDLE_TIMEOUT_SECONDS` | `20` | Tempo máximo de ociosidade antes de liberar uma conexão. |
+| `DATABASE_CONNECT_TIMEOUT_SECONDS` | `10` | Limite para estabelecimento de uma nova conexão. |
+| `DATABASE_SHUTDOWN_TIMEOUT_SECONDS` | `5` | Janela de encerramento gracioso do pool. |
 
-Exemplo local:
+A URI deve ser fornecida pelo ambiente de execução. Exemplo genérico, que deve ser substituído por valores do ambiente autorizado:
 
 ```text
-DATABASE_URL=postgresql://laje:laje@localhost:5432/laje?sslmode=disable
+DATABASE_URL=postgresql://<usuario>:<senha>@<host>:5432/<database>?sslmode=<modo>
 ```
 
-Nenhuma credencial real deve ser versionada. Em AWS, a credencial deve permanecer no AWS Secrets Manager e ser disponibilizada à task da API em runtime.
+Não existe requisito de manter um PostgreSQL local permanente. Em desenvolvimento, a API pode apontar para qualquer PostgreSQL 17 controlado e autorizado para esse fim. Em CI, a integração utiliza PostgreSQL 17 efêmero. Nenhuma credencial real deve ser versionada.
 
 ## RDS de staging
 
@@ -67,6 +68,8 @@ laje-staging-postgres.c7s8g84qonz5.sa-east-1.rds.amazonaws.com:5432
 A instância exige SSL (`rds.force_ssl=1`) e o Security Group do banco aceita `5432` somente da camada de aplicação autorizada. Portanto, testes contra o RDS real devem partir da rede privada AWS prevista para a `laje-api`; o endpoint não deve ser tornado público para testes locais.
 
 A URI do ambiente AWS deve habilitar TLS, por exemplo usando `sslmode=require`. Sempre que a cadeia de certificados utilizada pelo runtime estiver configurada para validar a CA do RDS, deve-se preferir validação equivalente a `sslmode=verify-full`, conforme a arquitetura do projeto.
+
+Em AWS, a credencial deve permanecer no AWS Secrets Manager e ser disponibilizada ao workload da API em runtime. O segredo gerenciado automaticamente pelo RDS armazena campos de credencial; como a aplicação recebe uma única `DATABASE_URL`, o deploy deve fornecer essa URI por secret específico da aplicação ou compô-la de forma segura na inicialização, sem persistir credenciais no repositório ou na imagem.
 
 ## Lifecycle
 
@@ -103,11 +106,15 @@ A integração real com PostgreSQL 17 é validada no CI usando um service contai
 npm run test:integration
 ```
 
-A conexão ao RDS real não é executada no CI público, pois o banco é privado e suas credenciais ficam fora do repositório. Essa validação deve ocorrer quando a task/container da API estiver conectada à VPC, etapa que será materializada nas tarefas seguintes da infraestrutura AWS.
+A conexão ao RDS real não é executada no CI público, pois o banco é privado e suas credenciais ficam fora do repositório. Essa validação deverá ocorrer quando o workload ECS/Fargate da API estiver conectado à VPC e ao Security Group autorizado.
 
-## Fora do escopo da LAJE-107
+## Relação com as tarefas seguintes
 
-- migração de queries/regras de negócio do Supabase;
-- importação/cutover dos dados;
-- endpoint de healthcheck HTTP (LAJE-109);
-- container/deploy definitivo da API na AWS (LAJE-131).
+A LAJE-107 entregou a camada de acesso PostgreSQL. A LAJE-131 entregou a imagem Docker compatível com o runtime AWS, mas não provisionou ECS/Fargate nem realizou deploy físico.
+
+Permanecem em tarefas próprias:
+
+- migração de queries e regras de negócio do Supabase;
+- importação, ensaios, cutover e rollback dos dados (`LAJE-88`);
+- contratos HTTP e OpenAPI (`LAJE-115` e `LAJE-84`);
+- deploy automatizado da API na AWS (`LAJE-33` e tarefas de infraestrutura relacionadas).
