@@ -156,6 +156,7 @@ const mailEnabled = booleanValue("MAIL_ENABLED", false);
 
 const authJwtSecret = optional("AUTH_JWT_SECRET");
 const authJwtExpiresIn = optional("AUTH_JWT_EXPIRES_IN");
+const authRefreshExpiresInDays = optionalInteger("AUTH_REFRESH_EXPIRES_IN_DAYS", 30, 1, 90);
 if (authEnabled) {
   if (!authJwtSecret || authJwtSecret.length < 32) {
     issues.push(
@@ -200,6 +201,7 @@ const auth = createRedactedConfig(
     enabled: authEnabled,
     jwtSecret: authJwtSecret,
     jwtExpiresIn: authJwtExpiresIn,
+    refreshExpiresInDays: authRefreshExpiresInDays,
   },
   ["jwtSecret"] as const,
 );
