@@ -17,6 +17,7 @@
     "test": "npm run test:unit && npm run test:e2e",
     "test:unit": "node --import tsx --test tests/unit/*.test.ts",
     "test:e2e": "node --import tsx --test tests/e2e/*.test.ts",
+    "test:integration": "node --import tsx --test tests/integration/*.test.ts",
     "test:coverage": "node --import tsx --test --experimental-test-coverage tests/unit/*.test.ts tests/e2e/*.test.ts"
   },
   "repository": {
@@ -36,7 +37,8 @@
   "dependencies": {
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "postgres": "^3.4.9"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
