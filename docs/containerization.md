@@ -87,9 +87,9 @@ A separação permite utilizar o primeiro endpoint como liveness e o segundo com
 
 No ambiente de staging já existe um Amazon RDS for PostgreSQL 17 privado. O banco deve permanecer não público; a `laje-api` deverá acessá-lo a partir de workloads autorizados dentro da VPC.
 
-Para ECS/Fargate, os valores sensíveis devem ser injetados em runtime por AWS Secrets Manager/ECS task definition. O segredo gerenciado automaticamente pelo RDS contém os campos de credencial do banco, mas a aplicação atualmente recebe uma única `DATABASE_URL`. A configuração de deploy deve, portanto, fornecer essa variável de forma segura — por exemplo, por um secret específico da aplicação ou por mecanismo de inicialização que componha a URL sem persistir credenciais na imagem.
+Para ECS/Fargate, os valores sensíveis devem ser injetados em runtime por AWS Secrets Manager/ECS task definition. O segredo gerenciado automaticamente pelo RDS armazena os campos de credencial do banco, enquanto a aplicação recebe uma única `DATABASE_URL`. Por isso, a definição de task/deploy deve fornecer uma `DATABASE_URL` pronta por meio de um secret específico da aplicação ou adotar um mecanismo de inicialização que componha a URL a partir dos campos gerenciados, sem persistir credenciais na imagem ou no repositório.
 
-Não exponha o RDS publicamente para simplificar o deploy.
+O RDS de staging permanece privado e não deve ser tornado público para simplificar o deploy.
 
 ## CI
 
