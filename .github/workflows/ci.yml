@@ -134,3 +134,73 @@ jobs:
           --dbname laje_baseline
           --set ON_ERROR_STOP=1
           --file infra/database/baseline/validate.sql
+
+  container-image:
+    name: Docker Image
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Build application image
+        run: docker build --tag laje-api:ci .
+
+      - name: Create isolated Docker network
+        run: docker network create laje-ci
+
+      - name: Start PostgreSQL dependency
+        run: >-
+          docker run -d
+          --name laje-postgres
+          --network laje-ci
+          -e POSTGRES_USER=postgres
+          -e POSTGRES_PASSWORD=postgres
+          -e POSTGRES_DB=laje_api_test
+          postgres:17
+
+      - name: Wait for PostgreSQL
+        run: |
+          for attempt in {1..30}; do
+            if docker exec laje-postgres pg_isready -U postgres -d laje_api_test; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs laje-postgres
+          exit 1
+
+      - name: Start API container
+        run: >-
+          docker run -d
+          --name laje-api
+          --network laje-ci
+          -p 3000:3000
+          -e NODE_ENV=test
+          -e PORT=3000
+          -e DATABASE_URL=postgresql://postgres:postgres@laje-postgres:5432/laje_api_test?sslmode=disable
+          -e CORS_ORIGINS=http://localhost:8080
+          laje-api:ci
+
+      - name: Validate container health endpoints
+        run: |
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:3000/api/v1/health >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+
+          curl --fail --silent http://127.0.0.1:3000/api/v1/health
+          curl --fail --silent http://127.0.0.1:3000/api/v1/health/database
+
+      - name: Validate non-root runtime user
+        run: |
+          test "$(docker exec laje-api id -u)" != "0"
+
+      - name: Show container logs on failure
+        if: failure()
+        run: |
+          docker logs laje-api || true
+          docker logs laje-postgres || true

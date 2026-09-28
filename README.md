@@ -83,6 +83,13 @@ npm run test:coverage
 `npm start` executa o build automaticamente antes de iniciar `dist/server.js`.
 Os testes usam o runner nativo do Node com suporte TypeScript via `tsx`.
 
+## Container
+
+A imagem Docker multi-stage e o fluxo de execução com PostgreSQL gerenciado estão
+documentados em [docs/containerization.md](docs/containerization.md). O container
+recebe toda configuração em runtime, executa como usuário não-root e não exige um
+serviço PostgreSQL local via Docker Compose.
+
 O baseline PostgreSQL reproduzível está documentado em
 [docs/migration/database-baseline.md](docs/migration/database-baseline.md).
 As instruções completas de setup e migração serão consolidadas nas tarefas de
