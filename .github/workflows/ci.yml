@@ -38,10 +38,7 @@ jobs:
         run: npm run lint
 
       - name: Check formatting
-        run: |
-          npx prettier docs/migration/migration-strategy.md --write
-          git diff -- docs/migration/migration-strategy.md
-          exit 1
+        run: npm run format:check
 
       - name: Run tests
         run: npm test
