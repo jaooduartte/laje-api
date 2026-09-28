@@ -1,10 +1,17 @@
+import {
+  priorityFlowPaths,
+  priorityFlowSchemas,
+  priorityFlowSecuritySchemes,
+  priorityFlowTags,
+} from "./priority-flows.openapi.js";
+
 export const openApiDocument = {
   openapi: "3.1.0",
   info: {
     title: "LAJE API",
     version: "1.0.0",
     description:
-      "Contratos HTTP da API dedicada da Liga das Atléticas de Joinville. As convenções formais estão registradas em docs/api-conventions.md.",
+      "Contratos HTTP da API dedicada da Liga das Atléticas de Joinville. As convenções formais estão registradas em docs/api-conventions.md. Endpoints com x-implementation-status=planned estão definidos contratualmente, mas ainda não implementados.",
   },
   servers: [
     {
@@ -21,6 +28,7 @@ export const openApiDocument = {
       name: "Health",
       description: "Endpoints operacionais para aplicação e dependência PostgreSQL.",
     },
+    ...priorityFlowTags,
   ],
   paths: {
     "/api/v1": {
@@ -94,6 +102,7 @@ export const openApiDocument = {
         },
       },
     },
+    ...priorityFlowPaths,
   },
   components: {
     securitySchemes: {
@@ -102,8 +111,9 @@ export const openApiDocument = {
         scheme: "bearer",
         bearerFormat: "JWT",
         description:
-          "Esquema reservado para a autenticação futura da LAJE-85. Nenhuma rota atual exige Bearer JWT nesta etapa.",
+          "Bearer JWT planejado para a autenticação administrativa. As rotas protegidas da LAJE-84 já declaram esse requisito; a implementação pertence à LAJE-85.",
       },
+      ...priorityFlowSecuritySchemes,
     },
     parameters: {
       Page: {
@@ -306,6 +316,7 @@ export const openApiDocument = {
           },
         },
       },
+      ...priorityFlowSchemas,
     },
   },
 } as const;
