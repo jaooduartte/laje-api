@@ -135,6 +135,26 @@ jobs:
           --set ON_ERROR_STOP=1
           --file infra/database/baseline/validate.sql
 
+      - name: Apply incremental migrations
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          migrations=(infra/database/migrations/*.sql)
+          for migration in "${migrations[@]}"; do
+            echo "Applying ${migration}"
+            psql \
+              --host localhost \
+              --username postgres \
+              --dbname laje_baseline \
+              --set ON_ERROR_STOP=1 \
+              --file "${migration}"
+          done
+
+      - name: Validate LAJE-85 auth migration
+        run: |
+          test "$(psql --host localhost --username postgres --dbname laje_baseline --tuples-only --no-align --command "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relname IN ('admin_auth_accounts', 'admin_auth_sessions');")" = "2"
+          test "$(psql --host localhost --username postgres --dbname laje_baseline --tuples-only --no-align --command "SELECT count(*) FROM pg_constraint WHERE conname IN ('admin_auth_accounts_user_id_fkey', 'admin_auth_sessions_user_id_fkey');")" = "2"
+
   container-image:
     name: Docker Image
     runs-on: ubuntu-latest

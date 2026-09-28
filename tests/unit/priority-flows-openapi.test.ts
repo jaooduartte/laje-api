@@ -4,10 +4,6 @@ import test from "node:test";
 import { openApiDocument } from "../../src/openapi/openapi.document.js";
 
 const expectedPlannedOperations = [
-  ["/api/v1/auth/sessions", "post"],
-  ["/api/v1/auth/sessions/refresh", "post"],
-  ["/api/v1/auth/sessions/current", "delete"],
-  ["/api/v1/auth/me", "get"],
   ["/api/v1/matches", "get"],
   ["/api/v1/matches/{matchId}", "get"],
   ["/api/v1/matches/{matchId}/start", "post"],
@@ -19,7 +15,17 @@ const expectedPlannedOperations = [
   ["/api/v1/championships/{championshipId}/calendar", "get"],
 ] as const;
 
-test("priority flows are present in OpenAPI and explicitly marked as planned", () => {
+const implementedAuthenticationOperations = [
+  ["/api/v1/auth/login-state", "post"],
+  ["/api/v1/auth/password-setup", "post"],
+  ["/api/v1/auth/sessions", "post"],
+  ["/api/v1/auth/sessions/refresh", "post"],
+  ["/api/v1/auth/sessions/current", "delete"],
+  ["/api/v1/auth/me", "get"],
+  ["/api/v1/auth/password", "patch"],
+] as const;
+
+test("priority flows that are not migrated remain explicitly marked as planned", () => {
   const paths = openApiDocument.paths as unknown as Record<
     string,
     Record<string, { "x-implementation-status"?: string }>
@@ -29,6 +35,19 @@ test("priority flows are present in OpenAPI and explicitly marked as planned", (
     const operation = paths[path]?.[method];
     assert.ok(operation, `${method.toUpperCase()} ${path} should exist`);
     assert.equal(operation["x-implementation-status"], "planned");
+  }
+});
+
+test("LAJE-85 authentication operations are implemented rather than marked as planned", () => {
+  const paths = openApiDocument.paths as unknown as Record<
+    string,
+    Record<string, { "x-implementation-status"?: string }>
+  >;
+
+  for (const [path, method] of implementedAuthenticationOperations) {
+    const operation = paths[path]?.[method];
+    assert.ok(operation, `${method.toUpperCase()} ${path} should exist`);
+    assert.notEqual(operation["x-implementation-status"], "planned");
   }
 });
 
