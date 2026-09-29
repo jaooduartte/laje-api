@@ -54,6 +54,23 @@ interface IndividualStandingRow {
   firstPlaces: number;
   secondPlaces: number;
   thirdPlaces: number;
+  fourthPlaces: number;
+  fifthPlaces: number;
+  sixthPlaces: number;
+  seventhPlaces: number;
+  eighthPlaces: number;
+  ninthPlaces: number;
+  tenthPlaces: number;
+  eleventhPlaces: number;
+  twelfthPlaces: number;
+  thirteenthPlaces: number;
+  fourteenthPlaces: number;
+  fifteenthPlaces: number;
+  sixteenthPlaces: number;
+  seventeenthPlaces: number;
+  eighteenthPlaces: number;
+  nineteenthPlaces: number;
+  twentiethPlaces: number;
   relayPointsTotal: number;
   source: "INDIVIDUAL";
 }
@@ -284,13 +301,28 @@ export function createStandingsRouter(): Router {
           st.team_id AS "teamId", t.name AS "teamName", t.city AS "teamCity",
           st.total_points AS "totalPoints", st.scored_events_count AS "scoredEventsCount",
           st.first_places AS "firstPlaces", st.second_places AS "secondPlaces",
-          st.third_places AS "thirdPlaces", st.relay_points_total AS "relayPointsTotal"
+          st.third_places AS "thirdPlaces", st.fourth_places AS "fourthPlaces",
+          st.fifth_places AS "fifthPlaces", st.sixth_places AS "sixthPlaces",
+          st.seventh_places AS "seventhPlaces", st.eighth_places AS "eighthPlaces",
+          st.ninth_places AS "ninthPlaces", st.tenth_places AS "tenthPlaces",
+          st.eleventh_places AS "eleventhPlaces", st.twelfth_places AS "twelfthPlaces",
+          st.thirteenth_places AS "thirteenthPlaces", st.fourteenth_places AS "fourteenthPlaces",
+          st.fifteenth_places AS "fifteenthPlaces", st.sixteenth_places AS "sixteenthPlaces",
+          st.seventeenth_places AS "seventeenthPlaces", st.eighteenth_places AS "eighteenthPlaces",
+          st.nineteenth_places AS "nineteenthPlaces", st.twentieth_places AS "twentiethPlaces",
+          st.relay_points_total AS "relayPointsTotal"
          FROM public.championship_individual_team_standings st
          JOIN public.teams t ON t.id = st.team_id
          JOIN public.sports sp ON sp.id = st.sport_id
          WHERE ${individualConditions.join(" AND ")}
          ORDER BY sp.name, st.naipe, st.division NULLS FIRST, st.total_points DESC,
-           st.first_places DESC, st.second_places DESC, st.third_places DESC, t.name ASC`,
+           st.first_places DESC, st.second_places DESC, st.third_places DESC,
+           st.fourth_places DESC, st.fifth_places DESC, st.sixth_places DESC,
+           st.seventh_places DESC, st.eighth_places DESC, st.ninth_places DESC,
+           st.tenth_places DESC, st.eleventh_places DESC, st.twelfth_places DESC,
+           st.thirteenth_places DESC, st.fourteenth_places DESC, st.fifteenth_places DESC,
+           st.sixteenth_places DESC, st.seventeenth_places DESC, st.eighteenth_places DESC,
+           st.nineteenth_places DESC, st.twentieth_places DESC, t.name ASC`,
         individualParameters,
       );
 
@@ -313,6 +345,23 @@ export function createStandingsRouter(): Router {
           firstPlaces: toNumber(raw.firstPlaces),
           secondPlaces: toNumber(raw.secondPlaces),
           thirdPlaces: toNumber(raw.thirdPlaces),
+          fourthPlaces: toNumber(raw.fourthPlaces),
+          fifthPlaces: toNumber(raw.fifthPlaces),
+          sixthPlaces: toNumber(raw.sixthPlaces),
+          seventhPlaces: toNumber(raw.seventhPlaces),
+          eighthPlaces: toNumber(raw.eighthPlaces),
+          ninthPlaces: toNumber(raw.ninthPlaces),
+          tenthPlaces: toNumber(raw.tenthPlaces),
+          eleventhPlaces: toNumber(raw.eleventhPlaces),
+          twelfthPlaces: toNumber(raw.twelfthPlaces),
+          thirteenthPlaces: toNumber(raw.thirteenthPlaces),
+          fourteenthPlaces: toNumber(raw.fourteenthPlaces),
+          fifteenthPlaces: toNumber(raw.fifteenthPlaces),
+          sixteenthPlaces: toNumber(raw.sixteenthPlaces),
+          seventeenthPlaces: toNumber(raw.seventeenthPlaces),
+          eighteenthPlaces: toNumber(raw.eighteenthPlaces),
+          nineteenthPlaces: toNumber(raw.nineteenthPlaces),
+          twentiethPlaces: toNumber(raw.twentiethPlaces),
           relayPointsTotal: toNumber(raw.relayPointsTotal),
           source: "INDIVIDUAL",
         };
