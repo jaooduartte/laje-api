@@ -5,6 +5,10 @@ import {
   priorityFlowSecuritySchemes,
   priorityFlowTags,
 } from "./priority-flows.openapi.js";
+import {
+  sportsCoreContractPaths,
+  sportsCoreContractSchemas,
+} from "./sports-core-contracts.openapi.js";
 import { sportsCorePaths, sportsCoreSchemas, sportsCoreTags } from "./sports-core.openapi.js";
 
 export const openApiDocument = {
@@ -108,6 +112,7 @@ export const openApiDocument = {
     ...priorityFlowPaths,
     ...authPaths,
     ...sportsCorePaths,
+    ...sportsCoreContractPaths,
   },
   components: {
     securitySchemes: {
@@ -248,6 +253,7 @@ export const openApiDocument = {
       ...priorityFlowSchemas,
       ...authSchemas,
       ...sportsCoreSchemas,
+      ...sportsCoreContractSchemas,
     },
   },
 } as const;
