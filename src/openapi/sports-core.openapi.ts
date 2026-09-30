@@ -153,6 +153,23 @@ export const sportsCorePaths = {
       },
     },
   },
+  "/api/v1/matches/{matchId}/return-to-scheduled": {
+    post: {
+      tags: ["Matches"],
+      summary: "Retorna um jogo ao agendamento e limpa sua operação",
+      operationId: "returnMatchToScheduled",
+      "x-implementation-status": implemented,
+      security: bearer,
+      parameters: [matchId],
+      responses: {
+        "200": success({
+          type: "object",
+          properties: { data: { $ref: "#/components/schemas/MatchDto" } },
+        }),
+        "409": error("Estado do jogo incompatível."),
+      },
+    },
+  },
   "/api/v1/championships": {
     get: {
       tags: ["Championships"],
@@ -253,6 +270,37 @@ export const sportsCorePaths = {
           type: "object",
           properties: { data: { $ref: "#/components/schemas/SeasonSettingsDto" } },
         }),
+      },
+    },
+  },
+  "/api/v1/championships/{championshipId}/seasons/advance": {
+    post: {
+      tags: ["Seasons"],
+      summary: "Abre a próxima temporada de um campeonato encerrado",
+      operationId: "advanceChampionshipSeason",
+      "x-implementation-status": implemented,
+      security: bearer,
+      parameters: [championshipId],
+      responses: {
+        "200": success({
+          type: "object",
+          properties: { data: { $ref: "#/components/schemas/ChampionshipDto" } },
+        }),
+        "409": error("Campeonato ou próxima temporada em estado incompatível."),
+      },
+    },
+  },
+  "/api/v1/championships/{championshipId}/seasons/{seasonYear}/reset": {
+    post: {
+      tags: ["Seasons"],
+      summary: "Remove jogos e chaveamento da temporada para nova configuração",
+      operationId: "resetChampionshipSeasonMatches",
+      "x-implementation-status": implemented,
+      security: bearer,
+      parameters: [championshipId, seasonYearPath],
+      responses: {
+        "204": { description: "Jogos e chaveamento removidos." },
+        "404": error("Campeonato não encontrado."),
       },
     },
   },

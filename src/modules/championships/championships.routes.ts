@@ -49,12 +49,12 @@ async function getChampionship(executor: DatabaseQueryExecutor, championshipId: 
 async function insertAudit(
   executor: DatabaseQueryExecutor,
   request: AuthenticatedRequest,
-  actionType: "INSERT" | "UPDATE",
+  actionType: "INSERT" | "UPDATE" | "DELETE",
   resourceTable: string,
   recordId: string,
   description: string,
   oldData: DatabaseRow | null,
-  newData: DatabaseRow,
+  newData: DatabaseRow | null,
 ): Promise<void> {
   const principal = request.authPrincipal;
   await executor.query(
@@ -70,7 +70,7 @@ async function insertAudit(
       recordId,
       description,
       oldData ? JSON.stringify(oldData) : null,
-      JSON.stringify(newData),
+      newData ? JSON.stringify(newData) : null,
       principal?.user.profile?.name ?? null,
     ],
   );
@@ -365,6 +365,133 @@ export function createChampionshipsRouter(authService: AuthService): Router {
           return row;
         });
         response.status(200).json({ data: result });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.post(
+    "/:championshipId/seasons/advance",
+    ...requireSettingsEdit,
+    async (request, response, next) => {
+      try {
+        const championshipId = requireUuid(request.params.championshipId, "championshipId");
+        const championship = await database.transaction(async (tx) => {
+          const oldRecord = await getChampionship(tx, championshipId);
+          if (!oldRecord)
+            throw new ApiError(404, "CHAMPIONSHIP_NOT_FOUND", "Campeonato não encontrado.");
+          if (oldRecord.status !== "FINISHED") {
+            throw new ApiError(
+              409,
+              "CHAMPIONSHIP_STATE_CONFLICT",
+              "Somente campeonatos encerrados podem abrir uma nova temporada.",
+            );
+          }
+
+          const nextSeasonYear = Number(oldRecord.currentSeasonYear) + 1;
+          const nextSeasonData = await tx.query(
+            `SELECT EXISTS (
+              SELECT 1 FROM public.matches WHERE championship_id = $1 AND season_year = $2
+              UNION ALL
+              SELECT 1 FROM public.standings WHERE championship_id = $1 AND season_year = $2
+              UNION ALL
+              SELECT 1 FROM public.championship_bracket_editions WHERE championship_id = $1 AND season_year = $2
+            ) AS "exists"`,
+            [championshipId, nextSeasonYear],
+          );
+          if (nextSeasonData.rows[0]?.exists === true) {
+            throw new ApiError(
+              409,
+              "CHAMPIONSHIP_SEASON_CONFLICT",
+              "A próxima temporada já possui dados cadastrados.",
+            );
+          }
+
+          await tx.query(
+            `UPDATE public.championships
+             SET current_season_year = $2, status = 'PLANNING'::public.championship_status
+             WHERE id = $1`,
+            [championshipId, nextSeasonYear],
+          );
+          if (oldRecord.code === "INTERLAJE") {
+            await tx.query(
+              `INSERT INTO public.championship_overall_position_point_settings
+                (championship_id, season_year, final_position, points)
+               SELECT championship_id, $2, final_position, points
+               FROM public.championship_overall_position_point_settings
+               WHERE championship_id = $1 AND season_year = $3`,
+              [championshipId, nextSeasonYear, oldRecord.currentSeasonYear],
+            );
+          }
+
+          const newRecord = await getChampionship(tx, championshipId);
+          if (!newRecord)
+            throw new ApiError(
+              404,
+              "CHAMPIONSHIP_NOT_FOUND",
+              "Campeonato não encontrado após abrir a temporada.",
+            );
+          await insertAudit(
+            tx,
+            request as AuthenticatedRequest,
+            "UPDATE",
+            "championships",
+            championshipId,
+            "Nova temporada aberta via laje-api.",
+            oldRecord,
+            newRecord,
+          );
+          return newRecord;
+        });
+        response.status(200).json({ data: championship });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.post(
+    "/:championshipId/seasons/:seasonYear/reset",
+    ...requireSettingsEdit,
+    async (request, response, next) => {
+      try {
+        const championshipId = requireUuid(request.params.championshipId, "championshipId");
+        const seasonYear = requireInteger(request.params.seasonYear, "seasonYear", {
+          min: 2000,
+          max: 2100,
+        });
+        await database.transaction(async (tx) => {
+          if (!(await getChampionship(tx, championshipId)))
+            throw new ApiError(404, "CHAMPIONSHIP_NOT_FOUND", "Campeonato não encontrado.");
+          const matches = await tx.query(
+            "SELECT id FROM public.matches WHERE championship_id = $1 AND season_year = $2",
+            [championshipId, seasonYear],
+          );
+          const editions = await tx.query(
+            "SELECT id FROM public.championship_bracket_editions WHERE championship_id = $1 AND season_year = $2",
+            [championshipId, seasonYear],
+          );
+          await tx.query(
+            "DELETE FROM public.matches WHERE championship_id = $1 AND season_year = $2",
+            [championshipId, seasonYear],
+          );
+          await tx.query(
+            "DELETE FROM public.championship_bracket_editions WHERE championship_id = $1 AND season_year = $2",
+            [championshipId, seasonYear],
+          );
+          await insertAudit(
+            tx,
+            request as AuthenticatedRequest,
+            "DELETE",
+            "championship_season_matches",
+            `${championshipId}:${seasonYear}`,
+            "Jogos e chaveamento da temporada removidos via laje-api.",
+            { matches: matches.rows, editions: editions.rows },
+            null,
+          );
+        });
+        response.status(204).send();
       } catch (error) {
         next(error);
       }

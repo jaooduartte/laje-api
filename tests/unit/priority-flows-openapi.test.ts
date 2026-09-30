@@ -9,10 +9,14 @@ const implementedSportsCoreOperations = [
   ["/api/v1/matches/{matchId}/start", "post"],
   ["/api/v1/matches/{matchId}/scoreboard", "patch"],
   ["/api/v1/matches/{matchId}/finish", "post"],
+  ["/api/v1/matches/{matchId}/return-to-scheduled", "post"],
   ["/api/v1/championships", "get"],
   ["/api/v1/championships/{championshipId}", "get"],
   ["/api/v1/championships/{championshipId}/standings", "get"],
   ["/api/v1/championships/{championshipId}/calendar", "get"],
+  ["/api/v1/championships/{championshipId}/seasons/{seasonYear}", "put"],
+  ["/api/v1/championships/{championshipId}/seasons/advance", "post"],
+  ["/api/v1/championships/{championshipId}/seasons/{seasonYear}/reset", "post"],
 ] as const;
 
 const implementedAuthenticationOperations = [
@@ -52,6 +56,10 @@ test("administrative commands require bearer authentication while public reads d
   assert.deepEqual(openApiDocument.paths["/api/v1/matches/{matchId}/scoreboard"].patch.security, [
     { bearerAuth: [] },
   ]);
+  assert.deepEqual(
+    openApiDocument.paths["/api/v1/championships/{championshipId}/seasons/advance"].post.security,
+    [{ bearerAuth: [] }],
+  );
 
   assert.equal("security" in openApiDocument.paths["/api/v1/matches"].get, false);
   assert.equal(

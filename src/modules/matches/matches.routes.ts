@@ -451,7 +451,7 @@ async function persistScoreboardPatch(
   executor: DatabaseQueryExecutor,
   matchId: string,
   patch: ScoreboardPatch,
-  expectedStatus: "LIVE",
+  expectedStatus: "LIVE" | "SCHEDULED",
 ): Promise<void> {
   const columnByProperty: Record<keyof ScoreboardPatch, string> = {
     homeScore: "home_score",
@@ -615,7 +615,14 @@ export function createMatchesRouter(authService: AuthService): Router {
       const rawPayload = request.body == null ? {} : requireRecord(request.body);
       const scoreboardPayload = Object.fromEntries(
         Object.entries(rawPayload).filter(
-          ([key]) => !["isWalkover", "walkoverLoserTeamId", "isDoubleWalkover"].includes(key),
+          ([key]) =>
+            ![
+              "isWalkover",
+              "walkoverLoserTeamId",
+              "isDoubleWalkover",
+              "resolvedTieBreakerRule",
+              "resolvedTieBreakWinnerTeamId",
+            ].includes(key),
         ),
       );
       const scoreboard = parseScoreboardPayload(scoreboardPayload, false);
@@ -625,13 +632,22 @@ export function createMatchesRouter(authService: AuthService): Router {
         rawPayload.walkoverLoserTeamId === null
           ? null
           : optionalUuid(rawPayload.walkoverLoserTeamId, "walkoverLoserTeamId");
+      const resolvedTieBreakerRule =
+        rawPayload.resolvedTieBreakerRule === null
+          ? null
+          : optionalString(rawPayload.resolvedTieBreakerRule, "resolvedTieBreakerRule", 80);
+      const resolvedTieBreakWinnerTeamId =
+        rawPayload.resolvedTieBreakWinnerTeamId === null
+          ? null
+          : optionalUuid(rawPayload.resolvedTieBreakWinnerTeamId, "resolvedTieBreakWinnerTeamId");
 
       const updated = await database.transaction(async (transaction) => {
         const oldMatch = await getMatch(transaction, matchId);
         if (!oldMatch) {
           throw new ApiError(404, "MATCH_NOT_FOUND", "Jogo não encontrado.");
         }
-        if (oldMatch.status !== "LIVE") {
+        const isScheduledWalkover = oldMatch.status === "SCHEDULED" && isWalkover === true;
+        if (oldMatch.status !== "LIVE" && !isScheduledWalkover) {
           throw new ApiError(
             409,
             "MATCH_STATE_CONFLICT",
@@ -639,12 +655,19 @@ export function createMatchesRouter(authService: AuthService): Router {
           );
         }
 
-        await persistScoreboardPatch(transaction, matchId, scoreboard.patch, "LIVE");
+        await persistScoreboardPatch(
+          transaction,
+          matchId,
+          scoreboard.patch,
+          oldMatch.status === "SCHEDULED" ? "SCHEDULED" : "LIVE",
+        );
         await persistMatchSets(transaction, matchId, scoreboard.sets);
 
         const assignments = [
           "status = 'FINISHED'",
-          "end_time = COALESCE(end_time, now())",
+          oldMatch.status === "SCHEDULED"
+            ? "start_time = COALESCE(start_time, now())"
+            : "end_time = COALESCE(end_time, now())",
           "updated_at = now()",
         ];
         const parameters: unknown[] = [matchId];
@@ -660,10 +683,21 @@ export function createMatchesRouter(authService: AuthService): Router {
           parameters.push(walkoverLoserTeamId ?? null);
           assignments.push(`walkover_loser_team_id = $${parameters.length}`);
         }
+        if (resolvedTieBreakerRule !== undefined || rawPayload.resolvedTieBreakerRule === null) {
+          parameters.push(resolvedTieBreakerRule ?? null);
+          assignments.push(`resolved_tie_breaker_rule = $${parameters.length}`);
+        }
+        if (
+          resolvedTieBreakWinnerTeamId !== undefined ||
+          rawPayload.resolvedTieBreakWinnerTeamId === null
+        ) {
+          parameters.push(resolvedTieBreakWinnerTeamId ?? null);
+          assignments.push(`resolved_tie_break_winner_team_id = $${parameters.length}`);
+        }
         const finishResult = await transaction.query(
           `UPDATE public.matches SET ${assignments.join(", ")}
-             WHERE id = $1 AND status = 'LIVE' RETURNING id`,
-          parameters,
+             WHERE id = $1 AND status = $${parameters.length + 1}::public.match_status RETURNING id`,
+          [...parameters, oldMatch.status],
         );
         if (finishResult.rows.length === 0) {
           throw new ApiError(409, "MATCH_UPDATE_CONFLICT", "O jogo foi alterado concorrentemente.");
@@ -697,6 +731,89 @@ export function createMatchesRouter(authService: AuthService): Router {
       next(error);
     }
   });
+
+  router.post(
+    "/:matchId/return-to-scheduled",
+    ...requireControlEdit,
+    async (request, response, next) => {
+      try {
+        const matchId = requireUuid(request.params.matchId, "matchId");
+        const updated = await database.transaction(async (transaction) => {
+          const oldMatch = await getMatch(transaction, matchId);
+          if (!oldMatch) {
+            throw new ApiError(404, "MATCH_NOT_FOUND", "Jogo não encontrado.");
+          }
+          if (oldMatch.status === "SCHEDULED") {
+            throw new ApiError(409, "MATCH_STATE_CONFLICT", "O jogo já está agendado.");
+          }
+
+          const result = await transaction.query(
+            `UPDATE public.matches SET
+              status = 'SCHEDULED',
+              scheduled_start_time = COALESCE(scheduled_start_time, start_time),
+              start_time = NULL,
+              end_time = NULL,
+              home_score = 0,
+              away_score = 0,
+              current_set_home_score = NULL,
+              current_set_away_score = NULL,
+              home_yellow_cards = 0,
+              home_red_cards = 0,
+              home_blue_cards = 0,
+              home_two_minute_penalties = 0,
+              away_yellow_cards = 0,
+              away_red_cards = 0,
+              away_blue_cards = 0,
+              away_two_minute_penalties = 0,
+              home_penalty_score = NULL,
+              away_penalty_score = NULL,
+              resolved_tie_breaker_rule = NULL,
+              resolved_tie_break_winner_team_id = NULL,
+              is_walkover = false,
+              is_double_walkover = false,
+              walkover_loser_team_id = NULL,
+              updated_at = now()
+             WHERE id = $1 AND status = $2::public.match_status
+             RETURNING id`,
+            [matchId, oldMatch.status],
+          );
+          if (result.rows.length === 0) {
+            throw new ApiError(
+              409,
+              "MATCH_UPDATE_CONFLICT",
+              "O jogo foi alterado concorrentemente.",
+            );
+          }
+
+          await transaction.query("DELETE FROM public.match_sets WHERE match_id = $1", [matchId]);
+
+          const newMatch = await getMatch(transaction, matchId);
+          if (!newMatch) {
+            throw new ApiError(404, "MATCH_NOT_FOUND", "Jogo não encontrado.");
+          }
+          await recalculateCollectiveStandings(transaction, {
+            championshipId: String(newMatch.championshipId),
+            seasonYear: Number(newMatch.seasonYear),
+            sportId: String(newMatch.sportId),
+            naipe: String(newMatch.naipe),
+            division: typeof newMatch.division == "string" ? newMatch.division : null,
+          });
+          await insertAudit(
+            transaction,
+            request as AuthenticatedRequest,
+            matchId,
+            "Jogo retornado ao agendamento via laje-api.",
+            oldMatch,
+            newMatch,
+          );
+          return newMatch;
+        });
+        response.status(200).json({ data: updated });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
 
   return router;
 }
