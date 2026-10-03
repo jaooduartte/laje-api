@@ -5,8 +5,10 @@ import { database } from "../database/index.js";
 import { AuthRepository } from "../modules/auth/auth.repository.js";
 import { createAuthRouter } from "../modules/auth/auth.routes.js";
 import { AuthService } from "../modules/auth/auth.service.js";
+import { createChampionshipsRouter } from "../modules/championships/championships.routes.js";
 import { createHealthRouter } from "../modules/health/health.routes.js";
 import { HealthService } from "../modules/health/health.service.js";
+import { createMatchesRouter } from "../modules/matches/matches.routes.js";
 
 export const apiRouter = Router();
 
@@ -30,3 +32,5 @@ apiRouter.get("/", (_request, response) => {
 
 apiRouter.use("/health", createHealthRouter(healthService));
 apiRouter.use("/auth", createAuthRouter(authService));
+apiRouter.use("/matches", createMatchesRouter(authService));
+apiRouter.use("/championships", createChampionshipsRouter(authService));

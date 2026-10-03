@@ -5,6 +5,11 @@ import {
   priorityFlowSecuritySchemes,
   priorityFlowTags,
 } from "./priority-flows.openapi.js";
+import {
+  sportsCoreContractPaths,
+  sportsCoreContractSchemas,
+} from "./sports-core-contracts.openapi.js";
+import { sportsCorePaths, sportsCoreSchemas, sportsCoreTags } from "./sports-core.openapi.js";
 
 export const openApiDocument = {
   openapi: "3.1.0",
@@ -12,7 +17,7 @@ export const openApiDocument = {
     title: "LAJE API",
     version: "1.0.0",
     description:
-      "Contratos HTTP da API dedicada da Liga das Atléticas de Joinville. As convenções formais estão registradas em docs/api-conventions.md. Endpoints com x-implementation-status=planned estão definidos contratualmente, mas ainda não implementados.",
+      "Contratos HTTP da API dedicada da Liga das Atléticas de Joinville. As convenções formais estão registradas em docs/api-conventions.md. Endpoints com x-implementation-status=planned estão definidos contratualmente, mas ainda não implementados; os marcados como implemented possuem rota ativa no laje-api.",
   },
   servers: [
     {
@@ -30,6 +35,7 @@ export const openApiDocument = {
       description: "Endpoints operacionais para aplicação e dependência PostgreSQL.",
     },
     ...priorityFlowTags,
+    ...sportsCoreTags,
   ],
   paths: {
     "/api/v1": {
@@ -105,6 +111,8 @@ export const openApiDocument = {
     },
     ...priorityFlowPaths,
     ...authPaths,
+    ...sportsCorePaths,
+    ...sportsCoreContractPaths,
   },
   components: {
     securitySchemes: {
@@ -128,7 +136,7 @@ export const openApiDocument = {
         name: "pageSize",
         in: "query",
         description: "Quantidade de itens por página.",
-        schema: { type: "integer", minimum: 1, maximum: 100, default: 25 },
+        schema: { type: "integer", minimum: 1, maximum: 100, default: 50 },
       },
       Search: {
         name: "q",
@@ -202,13 +210,14 @@ export const openApiDocument = {
       },
       PaginationMeta: {
         type: "object",
-        required: ["page", "pageSize", "totalItems", "totalPages"],
+        required: ["page", "pageSize", "total", "totalPages"],
         additionalProperties: false,
         properties: {
           page: { type: "integer", minimum: 1 },
           pageSize: { type: "integer", minimum: 1, maximum: 100 },
-          totalItems: { type: "integer", minimum: 0 },
+          total: { type: "integer", minimum: 0 },
           totalPages: { type: "integer", minimum: 0 },
+          ordering: { type: "string" },
         },
       },
       ApiErrorDetail: {
@@ -243,6 +252,8 @@ export const openApiDocument = {
       },
       ...priorityFlowSchemas,
       ...authSchemas,
+      ...sportsCoreSchemas,
+      ...sportsCoreContractSchemas,
     },
   },
 } as const;
