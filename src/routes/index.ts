@@ -8,7 +8,10 @@ import { AuthService } from "../modules/auth/auth.service.js";
 import { createChampionshipsRouter } from "../modules/championships/championships.routes.js";
 import { createHealthRouter } from "../modules/health/health.routes.js";
 import { HealthService } from "../modules/health/health.service.js";
+import { createLeagueEventConflictsRouter } from "../modules/league-events/league-event-conflicts.routes.js";
+import { createLeagueEventsRouter } from "../modules/league-events/league-events.routes.js";
 import { createMatchesRouter } from "../modules/matches/matches.routes.js";
+import { createPublicAccessRouter } from "../modules/public-access/public-access.routes.js";
 
 export const apiRouter = Router();
 
@@ -34,3 +37,6 @@ apiRouter.use("/health", createHealthRouter(healthService));
 apiRouter.use("/auth", createAuthRouter(authService));
 apiRouter.use("/matches", createMatchesRouter(authService));
 apiRouter.use("/championships", createChampionshipsRouter(authService));
+apiRouter.use("/league-events", createLeagueEventConflictsRouter());
+apiRouter.use("/league-events", createLeagueEventsRouter(authService));
+apiRouter.use("/public", createPublicAccessRouter(authService));
