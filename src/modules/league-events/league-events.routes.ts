@@ -107,9 +107,10 @@ async function insertAudit(
 }
 
 async function getLeagueEvent(executor: DatabaseQueryExecutor, eventId: string) {
-  const result = await executor.query(`${EVENT_SELECT} WHERE e.id = $1 GROUP BY e.id, primary_team.id`, [
-    eventId,
-  ]);
+  const result = await executor.query(
+    `${EVENT_SELECT} WHERE e.id = $1 GROUP BY e.id, primary_team.id`,
+    [eventId],
+  );
   return result.rows[0] ?? null;
 }
 
@@ -128,7 +129,8 @@ function parseOrganizerTeamIds(value: unknown): string[] {
 function parseEventInput(body: unknown) {
   const payload = requireRecord(body);
   const eventType = requireEnum(payload.eventType, "eventType", EVENT_TYPES);
-  const organizerTeamIds = eventType === "LAJE_EVENT" ? [] : parseOrganizerTeamIds(payload.organizerTeamIds);
+  const organizerTeamIds =
+    eventType === "LAJE_EVENT" ? [] : parseOrganizerTeamIds(payload.organizerTeamIds);
   if (eventType !== "LAJE_EVENT" && organizerTeamIds.length === 0) {
     throw new ApiError(
       422,
@@ -175,7 +177,9 @@ async function replaceOrganizerTeams(
   eventId: string,
   organizerTeamIds: readonly string[],
 ): Promise<void> {
-  await executor.query("DELETE FROM public.league_event_organizer_teams WHERE event_id = $1", [eventId]);
+  await executor.query("DELETE FROM public.league_event_organizer_teams WHERE event_id = $1", [
+    eventId,
+  ]);
   for (const teamId of organizerTeamIds) {
     await executor.query(
       `INSERT INTO public.league_event_organizer_teams(event_id, team_id)
@@ -186,14 +190,20 @@ async function replaceOrganizerTeams(
   }
 }
 
-async function ensureTeamsExist(executor: DatabaseQueryExecutor, teamIds: readonly string[]): Promise<void> {
+async function ensureTeamsExist(
+  executor: DatabaseQueryExecutor,
+  teamIds: readonly string[],
+): Promise<void> {
   if (teamIds.length === 0) return;
-  const result = await executor.query(
-    "SELECT id FROM public.teams WHERE id = ANY($1::uuid[])",
-    [teamIds],
-  );
+  const result = await executor.query("SELECT id FROM public.teams WHERE id = ANY($1::uuid[])", [
+    teamIds,
+  ]);
   if (result.rows.length !== teamIds.length) {
-    throw new ApiError(422, "TEAM_NOT_FOUND", "Uma ou mais atléticas organizadoras não foram encontradas.");
+    throw new ApiError(
+      422,
+      "TEAM_NOT_FOUND",
+      "Uma ou mais atléticas organizadoras não foram encontradas.",
+    );
   }
 }
 
@@ -253,16 +263,20 @@ export function createLeagueEventsRouter(authService: AuthService): Router {
     }
   });
 
-  router.get("/reservation-requests/pending-count", ...requireEventsView, async (_request, response, next) => {
-    try {
-      const result = await database.query(
-        "SELECT count(*)::integer AS count FROM public.league_event_reservation_requests WHERE status = 'PENDING'",
-      );
-      response.status(200).json({ data: { count: Number(result.rows[0]?.count ?? 0) } });
-    } catch (error) {
-      next(error);
-    }
-  });
+  router.get(
+    "/reservation-requests/pending-count",
+    ...requireEventsView,
+    async (_request, response, next) => {
+      try {
+        const result = await database.query(
+          "SELECT count(*)::integer AS count FROM public.league_event_reservation_requests WHERE status = 'PENDING'",
+        );
+        response.status(200).json({ data: { count: Number(result.rows[0]?.count ?? 0) } });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
 
   router.get("/reservation-requests", ...requireEventsView, async (request, response, next) => {
     try {
@@ -277,7 +291,9 @@ export function createLeagueEventsRouter(authService: AuthService): Router {
       }
       if (status) {
         parameters.push(status);
-        conditions.push(`r.status = $${parameters.length}::public.league_event_reservation_request_status`);
+        conditions.push(
+          `r.status = $${parameters.length}::public.league_event_reservation_request_status`,
+        );
       }
       if (date) {
         parameters.push(date);
@@ -297,11 +313,16 @@ export function createLeagueEventsRouter(authService: AuthService): Router {
   router.post("/reservation-requests", async (request, response, next) => {
     try {
       const input = parseReservationCreate(request.body);
-      const teamResult = await database.query("SELECT id FROM public.teams WHERE id = $1 AND is_active", [
-        input.teamId,
-      ]);
+      const teamResult = await database.query(
+        "SELECT id FROM public.teams WHERE id = $1 AND is_active",
+        [input.teamId],
+      );
       if (teamResult.rows.length === 0) {
-        throw new ApiError(422, "TEAM_NOT_FOUND", "Atlética responsável não encontrada ou inativa.");
+        throw new ApiError(
+          422,
+          "TEAM_NOT_FOUND",
+          "Atlética responsável não encontrada ou inativa.",
+        );
       }
       const result = await database.query(
         `INSERT INTO public.league_event_reservation_requests
@@ -331,7 +352,10 @@ export function createLeagueEventsRouter(authService: AuthService): Router {
       try {
         const requestId = requireUuid(request.params.requestId, "requestId");
         const payload = requireRecord(request.body);
-        const decision = requireEnum(payload.decision, "decision", ["APPROVED", "REJECTED"] as const);
+        const decision = requireEnum(payload.decision, "decision", [
+          "APPROVED",
+          "REJECTED",
+        ] as const);
         const reviewNotes = optionalString(payload.reviewNotes, "reviewNotes", 2000) ?? null;
         const reviewedBy = (request as AuthenticatedRequest).authPrincipal?.userId ?? null;
 
@@ -347,10 +371,18 @@ export function createLeagueEventsRouter(authService: AuthService): Router {
           );
           const oldRequest = lockResult.rows[0];
           if (!oldRequest) {
-            throw new ApiError(404, "RESERVATION_REQUEST_NOT_FOUND", "Solicitação de reserva não encontrada.");
+            throw new ApiError(
+              404,
+              "RESERVATION_REQUEST_NOT_FOUND",
+              "Solicitação de reserva não encontrada.",
+            );
           }
           if (oldRequest.status !== "PENDING") {
-            throw new ApiError(409, "RESERVATION_ALREADY_REVIEWED", "Esta solicitação já foi analisada.");
+            throw new ApiError(
+              409,
+              "RESERVATION_ALREADY_REVIEWED",
+              "Esta solicitação já foi analisada.",
+            );
           }
 
           let approvedEventId: string | null = null;
@@ -388,7 +420,9 @@ export function createLeagueEventsRouter(authService: AuthService): Router {
             "UPDATE",
             "public.league_event_reservation_requests",
             requestId,
-            decision === "APPROVED" ? "Reserva do calendário aprovada." : "Reserva do calendário recusada.",
+            decision === "APPROVED"
+              ? "Reserva do calendário aprovada."
+              : "Reserva do calendário recusada.",
             oldRequest,
             newRequest,
             { approvedLeagueEventId: approvedEventId },
@@ -412,7 +446,13 @@ export function createLeagueEventsRouter(authService: AuthService): Router {
           `INSERT INTO public.league_events(name, event_type, organizer_type, organizer_team_id, event_date)
            VALUES ($1, $2::public.league_event_type, $3::public.league_event_organizer_type, $4, $5::date)
            RETURNING id`,
-          [input.name, input.eventType, input.organizerType, input.organizerTeamId, input.eventDate],
+          [
+            input.name,
+            input.eventType,
+            input.organizerType,
+            input.organizerTeamId,
+            input.eventDate,
+          ],
         );
         const eventId = String(result.rows[0]!.id);
         await replaceOrganizerTeams(transaction, eventId, input.organizerTeamIds);
@@ -467,7 +507,14 @@ export function createLeagueEventsRouter(authService: AuthService): Router {
             event_date = $6::date,
             updated_at = now()
            WHERE id = $1`,
-          [eventId, input.name, input.eventType, input.organizerType, input.organizerTeamId, input.eventDate],
+          [
+            eventId,
+            input.name,
+            input.eventType,
+            input.organizerType,
+            input.organizerTeamId,
+            input.eventDate,
+          ],
         );
         await replaceOrganizerTeams(transaction, eventId, input.organizerTeamIds);
         const updated = await getLeagueEvent(transaction, eventId);

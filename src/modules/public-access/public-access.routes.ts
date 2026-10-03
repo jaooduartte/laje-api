@@ -161,7 +161,10 @@ function parseSectionInput(body: unknown) {
   const payload = requireRecord(body);
   return {
     name: requireString(payload.name, "name", 160),
-    description: payload.description === null ? null : (optionalString(payload.description, "description", 1000) ?? null),
+    description:
+      payload.description === null
+        ? null
+        : (optionalString(payload.description, "description", 1000) ?? null),
     sortOrder: requireInteger(payload.sortOrder, "sortOrder", { min: 1, max: 10000 }),
     isActive: optionalBoolean(payload.isActive, "isActive") ?? true,
   };
@@ -189,7 +192,10 @@ function parseAbsoluteHttpUrl(value: unknown): string {
   return raw;
 }
 
-function parseFilters(value: unknown, filterMode: (typeof FILTER_MODES)[number]): LinkFilterInput[] {
+function parseFilters(
+  value: unknown,
+  filterMode: (typeof FILTER_MODES)[number],
+): LinkFilterInput[] {
   if (filterMode === "GLOBAL") return [];
   if (!Array.isArray(value) || value.length === 0) {
     throw new ApiError(
@@ -262,26 +268,34 @@ function normalizeAnnouncementContent(value: unknown): {
 
 function parseSettingsInput(body: unknown) {
   const payload = requireRecord(body);
-  const legacyMessage = payload.announcementMessage === null
-    ? null
-    : (optionalString(payload.announcementMessage, "announcementMessage", 4000) ?? null);
-  const normalized = payload.announcementContent === undefined
-    ? legacyMessage
-      ? { message: normalizeWhitespace(legacyMessage), content: { version: 1, segments: [{ text: normalizeWhitespace(legacyMessage) }] } }
-      : { message: null, content: null }
-    : normalizeAnnouncementContent(payload.announcementContent);
+  const legacyMessage =
+    payload.announcementMessage === null
+      ? null
+      : (optionalString(payload.announcementMessage, "announcementMessage", 4000) ?? null);
+  const normalized =
+    payload.announcementContent === undefined
+      ? legacyMessage
+        ? {
+            message: normalizeWhitespace(legacyMessage),
+            content: { version: 1, segments: [{ text: normalizeWhitespace(legacyMessage) }] },
+          }
+        : { message: null, content: null }
+      : normalizeAnnouncementContent(payload.announcementContent);
   return {
-    isPublicAccessBlocked: optionalBoolean(payload.isPublicAccessBlocked, "isPublicAccessBlocked") ?? false,
+    isPublicAccessBlocked:
+      optionalBoolean(payload.isPublicAccessBlocked, "isPublicAccessBlocked") ?? false,
     isLivePageBlocked: optionalBoolean(payload.isLivePageBlocked, "isLivePageBlocked") ?? false,
     isChampionshipsPageBlocked:
       optionalBoolean(payload.isChampionshipsPageBlocked, "isChampionshipsPageBlocked") ?? false,
-    isSchedulePageBlocked: optionalBoolean(payload.isSchedulePageBlocked, "isSchedulePageBlocked") ?? false,
+    isSchedulePageBlocked:
+      optionalBoolean(payload.isSchedulePageBlocked, "isSchedulePageBlocked") ?? false,
     isLeagueCalendarPageBlocked:
       optionalBoolean(payload.isLeagueCalendarPageBlocked, "isLeagueCalendarPageBlocked") ?? false,
     isLinksPageBlocked: optionalBoolean(payload.isLinksPageBlocked, "isLinksPageBlocked") ?? false,
-    blockedMessage: payload.blockedMessage === null
-      ? null
-      : (optionalString(payload.blockedMessage, "blockedMessage", 2000) ?? null),
+    blockedMessage:
+      payload.blockedMessage === null
+        ? null
+        : (optionalString(payload.blockedMessage, "blockedMessage", 2000) ?? null),
     announcementMessage: normalized.message,
     announcementContent: normalized.content,
     announcementType:
@@ -296,9 +310,10 @@ async function persistFilters(
   itemId: string,
   input: LinkItemInput,
 ): Promise<void> {
-  await executor.query("DELETE FROM public.public_link_item_filters WHERE public_link_item_id = $1", [
-    itemId,
-  ]);
+  await executor.query(
+    "DELETE FROM public.public_link_item_filters WHERE public_link_item_id = $1",
+    [itemId],
+  );
   if (input.filterMode === "GLOBAL") return;
 
   const championshipIds = [...new Set(input.filters.map((filter) => filter.championshipId))];
@@ -307,7 +322,11 @@ async function persistFilters(
     [championshipIds],
   );
   if (championships.rows.length !== championshipIds.length) {
-    throw new ApiError(422, "CHAMPIONSHIP_NOT_FOUND", "Campeonato informado no filtro não foi encontrado.");
+    throw new ApiError(
+      422,
+      "CHAMPIONSHIP_NOT_FOUND",
+      "Campeonato informado no filtro não foi encontrado.",
+    );
   }
   for (const filter of input.filters) {
     await executor.query(
@@ -319,7 +338,10 @@ async function persistFilters(
   }
 }
 
-async function normalizeSectionOrderAfterDelete(executor: DatabaseQueryExecutor, deletedSortOrder: number) {
+async function normalizeSectionOrderAfterDelete(
+  executor: DatabaseQueryExecutor,
+  deletedSortOrder: number,
+) {
   await executor.query(
     "UPDATE public.public_link_sections SET sort_order = sort_order - 1 WHERE sort_order > $1",
     [deletedSortOrder],
@@ -331,7 +353,10 @@ export function createPublicAccessRouter(authService: AuthService): Router {
   const requireAuthentication = createRequireAuthentication(authService);
   const requireLinksView = [requireAuthentication, requirePermission("links", "VIEW")] as const;
   const requireLinksEdit = [requireAuthentication, requirePermission("links", "EDIT")] as const;
-  const requireSettingsEdit = [requireAuthentication, requirePermission("settings", "EDIT")] as const;
+  const requireSettingsEdit = [
+    requireAuthentication,
+    requirePermission("settings", "EDIT"),
+  ] as const;
 
   router.get("/settings", async (_request, response, next) => {
     try {
@@ -466,7 +491,12 @@ export function createPublicAccessRouter(authService: AuthService): Router {
       const input = parseSectionInput(request.body);
       const section = await database.transaction(async (transaction) => {
         const previous = await getSection(transaction, sectionId);
-        if (!previous) throw new ApiError(404, "PUBLIC_LINK_SECTION_NOT_FOUND", "Seção de links não encontrada.");
+        if (!previous)
+          throw new ApiError(
+            404,
+            "PUBLIC_LINK_SECTION_NOT_FOUND",
+            "Seção de links não encontrada.",
+          );
         const oldOrder = Number(previous.sortOrder);
         const maxResult = await transaction.query(
           "SELECT COALESCE(MAX(sort_order), 1)::integer AS max FROM public.public_link_sections WHERE id <> $1",
@@ -511,44 +541,63 @@ export function createPublicAccessRouter(authService: AuthService): Router {
     }
   });
 
-  router.delete("/link-sections/:sectionId", ...requireLinksEdit, async (request, response, next) => {
-    try {
-      const sectionId = requireUuid(request.params.sectionId, "sectionId");
-      await database.transaction(async (transaction) => {
-        const previous = await getSection(transaction, sectionId);
-        if (!previous) throw new ApiError(404, "PUBLIC_LINK_SECTION_NOT_FOUND", "Seção de links não encontrada.");
-        const itemCount = await transaction.query(
-          "SELECT count(*)::integer AS count FROM public.public_link_items WHERE section_id = $1",
-          [sectionId],
-        );
-        if (Number(itemCount.rows[0]?.count ?? 0) > 0) {
-          throw new ApiError(409, "PUBLIC_LINK_SECTION_NOT_EMPTY", "Remova os links da seção antes de excluí-la.");
-        }
-        await transaction.query("DELETE FROM public.public_link_sections WHERE id = $1", [sectionId]);
-        await normalizeSectionOrderAfterDelete(transaction, Number(previous.sortOrder));
-        await insertAudit(
-          transaction,
-          request as AuthenticatedRequest,
-          "DELETE",
-          "public.public_link_sections",
-          sectionId,
-          "Excluiu uma seção de links públicos",
-          previous,
-          null,
-        );
-      });
-      response.status(204).end();
-    } catch (error) {
-      next(error);
-    }
-  });
+  router.delete(
+    "/link-sections/:sectionId",
+    ...requireLinksEdit,
+    async (request, response, next) => {
+      try {
+        const sectionId = requireUuid(request.params.sectionId, "sectionId");
+        await database.transaction(async (transaction) => {
+          const previous = await getSection(transaction, sectionId);
+          if (!previous)
+            throw new ApiError(
+              404,
+              "PUBLIC_LINK_SECTION_NOT_FOUND",
+              "Seção de links não encontrada.",
+            );
+          const itemCount = await transaction.query(
+            "SELECT count(*)::integer AS count FROM public.public_link_items WHERE section_id = $1",
+            [sectionId],
+          );
+          if (Number(itemCount.rows[0]?.count ?? 0) > 0) {
+            throw new ApiError(
+              409,
+              "PUBLIC_LINK_SECTION_NOT_EMPTY",
+              "Remova os links da seção antes de excluí-la.",
+            );
+          }
+          await transaction.query("DELETE FROM public.public_link_sections WHERE id = $1", [
+            sectionId,
+          ]);
+          await normalizeSectionOrderAfterDelete(transaction, Number(previous.sortOrder));
+          await insertAudit(
+            transaction,
+            request as AuthenticatedRequest,
+            "DELETE",
+            "public.public_link_sections",
+            sectionId,
+            "Excluiu uma seção de links públicos",
+            previous,
+            null,
+          );
+        });
+        response.status(204).end();
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
 
   router.post("/link-items", ...requireLinksEdit, async (request, response, next) => {
     try {
       const input = parseItemInput(request.body);
       const item = await database.transaction(async (transaction) => {
         if (!(await getSection(transaction, input.sectionId))) {
-          throw new ApiError(404, "PUBLIC_LINK_SECTION_NOT_FOUND", "Seção de links não encontrada.");
+          throw new ApiError(
+            404,
+            "PUBLIC_LINK_SECTION_NOT_FOUND",
+            "Seção de links não encontrada.",
+          );
         }
         const maxResult = await transaction.query(
           "SELECT COALESCE(MAX(sort_order), 0)::integer AS max FROM public.public_link_items WHERE section_id = $1",
@@ -564,7 +613,14 @@ export function createPublicAccessRouter(authService: AuthService): Router {
         const inserted = await transaction.query(
           `INSERT INTO public.public_link_items(section_id, display_name, url, sort_order, is_active, filter_mode)
            VALUES ($1, $2, $3, $4, $5, $6::public.public_link_filter_mode) RETURNING id`,
-          [input.sectionId, input.displayName, input.url, sortOrder, input.isActive, input.filterMode],
+          [
+            input.sectionId,
+            input.displayName,
+            input.url,
+            sortOrder,
+            input.isActive,
+            input.filterMode,
+          ],
         );
         const itemId = String(inserted.rows[0]!.id);
         await persistFilters(transaction, itemId, input);
@@ -593,9 +649,14 @@ export function createPublicAccessRouter(authService: AuthService): Router {
       const input = parseItemInput(request.body);
       const item = await database.transaction(async (transaction) => {
         const previous = await getItem(transaction, itemId);
-        if (!previous) throw new ApiError(404, "PUBLIC_LINK_ITEM_NOT_FOUND", "Link público não encontrado.");
+        if (!previous)
+          throw new ApiError(404, "PUBLIC_LINK_ITEM_NOT_FOUND", "Link público não encontrado.");
         if (!(await getSection(transaction, input.sectionId))) {
-          throw new ApiError(404, "PUBLIC_LINK_SECTION_NOT_FOUND", "Seção de links não encontrada.");
+          throw new ApiError(
+            404,
+            "PUBLIC_LINK_SECTION_NOT_FOUND",
+            "Seção de links não encontrada.",
+          );
         }
         const oldSectionId = String(previous.sectionId);
         const oldOrder = Number(previous.sortOrder);
@@ -636,7 +697,15 @@ export function createPublicAccessRouter(authService: AuthService): Router {
           `UPDATE public.public_link_items SET section_id = $2, display_name = $3, url = $4,
              sort_order = $5, is_active = $6, filter_mode = $7::public.public_link_filter_mode,
              updated_at = now() WHERE id = $1`,
-          [itemId, input.sectionId, input.displayName, input.url, sortOrder, input.isActive, input.filterMode],
+          [
+            itemId,
+            input.sectionId,
+            input.displayName,
+            input.url,
+            sortOrder,
+            input.isActive,
+            input.filterMode,
+          ],
         );
         await persistFilters(transaction, itemId, input);
         const current = await getItem(transaction, itemId);
@@ -663,7 +732,8 @@ export function createPublicAccessRouter(authService: AuthService): Router {
       const itemId = requireUuid(request.params.itemId, "itemId");
       await database.transaction(async (transaction) => {
         const previous = await getItem(transaction, itemId);
-        if (!previous) throw new ApiError(404, "PUBLIC_LINK_ITEM_NOT_FOUND", "Link público não encontrado.");
+        if (!previous)
+          throw new ApiError(404, "PUBLIC_LINK_ITEM_NOT_FOUND", "Link público não encontrado.");
         await transaction.query("DELETE FROM public.public_link_items WHERE id = $1", [itemId]);
         await transaction.query(
           "UPDATE public.public_link_items SET sort_order = sort_order - 1 WHERE section_id = $1 AND sort_order > $2",

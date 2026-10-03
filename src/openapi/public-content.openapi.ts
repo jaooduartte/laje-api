@@ -208,7 +208,9 @@ export const publicContentPaths = {
       operationId: "getPublicAccessSettings",
       "x-implementation-status": implemented,
       responses: {
-        "200": jsonData({ anyOf: [{ type: "object", additionalProperties: true }, { type: "null" }] }),
+        "200": jsonData({
+          anyOf: [{ type: "object", additionalProperties: true }, { type: "null" }],
+        }),
       },
     },
     put: {
