@@ -3,6 +3,17 @@ import test from "node:test";
 
 import { openApiDocument } from "../../src/openapi/openapi.document.js";
 
+interface OpenApiOperation {
+  "x-implementation-status"?: string;
+  security?: unknown;
+  summary?: string;
+}
+
+const openApiPaths = openApiDocument.paths as unknown as Record<
+  string,
+  Record<string, OpenApiOperation>
+>;
+
 const implementedOperations = [
   ["/api/v1/league-events", "get"],
   ["/api/v1/league-events", "post"],
@@ -28,7 +39,7 @@ const implementedOperations = [
 
 test("LAJE-87 OpenAPI marks all migrated public-content operations as implemented", () => {
   for (const [path, method] of implementedOperations) {
-    const pathItem = openApiDocument.paths[path];
+    const pathItem = openApiPaths[path];
     assert.ok(pathItem, `Missing OpenAPI path ${path}`);
 
     const operation = pathItem[method];
@@ -56,15 +67,16 @@ test("administrative LAJE-87 operations require bearer authentication", () => {
   ] as const;
 
   for (const [path, method] of protectedOperations) {
-    const operation = openApiDocument.paths[path][method];
+    const operation = openApiPaths[path]?.[method];
+    assert.ok(operation, `Missing protected operation ${method.toUpperCase()} ${path}`);
     assert.deepEqual(operation.security, [{ bearerAuth: [] }]);
   }
 });
 
 test("public reservation conflict contract is unauthenticated and explicitly sanitized", () => {
-  const operation =
-    openApiDocument.paths["/api/v1/league-events/reservation-requests/conflicts"].get;
+  const operation = openApiPaths["/api/v1/league-events/reservation-requests/conflicts"]?.get;
 
+  assert.ok(operation);
   assert.equal("security" in operation, false);
-  assert.match(operation.summary, /sem dados pessoais/i);
+  assert.match(operation.summary ?? "", /sem dados pessoais/i);
 });
