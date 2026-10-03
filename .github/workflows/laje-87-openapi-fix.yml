@@ -1,0 +1,60 @@
+name: LAJE-87 OpenAPI Fix
+
+on:
+  push:
+    branches:
+      - LAJE-87
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v7
+        with:
+          ref: LAJE-87
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Align LAJE-87 OpenAPI filters with implemented routes
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/openapi/public-content.openapi.ts')
+          content = path.read_text()
+          content = content.replace(
+              '{ name: "startDate", in: "query", schema: { type: "string", format: "date" } },',
+              '{ name: "from", in: "query", schema: { type: "string", format: "date" } },',
+          )
+          content = content.replace(
+              '{ name: "endDate", in: "query", schema: { type: "string", format: "date" } },',
+              '{ name: "to", in: "query", schema: { type: "string", format: "date" } },',
+          )
+          path.write_text(content)
+          PY
+          npx prettier src/openapi/public-content.openapi.ts --write
+
+      - name: Commit contract correction
+        run: |
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/openapi/public-content.openapi.ts
+          git commit -m "LAJE-87 align OpenAPI date filters"
+          git push origin HEAD:LAJE-87
