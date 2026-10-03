@@ -54,8 +54,8 @@ export const publicContentPaths = {
       operationId: "listLeagueEvents",
       "x-implementation-status": implemented,
       parameters: [
-        { name: "startDate", in: "query", schema: { type: "string", format: "date" } },
-        { name: "endDate", in: "query", schema: { type: "string", format: "date" } },
+        { name: "from", in: "query", schema: { type: "string", format: "date" } },
+        { name: "to", in: "query", schema: { type: "string", format: "date" } },
       ],
       responses: {
         "200": jsonData({ type: "array", items: { type: "object", additionalProperties: true } }),
