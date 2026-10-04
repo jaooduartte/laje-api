@@ -175,6 +175,43 @@ export async function executeQuery(
   return Buffer.concat(output).toString("utf8").trim();
 }
 
+export async function assertDistinctDatabases(
+  source: MigrationConnection,
+  destination: MigrationConnection,
+): Promise<void> {
+  if (
+    source.host.toLowerCase() === destination.host.toLowerCase() &&
+    source.port === destination.port &&
+    source.database === destination.database
+  ) {
+    throw new Error("Source and destination must be distinct databases.");
+  }
+
+  const identityQuery = `SELECT json_build_object(
+    'database', current_database(),
+    'address', inet_server_addr()::text,
+    'port', inet_server_port()
+  );`;
+  const [sourceIdentity, destinationIdentity] = await Promise.all([
+    executeQuery(source, "laje-migration-source-identity", identityQuery),
+    executeQuery(destination, "laje-migration-destination-identity", identityQuery),
+  ]);
+  const sourceServer = JSON.parse(sourceIdentity) as {
+    address: string | null;
+    database: string;
+    port: number | null;
+  };
+  const destinationServer = JSON.parse(destinationIdentity) as typeof sourceServer;
+  if (
+    sourceServer.address &&
+    sourceServer.address === destinationServer.address &&
+    sourceServer.port === destinationServer.port &&
+    sourceServer.database === destinationServer.database
+  ) {
+    throw new Error("Source and destination must be distinct databases.");
+  }
+}
+
 export async function streamDataExport(
   connection: MigrationConnection,
   destination: NodeJS.WritableStream,
@@ -234,6 +271,7 @@ export async function synchronizeData(
   source: MigrationConnection,
   destination: MigrationConnection,
 ): Promise<void> {
+  await assertDistinctDatabases(source, destination);
   const sourceProcess = startCommand(
     "pg_dump",
     dataDumpArguments,

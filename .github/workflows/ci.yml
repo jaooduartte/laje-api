@@ -213,6 +213,10 @@ jobs:
           export PATH="$RUNNER_TEMP/laje-pg17:$PATH"
           npm run migration:sync-data
           npm run migration:verify-parity
+          if MIGRATION_DESTINATION_DATABASE_URL="$MIGRATION_SOURCE_DATABASE_URL" npm run migration:sync-data; then
+            exit 1
+          fi
+          test "$(docker run --rm --network host --env PGPASSWORD postgres:17 psql --host localhost --username postgres --dbname laje_migration_source --tuples-only --no-align --command 'SELECT count(*) FROM public.league_event_reservation_requests')" = "39"
           if MIGRATION_SOURCE_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/laje_missing_source?sslmode=disable npm run migration:sync-data; then
             exit 1
           fi

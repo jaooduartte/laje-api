@@ -27,6 +27,8 @@ As conexões são configuradas por `MIGRATION_SOURCE_DATABASE_URL` e `MIGRATION_
 
 Os scripts usam `pg_dump` e `psql` com credenciais passadas apenas por variáveis de ambiente do processo filho. `sync-data` conecta os dois comandos diretamente, portanto o dump não é criado em disco. Limpeza do destino, importação e preparação da autenticação dedicada são executadas em uma única transação. Se a exportação ou importação falhar, o destino mantém os dados anteriores.
 
+Antes de limpar o destino, `sync-data` confere que origem e destino são bancos distintos, inclusive quando URLs diferentes chegam ao mesmo servidor PostgreSQL. O ensaio automatizado confirma que a tentativa de sincronizar um banco consigo mesmo preserva os registros.
+
 ```bash
 MIGRATION_EXECUTION_CONTEXT=controlled \
 MIGRATION_ALLOW_DESTINATION_WRITE=true \

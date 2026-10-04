@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  assertDistinctDatabases,
   diffTableParity,
   diffStructuralParity,
   parseParityRows,
@@ -9,6 +10,24 @@ import {
   parseStructuralParity,
   reservationParityMatches,
 } from "../../scripts/migration/shared.js";
+import type { MigrationConnection } from "../../scripts/migration/shared.js";
+
+test("migration refuses to synchronize a database with itself before connecting", async () => {
+  const connection: MigrationConnection = {
+    database: "laje_source",
+    host: "localhost",
+    password: undefined,
+    port: "5432",
+    sslMode: "disable",
+    sslRootCert: undefined,
+    user: "postgres",
+  };
+
+  await assert.rejects(
+    assertDistinctDatabases(connection, { ...connection, host: "LOCALHOST" }),
+    /Source and destination must be distinct databases/,
+  );
+});
 
 test("table parity parser accepts aggregate output without row values", () => {
   assert.deepEqual(parseParityRows("teams|2|abc|rows1\nsports|3|def|rows2"), [
