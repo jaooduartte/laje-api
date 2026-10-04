@@ -93,10 +93,11 @@ Create `production.tfvars` from `production.tfvars.example` only after the pre-c
 
 The RDS instance is private. The PostgreSQL baseline must therefore be applied from a controlled execution path with network access to the VPC, not by temporarily exposing the database publicly.
 
-Use `scripts/apply-rds-baseline.sh` from an approved AWS execution context after exporting a TLS-validated `DATABASE_URL` and the RDS CA certificate path. The script applies:
+Use `scripts/apply-rds-baseline.sh` from an approved AWS execution context after loading libpq connection variables from the managed secret. It requires `PGHOST`, `PGUSER`, `PGDATABASE`, `PGPASSWORD`, `PGSSLROOTCERT`, `PGSSLMODE=verify-full`, `MIGRATION_EXECUTION_CONTEXT=controlled` and `MIGRATION_ALLOW_DESTINATION_WRITE=true`. The script refuses a destination whose `public` schema already has tables. It applies:
 
 1. `infra/database/baseline/schema.sql`;
 2. `infra/database/baseline/validate.sql`.
+3. All incremental SQL migrations in `infra/database/migrations/`.
 
 No database credentials or secret values must be written to documentation, shell history, repository files or pull-request comments.
 

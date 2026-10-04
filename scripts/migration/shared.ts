@@ -16,8 +16,15 @@ export interface MigrationConnection {
 
 export interface ParityRow {
   checksum: string;
+  dataChecksum: string;
   rowCount: number;
   tableName: string;
+}
+
+export interface StructuralParityRow {
+  checksum: string;
+  kind: string;
+  name: string;
 }
 
 export interface ReservationParity {
@@ -112,11 +119,8 @@ export function assertDestinationWriteAllowed(action: string): void {
   }
 }
 
-function commandError(command: string, code: number | null, stderr: string): Error {
-  const detail = stderr.trim();
-  return new Error(
-    `${command} exited with code ${code ?? "unknown"}.${detail ? ` ${detail}` : ""}`,
-  );
+function commandError(command: string, code: number | null): Error {
+  return new Error(`${command} exited with code ${code ?? "unknown"}.`);
 }
 
 function startCommand(
@@ -135,13 +139,12 @@ async function waitForCommand(
   command: string,
   process: ChildProcessWithoutNullStreams,
 ): Promise<void> {
-  const stderr: Buffer[] = [];
-  process.stderr.on("data", (chunk: Buffer) => stderr.push(chunk));
+  process.stderr.resume();
   await new Promise<void>((resolve, reject) => {
     process.once("error", reject);
     process.once("close", (code) => {
       if (code === 0) resolve();
-      else reject(commandError(command, code, Buffer.concat(stderr).toString("utf8")));
+      else reject(commandError(command, code));
     });
   });
 }
@@ -192,12 +195,40 @@ export async function importDataStream(
 ): Promise<void> {
   const process = startCommand(
     "psql",
-    ["--no-psqlrc", "--quiet", "--set=ON_ERROR_STOP=1", "--single-transaction"],
+    [
+      "--no-psqlrc",
+      "--quiet",
+      "--set=ON_ERROR_STOP=1",
+      "--single-transaction",
+      "--file=-",
+      "--command",
+      resetAuthenticationQuery,
+    ],
     commandEnvironment(connection, "laje-migration-import-data"),
   );
   source.pipe(process.stdin);
   await waitForCommand("psql", process);
 }
+
+const truncateDestinationQuery = `DO $$
+DECLARE table_list text;
+BEGIN
+  SELECT string_agg(format('%I.%I', schemaname, tablename), ', ' ORDER BY tablename)
+    INTO table_list
+  FROM pg_tables
+  WHERE schemaname = 'public';
+  IF table_list IS NULL THEN
+    RAISE EXCEPTION 'No public tables were found in the destination database.';
+  END IF;
+  EXECUTE 'TRUNCATE TABLE ' || table_list || ' RESTART IDENTITY CASCADE';
+END
+$$;`;
+
+const resetAuthenticationQuery = `DELETE FROM public.admin_auth_sessions;
+DELETE FROM public.admin_auth_accounts;
+UPDATE public.admin_user_profiles
+SET password_status = 'PENDING'::public.admin_user_password_status,
+    updated_at = now();`;
 
 export async function synchronizeData(
   source: MigrationConnection,
@@ -210,51 +241,41 @@ export async function synchronizeData(
   );
   const destinationProcess = startCommand(
     "psql",
-    ["--no-psqlrc", "--quiet", "--set=ON_ERROR_STOP=1", "--single-transaction"],
+    [
+      "--no-psqlrc",
+      "--quiet",
+      "--set=ON_ERROR_STOP=1",
+      "--single-transaction",
+      "--command",
+      truncateDestinationQuery,
+      "--file=-",
+      "--command",
+      resetAuthenticationQuery,
+    ],
     commandEnvironment(destination, "laje-migration-sync-import"),
   );
   sourceProcess.stdin.end();
-  sourceProcess.stdout.pipe(destinationProcess.stdin);
-  await Promise.all([
-    waitForCommand("pg_dump", sourceProcess),
-    waitForCommand("psql", destinationProcess),
-  ]);
-}
+  const sourceCompletion = waitForCommand("pg_dump", sourceProcess);
+  const destinationCompletion = waitForCommand("psql", destinationProcess);
+  void destinationCompletion.catch(() => undefined);
+  const streamCompletion = new Promise<void>((resolve, reject) => {
+    sourceProcess.stdout.once("end", resolve);
+    sourceProcess.stdout.once("error", reject);
+    destinationProcess.stdin.once("error", reject);
+    sourceProcess.stdout.pipe(destinationProcess.stdin, { end: false });
+  });
 
-export async function truncateDestinationPublicSchema(
-  connection: MigrationConnection,
-): Promise<void> {
-  await executeQuery(
-    connection,
-    "laje-migration-truncate",
-    `DO $$
-     DECLARE table_list text;
-     BEGIN
-       SELECT string_agg(format('%I.%I', schemaname, tablename), ', ' ORDER BY tablename)
-         INTO table_list
-       FROM pg_tables
-       WHERE schemaname = 'public';
-       IF table_list IS NULL THEN
-         RAISE EXCEPTION 'No public tables were found in the destination database.';
-       END IF;
-       EXECUTE 'TRUNCATE TABLE ' || table_list || ' RESTART IDENTITY CASCADE';
-     END
-     $$;`,
-  );
-}
-
-export async function prepareDedicatedAuthentication(
-  connection: MigrationConnection,
-): Promise<void> {
-  await executeQuery(
-    connection,
-    "laje-migration-auth-reset",
-    `DELETE FROM public.admin_auth_sessions;
-     DELETE FROM public.admin_auth_accounts;
-     UPDATE public.admin_user_profiles
-     SET password_status = 'PENDING'::public.admin_user_password_status,
-         updated_at = now();`,
-  );
+  try {
+    await Promise.all([sourceCompletion, streamCompletion]);
+    destinationProcess.stdin.end();
+    await destinationCompletion;
+  } catch (error) {
+    sourceProcess.kill();
+    destinationProcess.stdin.destroy();
+    destinationProcess.kill();
+    await Promise.allSettled([sourceCompletion, destinationCompletion]);
+    throw error;
+  }
 }
 
 export async function calculateSchemaChecksum(connection: MigrationConnection): Promise<string> {
@@ -272,7 +293,7 @@ export async function calculateSchemaChecksum(connection: MigrationConnection): 
 }
 
 const tableParityQuery = `CREATE OR REPLACE FUNCTION pg_temp.laje_migration_table_parity()
-RETURNS TABLE(table_name text, row_count bigint, checksum text)
+RETURNS TABLE(table_name text, row_count bigint, checksum text, data_checksum text)
 LANGUAGE plpgsql
 AS $$
 DECLARE item record;
@@ -280,29 +301,87 @@ BEGIN
   FOR item IN
     SELECT c.relname AS table_name,
            string_agg(format('t.%I::text', a.attname), ', ' ORDER BY key_columns.ordinality) AS key_values,
-           string_agg(format('t.%I', a.attname), ', ' ORDER BY key_columns.ordinality) AS key_order
+           string_agg(format('t.%I', a.attname), ', ' ORDER BY key_columns.ordinality) AS key_order,
+           CASE WHEN c.relname = 'admin_user_profiles'
+             THEN 'to_jsonb(t) - ''password_status'' - ''updated_at'''
+             ELSE 'to_jsonb(t)'
+           END AS row_value
     FROM pg_class c
     JOIN pg_namespace n ON n.oid = c.relnamespace
     JOIN pg_constraint constraint_record ON constraint_record.conrelid = c.oid AND constraint_record.contype = 'p'
     JOIN unnest(constraint_record.conkey) WITH ORDINALITY AS key_columns(attribute_number, ordinality) ON true
     JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = key_columns.attribute_number
     WHERE n.nspname = 'public' AND c.relkind = 'r'
+      AND c.relname NOT IN ('admin_auth_accounts', 'admin_auth_sessions')
     GROUP BY c.relname
     ORDER BY c.relname
   LOOP
     RETURN QUERY EXECUTE format(
-      'SELECT %L, count(*), md5(coalesce(string_agg(concat_ws(''|'', %s), '','' ORDER BY %s), '''')) FROM public.%I AS t',
+      'SELECT %L, count(*), md5(coalesce(string_agg(concat_ws(''|'', %s), '','' ORDER BY %s), '''')), md5(coalesce(string_agg(md5((%s)::text), '','' ORDER BY %s), '''')) FROM public.%I AS t',
       item.table_name,
       item.key_values,
+      item.key_order,
+      item.row_value,
       item.key_order,
       item.table_name
     );
   END LOOP;
 END
 $$;
-SELECT table_name, row_count, checksum
+SELECT table_name, row_count, checksum, data_checksum
 FROM pg_temp.laje_migration_table_parity()
 ORDER BY table_name;`;
+
+const structuralParityQuery = `SET search_path = public, pg_catalog;
+WITH objects AS (
+  SELECT 'column'::text AS kind,
+         relation.relname || '.' || attribute.attname AS object_name,
+         concat_ws('|', format_type(attribute.atttypid, attribute.atttypmod),
+                   attribute.attnotnull::text,
+                   coalesce(pg_get_expr(default_value.adbin, default_value.adrelid), ''),
+                   attribute.attgenerated::text,
+                   attribute.attidentity::text) AS definition
+  FROM pg_class AS relation
+  JOIN pg_namespace AS namespace ON namespace.oid = relation.relnamespace
+  JOIN pg_attribute AS attribute ON attribute.attrelid = relation.oid
+  LEFT JOIN pg_attrdef AS default_value
+    ON default_value.adrelid = relation.oid AND default_value.adnum = attribute.attnum
+  WHERE namespace.nspname = 'public' AND relation.relkind = 'r'
+    AND relation.relname NOT IN ('admin_auth_accounts', 'admin_auth_sessions')
+    AND attribute.attnum > 0 AND NOT attribute.attisdropped
+  UNION ALL
+  SELECT 'enum', enum_type.typname || '.' || enum_value.enumlabel,
+         enum_value.enumsortorder::text
+  FROM pg_type AS enum_type
+  JOIN pg_namespace AS namespace ON namespace.oid = enum_type.typnamespace
+  JOIN pg_enum AS enum_value ON enum_value.enumtypid = enum_type.oid
+  WHERE namespace.nspname = 'public'
+  UNION ALL
+  SELECT 'constraint', relation.relname || '.' || constraint_record.conname,
+         constraint_record.contype::text || '|' || pg_get_constraintdef(constraint_record.oid)
+  FROM pg_constraint AS constraint_record
+  JOIN pg_class AS relation ON relation.oid = constraint_record.conrelid
+  JOIN pg_namespace AS namespace ON namespace.oid = relation.relnamespace
+  LEFT JOIN pg_class AS referenced_relation ON referenced_relation.oid = constraint_record.confrelid
+  LEFT JOIN pg_namespace AS referenced_namespace
+    ON referenced_namespace.oid = referenced_relation.relnamespace
+  WHERE namespace.nspname = 'public' AND relation.relkind = 'r'
+    AND relation.relname NOT IN ('admin_auth_accounts', 'admin_auth_sessions')
+    AND (constraint_record.contype <> 'f' OR referenced_namespace.nspname = 'public')
+  UNION ALL
+  SELECT 'index', relation.relname || '.' || index_relation.relname,
+         pg_get_indexdef(index_record.indexrelid)
+  FROM pg_index AS index_record
+  JOIN pg_class AS relation ON relation.oid = index_record.indrelid
+  JOIN pg_class AS index_relation ON index_relation.oid = index_record.indexrelid
+  JOIN pg_namespace AS namespace ON namespace.oid = relation.relnamespace
+  WHERE namespace.nspname = 'public' AND relation.relkind = 'r'
+    AND relation.relname NOT IN ('admin_auth_accounts', 'admin_auth_sessions')
+)
+SELECT coalesce(json_agg(json_build_object(
+  'kind', kind, 'name', object_name, 'checksum', md5(definition)
+) ORDER BY kind, object_name), '[]'::json)
+FROM objects;`;
 
 const reservationParityQuery = `SELECT json_build_object(
   'rowCount', (SELECT count(*) FROM public.league_event_reservation_requests),
@@ -357,12 +436,28 @@ const reservationParityQuery = `SELECT json_build_object(
 export function parseParityRows(output: string): ParityRow[] {
   if (!output) return [];
   return output.split("\n").map((line) => {
-    const [tableName, rawCount, checksum] = line.split("|");
-    if (!tableName || !rawCount || !checksum || !/^\d+$/.test(rawCount)) {
+    const [tableName, rawCount, checksum, dataChecksum] = line.split("|");
+    if (!tableName || !rawCount || !checksum || !dataChecksum || !/^\d+$/.test(rawCount)) {
       throw new Error("Invalid table parity output.");
     }
-    return { checksum, rowCount: Number(rawCount), tableName };
+    return { checksum, dataChecksum, rowCount: Number(rawCount), tableName };
   });
+}
+
+export function parseStructuralParity(output: string): StructuralParityRow[] {
+  const parsed = JSON.parse(output) as StructuralParityRow[];
+  if (
+    !Array.isArray(parsed) ||
+    parsed.some(
+      (item) =>
+        typeof item.kind !== "string" ||
+        typeof item.name !== "string" ||
+        typeof item.checksum !== "string",
+    )
+  ) {
+    throw new Error("Invalid structural parity output.");
+  }
+  return parsed;
 }
 
 export function parseReservationParity(output: string): ReservationParity {
@@ -390,6 +485,14 @@ export async function getTableParity(connection: MigrationConnection): Promise<P
   );
 }
 
+export async function getStructuralParity(
+  connection: MigrationConnection,
+): Promise<StructuralParityRow[]> {
+  return parseStructuralParity(
+    await executeQuery(connection, "laje-migration-structural-parity", structuralParityQuery),
+  );
+}
+
 export async function getReservationParity(
   connection: MigrationConnection,
 ): Promise<ReservationParity> {
@@ -407,7 +510,11 @@ export function diffTableParity(source: ParityRow[], destination: ParityRow[]): 
       differences.push(`${item.tableName} is missing from destination parity output.`);
       continue;
     }
-    if (item.rowCount !== compared.rowCount || item.checksum !== compared.checksum) {
+    if (
+      item.rowCount !== compared.rowCount ||
+      item.checksum !== compared.checksum ||
+      item.dataChecksum !== compared.dataChecksum
+    ) {
       differences.push(`${item.tableName} differs between source and destination.`);
     }
   }
@@ -415,6 +522,26 @@ export function diffTableParity(source: ParityRow[], destination: ParityRow[]): 
     if (!source.some((sourceItem) => sourceItem.tableName === item.tableName)) {
       differences.push(`${item.tableName} is missing from source parity output.`);
     }
+  }
+  return differences;
+}
+
+export function diffStructuralParity(
+  source: StructuralParityRow[],
+  destination: StructuralParityRow[],
+): string[] {
+  const sourceByName = new Map(source.map((item) => [`${item.kind}:${item.name}`, item]));
+  const destinationByName = new Map(destination.map((item) => [`${item.kind}:${item.name}`, item]));
+  const differences: string[] = [];
+  for (const [name, item] of sourceByName) {
+    const compared = destinationByName.get(name);
+    if (!compared) differences.push(`${name} is missing from destination structure.`);
+    else if (item.checksum !== compared.checksum) {
+      differences.push(`${name} differs between source and destination structure.`);
+    }
+  }
+  for (const name of destinationByName.keys()) {
+    if (!sourceByName.has(name)) differences.push(`${name} is missing from source structure.`);
   }
   return differences;
 }

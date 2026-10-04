@@ -3,12 +3,12 @@
 ## Preparação
 
 1. Confirmar que LAJE-33, LAJE-37 e LAJE-89 foram concluídas e que os fluxos API, publicação e realtime foram validados em staging.
-2. Revisar o custo estimado de RDS, API, rede e recursos temporários contra os créditos AWS restantes.
+2. Revisar o custo estimado de RDS, API, rede e recursos temporários contra os créditos AWS restantes. Em 04/10/2026, a consulta AWS mostrou US$ 137,18 de créditos registrados e US$ 134,13 estimados após cobranças em aberto; atualizar esses valores antes de provisionar.
 3. Criar o RDS de produção a partir de `production.tfvars.example`, usando estado Terraform próprio e sem reutilizar VPC, estado ou credenciais de staging.
-4. Aplicar baseline e migration de autenticação no RDS de produção a partir de uma execução temporária autorizada na VPC.
+4. Aplicar baseline e migrations incrementais no RDS de produção vazio por `scripts/apply-rds-baseline.sh`, com `PGHOST`, `PGUSER`, `PGDATABASE`, `PGPASSWORD`, `PGSSLROOTCERT`, `PGSSLMODE=verify-full` e os gates de execução controlada, a partir de uma execução temporária autorizada na VPC.
 5. Carregar conexões de origem e destino por Secrets Manager e confirmar TLS, CA e conectividade.
 6. Executar `npm run migration:export-schema` para registrar somente o checksum estrutural da origem.
-7. Fazer ao menos um ensaio completo de `migration:sync-data` e `migration:verify-parity` no staging com dados sintéticos para PII.
+7. Fazer ao menos um ensaio completo de `migration:sync-data` e `migration:verify-parity` no staging com dados sintéticos para PII; usar o ensaio automatizado do CI como verificação prévia da mecânica de importação.
 
 ## Janela de corte
 

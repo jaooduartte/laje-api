@@ -1,22 +1,33 @@
 import {
   diffTableParity,
+  diffStructuralParity,
   getMigrationConnection,
   getReservationParity,
+  getStructuralParity,
   getTableParity,
   reservationParityMatches,
 } from "./shared.js";
 
 const source = getMigrationConnection("source");
 const destination = getMigrationConnection("destination");
-const [sourceTables, destinationTables, sourceReservations, destinationReservations] =
-  await Promise.all([
-    getTableParity(source),
-    getTableParity(destination),
-    getReservationParity(source),
-    getReservationParity(destination),
-  ]);
+const [
+  sourceTables,
+  destinationTables,
+  sourceReservations,
+  destinationReservations,
+  sourceStructure,
+  destinationStructure,
+] = await Promise.all([
+  getTableParity(source),
+  getTableParity(destination),
+  getReservationParity(source),
+  getReservationParity(destination),
+  getStructuralParity(source),
+  getStructuralParity(destination),
+]);
 
 const differences = diffTableParity(sourceTables, destinationTables);
+differences.push(...diffStructuralParity(sourceStructure, destinationStructure));
 const expectedReservationRequestCount = process.env.MIGRATION_EXPECTED_RESERVATION_REQUEST_COUNT;
 const parsedExpectedReservationRequestCount = expectedReservationRequestCount
   ? Number(expectedReservationRequestCount)
@@ -51,6 +62,7 @@ if (
         statusDistribution: destinationReservations.statusDistribution,
       },
       tablesValidated: sourceTables.length,
+      structuralObjectsValidated: sourceStructure.length,
     }) + "\n",
   );
 }

@@ -3,30 +3,59 @@ import test from "node:test";
 
 import {
   diffTableParity,
+  diffStructuralParity,
   parseParityRows,
   parseReservationParity,
+  parseStructuralParity,
   reservationParityMatches,
 } from "../../scripts/migration/shared.js";
 
 test("table parity parser accepts aggregate output without row values", () => {
-  assert.deepEqual(parseParityRows("teams|2|abc\nsports|3|def"), [
-    { tableName: "teams", rowCount: 2, checksum: "abc" },
-    { tableName: "sports", rowCount: 3, checksum: "def" },
+  assert.deepEqual(parseParityRows("teams|2|abc|rows1\nsports|3|def|rows2"), [
+    { tableName: "teams", rowCount: 2, checksum: "abc", dataChecksum: "rows1" },
+    { tableName: "sports", rowCount: 3, checksum: "def", dataChecksum: "rows2" },
   ]);
 });
 
 test("table parity differences include missing and changed tables", () => {
   const differences = diffTableParity(
-    [{ tableName: "teams", rowCount: 2, checksum: "source" }],
+    [{ tableName: "teams", rowCount: 2, checksum: "source", dataChecksum: "rows1" }],
     [
-      { tableName: "teams", rowCount: 3, checksum: "destination" },
-      { tableName: "sports", rowCount: 1, checksum: "other" },
+      { tableName: "teams", rowCount: 3, checksum: "destination", dataChecksum: "rows2" },
+      { tableName: "sports", rowCount: 1, checksum: "other", dataChecksum: "rows3" },
     ],
   );
 
   assert.deepEqual(differences, [
     "teams differs between source and destination.",
     "sports is missing from source parity output.",
+  ]);
+});
+
+test("table parity detects changed row data when primary keys match", () => {
+  assert.deepEqual(
+    diffTableParity(
+      [{ tableName: "teams", rowCount: 1, checksum: "ids", dataChecksum: "source" }],
+      [{ tableName: "teams", rowCount: 1, checksum: "ids", dataChecksum: "destination" }],
+    ),
+    ["teams differs between source and destination."],
+  );
+});
+
+test("structural parity detects missing and changed schema objects", () => {
+  const source = parseStructuralParity(
+    JSON.stringify([
+      { kind: "column", name: "teams.name", checksum: "name" },
+      { kind: "index", name: "teams.teams_pkey", checksum: "index" },
+    ]),
+  );
+  const destination = parseStructuralParity(
+    JSON.stringify([{ kind: "column", name: "teams.name", checksum: "changed" }]),
+  );
+
+  assert.deepEqual(diffStructuralParity(source, destination), [
+    "column:teams.name differs between source and destination structure.",
+    "index:teams.teams_pkey is missing from destination structure.",
   ]);
 });
 
