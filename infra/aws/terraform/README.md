@@ -103,7 +103,7 @@ No database credentials or secret values must be written to documentation, shell
 
 ## Cost controls
 
-The staging defaults intentionally use a small Single-AZ `db.t4g.micro` instance and 20 GiB gp3 storage. Automated backup retention is set to **1 day** in staging because the AWS Free Plan used for this environment rejects the previous 7-day value. The production example uses the same initial instance size, seven days of automated backups, deletion protection and a final snapshot. Before `terraform apply`, review the current AWS estimate, active credits and any costs from API, load balancer, network or temporary migration resources.
+The staging defaults intentionally use a small Single-AZ `db.t4g.micro` instance and 20 GiB gp3 storage. Automated backup retention is set to **1 day** in staging because the AWS Free Plan used for this environment rejects the previous 7-day value. The production example requests seven days, deletion protection and a final snapshot. Before `terraform apply`, confirm that the account accepts seven-day retention; if it still uses the Free Plan restriction, review the one-day retention and manual snapshot tradeoff before changing `production.tfvars`. Review the current AWS estimate, active credits and any costs from API, load balancer, network or temporary migration resources.
 
 ## Current execution status
 
@@ -118,6 +118,7 @@ Verified state:
 - Terraform state is stored in the encrypted, versioned S3 backend with Block Public Access enabled;
 - the final `terraform plan` after provisioning returned no changes, confirming no known drift between configuration, state and live infrastructure;
 - temporary EC2/SSM/IAM resources used only to bootstrap and validate the private RDS were removed after completion;
+- on 04/10/2026, a temporary copy of the production configuration passed `terraform validate`; a production `terraform plan` could not complete because local AWS provider credentials were unavailable, so no production resource was created;
 - future production infrastructure and the final Supabase -> AWS cutover remain for later migration tasks.
 
 The frontend hosting is not changed by LAJE-127. The current Vercel usage remains under the project-specific authorization previously obtained from the professor; this infrastructure module is limited to the AWS staging/backend migration path.
