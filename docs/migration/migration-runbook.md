@@ -3,7 +3,7 @@
 ## Preparação
 
 1. Confirmar que LAJE-33, LAJE-37 e LAJE-89 foram concluídas e que os fluxos API, publicação e realtime foram validados em staging.
-2. Revisar o custo estimado de RDS, API, rede e recursos temporários contra os créditos AWS restantes. Em 04/10/2026, a consulta AWS mostrou US$ 137,18 de créditos registrados e US$ 134,13 estimados após cobranças em aberto; atualizar esses valores antes de provisionar.
+2. Revisar o custo estimado de RDS, API, rede e recursos temporários contra os créditos AWS restantes. Em 04/10/2026 às 15h30 de Brasília, a consulta AWS mostrou US$ 137,18 de créditos registrados e US$ 133,73 estimados após cobranças em aberto; atualizar esses valores antes de provisionar.
 3. Confirmar um executor temporário autorizado com acesso à origem Supabase e ao RDS privado, além das duas credenciais de banco entregues em memória. Em 04/10/2026, não havia instância gerenciada por SSM, cluster ECS ou segredo de origem na AWS; a `.env` local da API não aponta para o Supabase hospedado.
 4. Criar o RDS de produção a partir de `production.tfvars.example`, usando estado Terraform próprio e sem reutilizar VPC, estado ou credenciais de staging.
 5. Aplicar baseline e migrations incrementais no RDS de produção vazio por `scripts/apply-rds-baseline.sh`, com `PGHOST`, `PGUSER`, `PGDATABASE`, `PGPASSWORD`, `PGSSLROOTCERT`, `PGSSLMODE=verify-full` e os gates de execução controlada, a partir de uma execução temporária autorizada na VPC.
