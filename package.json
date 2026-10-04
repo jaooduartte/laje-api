@@ -18,7 +18,12 @@
     "test:unit": "node --import tsx --test tests/unit/*.test.ts",
     "test:e2e": "node --import tsx --test tests/e2e/*.test.ts",
     "test:integration": "node --import tsx --test tests/integration/*.test.ts",
-    "test:coverage": "node --import tsx --test --experimental-test-coverage tests/unit/*.test.ts tests/e2e/*.test.ts"
+    "test:coverage": "node --import tsx --test --experimental-test-coverage tests/unit/*.test.ts tests/e2e/*.test.ts",
+    "migration:export-schema": "tsx scripts/migration/export-schema.ts",
+    "migration:export-data": "tsx scripts/migration/export-data.ts",
+    "migration:import-data": "tsx scripts/migration/import-data.ts",
+    "migration:sync-data": "tsx scripts/migration/sync-data.ts",
+    "migration:verify-parity": "tsx scripts/migration/verify-parity.ts"
   },
   "repository": {
     "type": "git",

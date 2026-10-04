@@ -247,14 +247,15 @@ resource "aws_db_instance" "staging" {
   maintenance_window      = "sun:04:00-sun:05:00"
 
   auto_minor_version_upgrade = true
-  deletion_protection        = false
-  skip_final_snapshot        = true
+  deletion_protection        = var.deletion_protection
+  skip_final_snapshot        = var.skip_final_snapshot
+  final_snapshot_identifier  = var.skip_final_snapshot ? null : coalesce(var.final_snapshot_identifier, "${local.name_prefix}-final")
   copy_tags_to_snapshot      = true
 
   enabled_cloudwatch_logs_exports = ["postgresql"]
 
   tags = {
     Name = "${local.name_prefix}-postgres"
-    Role = "integration-database"
+    Role = "database"
   }
 }

@@ -1,0 +1,14 @@
+aws_region                = "sa-east-1"
+project_name              = "laje"
+environment               = "production"
+vpc_cidr                  = "10.43.0.0/16"
+app_port                  = 3000
+postgres_engine_version   = "17"
+db_instance_class         = "db.t4g.micro"
+db_name                   = "laje_production"
+db_master_username        = "laje_admin"
+backup_retention_days     = 7
+deletion_protection       = true
+skip_final_snapshot       = false
+final_snapshot_identifier = "laje-production-final"
+jira_issue_key            = "LAJE-88"
