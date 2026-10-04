@@ -261,7 +261,7 @@ export async function synchronizeData(
   const streamCompletion = new Promise<void>((resolve, reject) => {
     sourceProcess.stdout.once("end", resolve);
     sourceProcess.stdout.once("error", reject);
-    destinationProcess.stdin.once("error", reject);
+    destinationProcess.stdin.on("error", reject);
     sourceProcess.stdout.pipe(destinationProcess.stdin, { end: false });
   });
 
@@ -271,8 +271,10 @@ export async function synchronizeData(
     await destinationCompletion;
   } catch (error) {
     sourceProcess.kill();
-    destinationProcess.stdin.destroy();
-    destinationProcess.kill();
+    if (!destinationProcess.stdin.destroyed) {
+      destinationProcess.stdin.write("SELECT 1 / 0;\n");
+      destinationProcess.stdin.end();
+    }
     await Promise.allSettled([sourceCompletion, destinationCompletion]);
     throw error;
   }
