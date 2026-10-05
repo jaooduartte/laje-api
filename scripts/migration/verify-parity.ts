@@ -1,5 +1,10 @@
 import { diffMigrationStructure, getEnumParity } from "./enum-parity.js";
 import {
+  assertParityModePreconditions,
+  getMigrationParityMode,
+  parityFailureMessage,
+} from "./parity-mode.js";
+import {
   diffTableParity,
   getMigrationConnection,
   getReservationParity,
@@ -7,6 +12,9 @@ import {
   getTableParity,
   reservationParityMatches,
 } from "./shared.js";
+
+const parityMode = getMigrationParityMode();
+assertParityModePreconditions(parityMode);
 
 const source = getMigrationConnection("source");
 const destination = getMigrationConnection("destination");
@@ -58,12 +66,13 @@ if (
   !reservationRequestCountMatches
 ) {
   for (const difference of differences) process.stderr.write(`${difference}\n`);
-  process.stderr.write("Reservation parity validation failed.\n");
+  process.stderr.write(`${parityFailureMessage(parityMode)}\n`);
   process.exitCode = 1;
 } else {
   process.stdout.write(
     JSON.stringify({
       enumTypesValidated: sourceEnums.length,
+      parityMode,
       reservationRequests: {
         rowCount: destinationReservations.rowCount,
         statusDistribution: destinationReservations.statusDistribution,
