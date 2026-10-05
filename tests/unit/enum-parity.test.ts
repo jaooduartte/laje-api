@@ -9,13 +9,7 @@ import {
 import type { EnumParityRow } from "../../scripts/migration/enum-parity.js";
 import type { StructuralParityRow } from "../../scripts/migration/shared.js";
 
-const championshipStatusValues = [
-  "PLANNING",
-  "UPCOMING",
-  "REVIEW",
-  "IN_PROGRESS",
-  "FINISHED",
-];
+const championshipStatusValues = ["PLANNING", "UPCOMING", "REVIEW", "IN_PROGRESS", "FINISHED"];
 
 test("enum parity ignores internal enum sort hashes when logical order matches", () => {
   const sourceStructure: StructuralParityRow[] = championshipStatusValues.map((value, index) => ({
