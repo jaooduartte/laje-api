@@ -1,6 +1,6 @@
+import { diffMigrationStructure, getEnumParity } from "./enum-parity.js";
 import {
   diffTableParity,
-  diffStructuralParity,
   getMigrationConnection,
   getReservationParity,
   getStructuralParity,
@@ -17,6 +17,8 @@ const [
   destinationReservations,
   sourceStructure,
   destinationStructure,
+  sourceEnums,
+  destinationEnums,
 ] = await Promise.all([
   getTableParity(source),
   getTableParity(destination),
@@ -24,10 +26,14 @@ const [
   getReservationParity(destination),
   getStructuralParity(source),
   getStructuralParity(destination),
+  getEnumParity(source),
+  getEnumParity(destination),
 ]);
 
 const differences = diffTableParity(sourceTables, destinationTables);
-differences.push(...diffStructuralParity(sourceStructure, destinationStructure));
+differences.push(
+  ...diffMigrationStructure(sourceStructure, destinationStructure, sourceEnums, destinationEnums),
+);
 const expectedReservationRequestCount = process.env.MIGRATION_EXPECTED_RESERVATION_REQUEST_COUNT;
 const parsedExpectedReservationRequestCount = expectedReservationRequestCount
   ? Number(expectedReservationRequestCount)
@@ -57,6 +63,7 @@ if (
 } else {
   process.stdout.write(
     JSON.stringify({
+      enumTypesValidated: sourceEnums.length,
       reservationRequests: {
         rowCount: destinationReservations.rowCount,
         statusDistribution: destinationReservations.statusDistribution,
