@@ -55,18 +55,68 @@ function buildLeagueCalendarHolidays(year: number) {
   const easterDate = resolveEasterDate(year);
   return [
     { holidayDate: fixedDate(year, 1, 1), name: "Ano Novo", scope: "NATIONAL", dayKind: "HOLIDAY" },
-    { holidayDate: fixedDate(year, 4, 21), name: "Tiradentes", scope: "NATIONAL", dayKind: "HOLIDAY" },
-    { holidayDate: fixedDate(year, 5, 1), name: "Dia do Trabalhador", scope: "NATIONAL", dayKind: "HOLIDAY" },
-    { holidayDate: fixedDate(year, 9, 7), name: "Independência do Brasil", scope: "NATIONAL", dayKind: "HOLIDAY" },
-    { holidayDate: fixedDate(year, 10, 12), name: "Nossa Senhora Aparecida", scope: "NATIONAL", dayKind: "HOLIDAY" },
+    {
+      holidayDate: fixedDate(year, 4, 21),
+      name: "Tiradentes",
+      scope: "NATIONAL",
+      dayKind: "HOLIDAY",
+    },
+    {
+      holidayDate: fixedDate(year, 5, 1),
+      name: "Dia do Trabalhador",
+      scope: "NATIONAL",
+      dayKind: "HOLIDAY",
+    },
+    {
+      holidayDate: fixedDate(year, 9, 7),
+      name: "Independência do Brasil",
+      scope: "NATIONAL",
+      dayKind: "HOLIDAY",
+    },
+    {
+      holidayDate: fixedDate(year, 10, 12),
+      name: "Nossa Senhora Aparecida",
+      scope: "NATIONAL",
+      dayKind: "HOLIDAY",
+    },
     { holidayDate: fixedDate(year, 11, 2), name: "Finados", scope: "NATIONAL", dayKind: "HOLIDAY" },
-    { holidayDate: fixedDate(year, 11, 15), name: "Proclamação da República", scope: "NATIONAL", dayKind: "HOLIDAY" },
-    { holidayDate: fixedDate(year, 11, 20), name: "Dia da Consciência Negra", scope: "NATIONAL", dayKind: "HOLIDAY" },
+    {
+      holidayDate: fixedDate(year, 11, 15),
+      name: "Proclamação da República",
+      scope: "NATIONAL",
+      dayKind: "HOLIDAY",
+    },
+    {
+      holidayDate: fixedDate(year, 11, 20),
+      name: "Dia da Consciência Negra",
+      scope: "NATIONAL",
+      dayKind: "HOLIDAY",
+    },
     { holidayDate: fixedDate(year, 12, 25), name: "Natal", scope: "NATIONAL", dayKind: "HOLIDAY" },
-    { holidayDate: fixedDate(year, 3, 9), name: "Aniversário de Joinville", scope: "JOINVILLE", dayKind: "HOLIDAY" },
-    { holidayDate: addDays(easterDate, -47), name: "Carnaval", scope: "NATIONAL", dayKind: "OPTIONAL" },
-    { holidayDate: addDays(easterDate, -2), name: "Sexta-feira Santa", scope: "NATIONAL", dayKind: "HOLIDAY" },
-    { holidayDate: addDays(easterDate, 60), name: "Corpus Christi", scope: "NATIONAL", dayKind: "OPTIONAL" },
+    {
+      holidayDate: fixedDate(year, 3, 9),
+      name: "Aniversário de Joinville",
+      scope: "JOINVILLE",
+      dayKind: "HOLIDAY",
+    },
+    {
+      holidayDate: addDays(easterDate, -47),
+      name: "Carnaval",
+      scope: "NATIONAL",
+      dayKind: "OPTIONAL",
+    },
+    {
+      holidayDate: addDays(easterDate, -2),
+      name: "Sexta-feira Santa",
+      scope: "NATIONAL",
+      dayKind: "HOLIDAY",
+    },
+    {
+      holidayDate: addDays(easterDate, 60),
+      name: "Corpus Christi",
+      scope: "NATIONAL",
+      dayKind: "OPTIONAL",
+    },
   ] as const;
 }
 
@@ -517,10 +567,7 @@ export function createPublicRuntimeRouter(): Router {
     "/championships/:championshipId/seasons/:seasonYear/match-context",
     async (request, response, next) => {
       try {
-        const championshipId = requireUuid(
-          request.params.championshipId,
-          "championshipId",
-        );
+        const championshipId = requireUuid(request.params.championshipId, "championshipId");
         const seasonYear = requireInteger(request.params.seasonYear, "seasonYear", {
           min: 2000,
           max: 2100,
