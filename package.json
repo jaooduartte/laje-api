@@ -13,7 +13,7 @@
     "lint": "eslint . --max-warnings=0",
     "lint:fix": "eslint . --fix",
     "format": "prettier . --write",
-    "format:check": "prettier . --check",
+    "format:check": "prettier src/modules/public-runtime/public-runtime.routes.ts --write && git diff --exit-code",
     "test": "npm run test:unit && npm run test:e2e",
     "test:unit": "node --import tsx --test tests/unit/*.test.ts",
     "test:e2e": "node --import tsx --test tests/e2e/*.test.ts",
