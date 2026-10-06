@@ -248,6 +248,6 @@ resource "aws_db_instance" "staging" {
 
   tags = {
     Name = "${local.name_prefix}-postgres"
-    Role = "database"
+    Role = "integration-database"
   }
 }
