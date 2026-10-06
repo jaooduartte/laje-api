@@ -23,8 +23,7 @@ export function assertParityModePreconditions(
   if (mode !== "final") return;
 
   const syncMode = preconditions.syncMode ?? process.env.MIGRATION_SYNC_MODE;
-  const writesPausedAt =
-    preconditions.writesPausedAt ?? process.env.MIGRATION_WRITES_PAUSED_AT;
+  const writesPausedAt = preconditions.writesPausedAt ?? process.env.MIGRATION_WRITES_PAUSED_AT;
 
   if (syncMode !== "final") {
     throw new Error("Final parity validation requires MIGRATION_SYNC_MODE=final.");
