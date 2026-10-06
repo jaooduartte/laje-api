@@ -93,8 +93,8 @@ resource "aws_iam_role_policy" "ecs_execution_rds_secret" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect   = "Allow"
-        Action   = ["secretsmanager:GetSecretValue"]
+        Effect = "Allow"
+        Action = ["secretsmanager:GetSecretValue"]
         Resource = [
           aws_db_instance.staging.master_user_secret[0].secret_arn,
           data.aws_secretsmanager_secret.auth_jwt.arn
