@@ -20,19 +20,27 @@ The current Terraform creates:
 
 The current Supabase production environment is not modified by this stack.
 
-## Deliberately not provisioned yet
+## Staging API runtime — LAJE-136
 
-The following components belong to later tasks and are intentionally not created here:
+The module now contains the integration/staging runtime for `laje-api`:
 
-- ECS/Fargate service and task definition;
-- ECR image/repository configuration used by the final deployment;
-- Application Load Balancer and ACM certificate;
-- NAT Gateway or VPC endpoints for ECS egress;
-- final GitHub Actions -> AWS OIDC deployment role;
-- SQS/EventBridge replacements for asynchronous/cron workloads;
-- final production cutover from Supabase to AWS.
+- Amazon ECR with scan-on-push and retention of the three newest images;
+- Amazon ECS/Fargate using one 0.25 vCPU / 512 MiB task while staging is active;
+- internal Application Load Balancer in the application subnets;
+- API Gateway HTTP API as the public HTTPS endpoint, connected through a VPC Link;
+- CloudWatch Logs with short staging retention;
+- RDS credentials injected from the RDS-managed Secrets Manager secret;
+- browser CORS configured through Terraform variables.
 
-Security Groups and subnets for the future ALB/ECS path are created now so the database can be provisioned without later reopening PostgreSQL to the Internet.
+To avoid a NAT Gateway, the staging Fargate task runs in the public subnets with a public IP **but does not accept Internet ingress**. Its Security Group permits application traffic only from the ALB. The ALB is internal and receives traffic only from API Gateway through a VPC Link. RDS remains private and accepts PostgreSQL only from the ECS Security Group.
+
+The billable ALB, API Gateway VPC Link/runtime and ECS service are controlled by `staging_api_enabled`. Keep it `false` when staging is not being actively validated. ECR, the ECS cluster, task definition, execution role and short-retention log group may remain because they do not create continuous compute/load-balancer charges.
+
+Still intentionally outside this module/task:
+
+- SQS/EventBridge replacements for asynchronous/cron workloads (LAJE-126);
+- realtime replacement (LAJE-89);
+- production database/runtime and final cutover (LAJE-139).
 
 ## Security model
 
@@ -122,3 +130,11 @@ Verified state:
 - future production infrastructure and the final Supabase -> AWS cutover remain for later migration tasks.
 
 The frontend hosting is not changed by LAJE-127. The current Vercel usage remains under the project-specific authorization previously obtained from the professor; this infrastructure module is limited to the AWS staging/backend migration path.
+
+## Deploying or suspending staging
+
+The GitHub Actions workflow `.github/workflows/deploy-aws.yml` uses GitHub OIDC instead of long-lived AWS keys. A deployment first applies the runtime with zero tasks, publishes an immutable image to ECR, then applies one Fargate task and validates both health endpoints.
+
+Use the manual workflow action `deploy` to start/update staging. Use `suspend` after validation to destroy the billable ALB/API Gateway VPC Link/ECS service while preserving the reproducible low-cost foundation.
+
+No NAT Gateway is part of this design.

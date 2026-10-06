@@ -58,3 +58,23 @@ output "rds_master_secret_arn" {
   description = "Secrets Manager ARN managed automatically by RDS for the master credential."
   sensitive   = true
 }
+
+output "staging_api_ecr_repository_url" {
+  value       = aws_ecr_repository.api.repository_url
+  description = "ECR repository used by the staging laje-api image."
+}
+
+output "staging_api_ecs_cluster_name" {
+  value       = aws_ecs_cluster.api.name
+  description = "ECS cluster used by staging."
+}
+
+output "staging_api_https_url" {
+  value       = var.staging_api_enabled ? aws_apigatewayv2_api.api[0].api_endpoint : null
+  description = "Public API Gateway HTTPS URL for staging. Null while the billable staging runtime is suspended."
+}
+
+output "staging_api_alb_dns_name" {
+  value       = var.staging_api_enabled ? aws_lb.api[0].dns_name : null
+  description = "Internal ALB DNS name used only through API Gateway VPC Link."
+}

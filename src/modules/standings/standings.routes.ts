@@ -176,14 +176,48 @@ export function createStandingsRouter(): Router {
           st.goal_diff AS "goalDiff", st.points,
           st.yellow_cards AS "yellowCards", st.red_cards AS "redCards",
           st.blue_cards AS "blueCards", st.two_minute_penalties AS "twoMinutePenalties",
-          st.sets_for AS "setsFor", st.sets_against AS "setsAgainst",
-          st.rally_points_for AS "rallyPointsFor", st.rally_points_against AS "rallyPointsAgainst",
+          COALESCE(vm.sets_for, 0)::int AS "setsFor",
+          COALESCE(vm.sets_against, 0)::int AS "setsAgainst",
+          COALESCE(vm.rally_points_for, 0)::int AS "rallyPointsFor",
+          COALESCE(vm.rally_points_against, 0)::int AS "rallyPointsAgainst",
           cs.tie_breaker_rule AS "legacyRule", cs.classification_policy AS "classificationPolicy"
         FROM public.standings st
         JOIN public.teams t ON t.id = st.team_id
         JOIN public.sports sp ON sp.id = st.sport_id
         LEFT JOIN public.championship_sports cs
           ON cs.championship_id = st.championship_id AND cs.sport_id = st.sport_id
+        LEFT JOIN LATERAL (
+          SELECT
+            COALESCE(SUM(CASE
+              WHEN m.home_team_id = st.team_id AND ms.home_points > ms.away_points THEN 1
+              WHEN m.away_team_id = st.team_id AND ms.away_points > ms.home_points THEN 1
+              ELSE 0
+            END), 0) AS sets_for,
+            COALESCE(SUM(CASE
+              WHEN m.home_team_id = st.team_id AND ms.away_points > ms.home_points THEN 1
+              WHEN m.away_team_id = st.team_id AND ms.home_points > ms.away_points THEN 1
+              ELSE 0
+            END), 0) AS sets_against,
+            COALESCE(SUM(CASE
+              WHEN m.home_team_id = st.team_id THEN ms.home_points
+              WHEN m.away_team_id = st.team_id THEN ms.away_points
+              ELSE 0
+            END), 0) AS rally_points_for,
+            COALESCE(SUM(CASE
+              WHEN m.home_team_id = st.team_id THEN ms.away_points
+              WHEN m.away_team_id = st.team_id THEN ms.home_points
+              ELSE 0
+            END), 0) AS rally_points_against
+          FROM public.matches m
+          JOIN public.match_sets ms ON ms.match_id = m.id
+          WHERE m.status = 'FINISHED'
+            AND m.championship_id = st.championship_id
+            AND m.season_year = st.season_year
+            AND m.sport_id = st.sport_id
+            AND m.naipe = st.naipe
+            AND m.division IS NOT DISTINCT FROM st.division
+            AND (m.home_team_id = st.team_id OR m.away_team_id = st.team_id)
+        ) vm ON TRUE
         WHERE ${conditions.join(" AND ")}
         ORDER BY sp.name, st.naipe, st.division NULLS FIRST, t.name`,
         parameters,

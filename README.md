@@ -35,7 +35,7 @@ A Vercel permanece somente como hospedagem do frontend por uma exceção especí
 | Integration / staging | Mesmo repositório `laje`, ambiente dedicado | `laje-api` em AWS | Amazon RDS PostgreSQL 17 | Validar API, migrations, contratos, CORS, TLS, deploy e migração |
 | Produção alvo | Vercel, repositório `laje` | `laje-api` em AWS | Amazon RDS PostgreSQL 17 | Estado final após cutover |
 
-No frontend, `VITE_API_URL` seleciona a API correspondente ao ambiente. No backend, `DATABASE_URL` seleciona a instância PostgreSQL correspondente. A troca de ambiente deve ocorrer por configuração, sem alteração de código e sem versionar credenciais.
+No frontend, `VITE_API_URL` seleciona a API correspondente ao ambiente. No backend, desenvolvimento/CI podem usar `DATABASE_URL`; no ECS staging, host, banco, usuário e senha são injetados separadamente em runtime para que o usuário/senha permaneçam no Secrets Manager e a própria aplicação componha a URL PostgreSQL com escaping seguro. A troca de ambiente ocorre por configuração, sem alteração de código e sem versionar credenciais.
 
 ## Stack
 
@@ -80,7 +80,7 @@ DATABASE_URL=postgresql://<usuario>:<senha>@<host>:5432/<database>?sslmode=<modo
 CORS_ORIGINS=http://localhost:8080
 ```
 
-`DATABASE_URL` é obrigatória. Use somente credenciais do ambiente ao qual você está autorizado a acessar. Credenciais reais de staging/produção, tokens e valores do AWS Secrets Manager nunca devem ser adicionados ao repositório, ao README ou à imagem Docker.
+`DATABASE_URL` continua sendo a forma recomendada para desenvolvimento e CI. Em runtime AWS, ela pode ser substituída por `DATABASE_HOST`, `DATABASE_NAME`, `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_PORT` e `DATABASE_SSLMODE`; todos os quatro primeiros componentes obrigatórios devem estar presentes. O staging injeta usuário/senha diretamente do Secrets Manager. Credenciais reais, tokens e valores do AWS Secrets Manager nunca devem ser adicionados ao repositório, ao README ou à imagem Docker.
 
 Para um PostgreSQL de desenvolvimento sem TLS, o ambiente controlado pode utilizar `sslmode=disable`. Em AWS/RDS, a conexão deve usar TLS; consulte [docs/database-access.md](docs/database-access.md).
 

@@ -82,3 +82,38 @@ variable "jira_issue_key" {
   type        = string
   default     = "LAJE-127"
 }
+
+variable "staging_api_enabled" {
+  description = "Creates the billable staging API runtime (ALB, CloudFront and ECS service). Keep false when staging is suspended."
+  type        = bool
+  default     = false
+}
+
+variable "staging_api_desired_count" {
+  description = "Number of Fargate tasks for staging. Use 0 while publishing the first image and 1 only while staging is active."
+  type        = number
+  default     = 0
+
+  validation {
+    condition     = var.staging_api_desired_count >= 0 && var.staging_api_desired_count <= 1
+    error_message = "staging_api_desired_count must be 0 or 1 for the low-cost staging environment."
+  }
+}
+
+variable "staging_api_image_tag" {
+  description = "Immutable ECR image tag deployed to the staging task definition."
+  type        = string
+  default     = "staging"
+}
+
+variable "staging_api_cors_origins" {
+  description = "Comma-separated browser origins allowed to call the staging API."
+  type        = string
+  default     = "https://ligadasatleticas.vercel.app"
+}
+
+variable "staging_api_log_retention_days" {
+  description = "CloudWatch Logs retention for the staging API."
+  type        = number
+  default     = 7
+}
