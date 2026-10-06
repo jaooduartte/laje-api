@@ -173,3 +173,15 @@ jobs:
           echo "- Application health: OK" >> "${GITHUB_STEP_SUMMARY}"
           echo "- PostgreSQL health: OK" >> "${GITHUB_STEP_SUMMARY}"
           echo "- CORS for Vercel production origin: OK" >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Run core E2E smoke
+        if: steps.mode.outputs.action == 'deploy'
+        run: |
+          API_URL="$(terraform -chdir="${TF_DIR}" output -raw staging_api_https_url)"
+          chmod +x scripts/smoke-staging.sh
+          smoke_output="$(scripts/smoke-staging.sh "${API_URL}")"
+          echo "${smoke_output}"
+          echo "### Core E2E smoke" >> "${GITHUB_STEP_SUMMARY}"
+          echo '~~~text' >> "${GITHUB_STEP_SUMMARY}"
+          echo "${smoke_output}" >> "${GITHUB_STEP_SUMMARY}"
+          echo '~~~' >> "${GITHUB_STEP_SUMMARY}"
