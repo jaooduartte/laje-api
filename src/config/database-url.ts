@@ -1,11 +1,11 @@
 export interface DatabaseUrlInput {
-  url?: string;
-  host?: string;
-  port?: string;
-  database?: string;
-  user?: string;
-  password?: string;
-  sslMode?: string;
+  url?: string | undefined;
+  host?: string | undefined;
+  port?: string | undefined;
+  database?: string | undefined;
+  user?: string | undefined;
+  password?: string | undefined;
+  sslMode?: string | undefined;
 }
 
 export interface DatabaseUrlResolution {
