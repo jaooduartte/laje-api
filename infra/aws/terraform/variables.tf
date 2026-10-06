@@ -112,6 +112,12 @@ variable "staging_api_cors_origins" {
   default     = "https://laje-tcc.vercel.app"
 }
 
+variable "staging_auth_jwt_secret_name" {
+  description = "Secrets Manager name containing the dedicated auth JWT signing secret for staging."
+  type        = string
+  default     = "laje/staging/auth-jwt"
+}
+
 variable "staging_api_log_retention_days" {
   description = "CloudWatch Logs retention for the staging API."
   type        = number

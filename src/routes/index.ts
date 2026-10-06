@@ -12,6 +12,7 @@ import { createLeagueEventConflictsRouter } from "../modules/league-events/leagu
 import { createLeagueEventsRouter } from "../modules/league-events/league-events.routes.js";
 import { createMatchesRouter } from "../modules/matches/matches.routes.js";
 import { createPublicAccessRouter } from "../modules/public-access/public-access.routes.js";
+import { createPublicRuntimeRouter } from "../modules/public-runtime/public-runtime.routes.js";
 
 export const apiRouter = Router();
 
@@ -40,3 +41,4 @@ apiRouter.use("/championships", createChampionshipsRouter(authService));
 apiRouter.use("/league-events", createLeagueEventConflictsRouter());
 apiRouter.use("/league-events", createLeagueEventsRouter(authService));
 apiRouter.use("/public", createPublicAccessRouter(authService));
+apiRouter.use("/public-runtime", createPublicRuntimeRouter());
