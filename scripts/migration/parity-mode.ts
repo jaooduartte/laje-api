@@ -5,7 +5,9 @@ export interface FinalParityPreconditions {
   writesPausedAt?: string;
 }
 
-export function getMigrationParityMode(value = process.env.MIGRATION_PARITY_MODE): MigrationParityMode {
+export function getMigrationParityMode(
+  value = process.env.MIGRATION_PARITY_MODE,
+): MigrationParityMode {
   const normalized = value?.trim() || "strict";
   if (normalized === "strict" || normalized === "rehearsal" || normalized === "final") {
     return normalized;
@@ -21,7 +23,8 @@ export function assertParityModePreconditions(
   if (mode !== "final") return;
 
   const syncMode = preconditions.syncMode ?? process.env.MIGRATION_SYNC_MODE;
-  const writesPausedAt = preconditions.writesPausedAt ?? process.env.MIGRATION_WRITES_PAUSED_AT;
+  const writesPausedAt =
+    preconditions.writesPausedAt ?? process.env.MIGRATION_WRITES_PAUSED_AT;
 
   if (syncMode !== "final") {
     throw new Error("Final parity validation requires MIGRATION_SYNC_MODE=final.");
