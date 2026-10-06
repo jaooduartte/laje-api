@@ -1,5 +1,6 @@
 import "dotenv/config";
 
+import { resolveDatabaseUrl } from "./database-url.js";
 import { createRedactedConfig } from "./redacted-config.js";
 
 export type NodeEnvironment = "development" | "test" | "production";
@@ -73,18 +74,6 @@ function booleanValue(name: string, fallback: boolean): boolean {
   return value === "true";
 }
 
-function url(name: string): string | undefined {
-  const value = required(name);
-  if (!value) return undefined;
-
-  try {
-    new URL(value);
-  } catch {
-    issues.push(`${name} must be a valid URL.`);
-  }
-  return value;
-}
-
 function csvOrigins(name: string): string[] | undefined {
   const value = required(name);
   if (!value) return undefined;
@@ -119,7 +108,17 @@ function csvOrigins(name: string): string[] | undefined {
 
 const nodeEnv = enumValue("NODE_ENV", ["development", "test", "production"] as const);
 const port = integer("PORT", 1, 65535);
-const databaseUrl = url("DATABASE_URL");
+const databaseResolution = resolveDatabaseUrl({
+  url: optional("DATABASE_URL"),
+  host: optional("DATABASE_HOST"),
+  port: optional("DATABASE_PORT"),
+  database: optional("DATABASE_NAME"),
+  user: optional("DATABASE_USER"),
+  password: optional("DATABASE_PASSWORD"),
+  sslMode: optional("DATABASE_SSLMODE"),
+});
+issues.push(...databaseResolution.issues);
+const databaseUrl = databaseResolution.url;
 const databasePoolMax = optionalInteger("DATABASE_POOL_MAX", 10, 1, 50);
 const databaseIdleTimeoutSeconds = optionalInteger("DATABASE_IDLE_TIMEOUT_SECONDS", 20, 1, 300);
 const databaseConnectTimeoutSeconds = optionalInteger(
@@ -135,20 +134,6 @@ const databaseShutdownTimeoutSeconds = optionalInteger(
   30,
 );
 const corsOrigins = csvOrigins("CORS_ORIGINS");
-
-if (databaseUrl) {
-  try {
-    const parsedDatabaseUrl = new URL(databaseUrl);
-    if (
-      parsedDatabaseUrl.protocol !== "postgres:" &&
-      parsedDatabaseUrl.protocol !== "postgresql:"
-    ) {
-      issues.push("DATABASE_URL must use the postgres:// or postgresql:// protocol.");
-    }
-  } catch {
-    // The generic URL validation above already records this issue.
-  }
-}
 
 const authEnabled = booleanValue("AUTH_ENABLED", false);
 const awsEnabled = booleanValue("AWS_ENABLED", false);
