@@ -477,6 +477,25 @@ export function createPublicRuntimeRouter(): Router {
     }
   });
 
+  router.get("/individual-sessions/:sessionId/participants", async (request, response, next) => {
+    try {
+      const sessionId = requireUuid(request.params.sessionId, "sessionId");
+      const result = await database.query(
+        `SELECT DISTINCT t.id, t.name, t.city, t.division, t.is_active AS "isActive",
+           t.created_at::text AS "createdAt"
+         FROM public.championship_individual_events e
+         JOIN public.championship_individual_event_entries entry ON entry.event_id = e.id
+         JOIN public.teams t ON t.id = entry.team_id
+         WHERE e.session_id = $1
+         ORDER BY t.name ASC`,
+        [sessionId],
+      );
+      response.status(200).json({ data: result.rows });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.get("/championships/:championshipId/individual-standings", async (request, response, next) => {
     try {
       const championshipId = requireUuid(request.params.championshipId, "championshipId");
