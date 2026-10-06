@@ -37,7 +37,7 @@ env:
   TF_DIR: infra/aws/terraform
   TF_STATE_BUCKET: laje-terraform-state-549243453554-sa-east-1
   AWS_DEPLOY_ROLE_ARN: arn:aws:iam::549243453554:role/laje-github-actions-staging-deploy
-  CORS_ORIGINS: https://ligadasatleticas.vercel.app
+  CORS_ORIGINS: https://laje-tcc.vercel.app
 
 jobs:
   staging:
