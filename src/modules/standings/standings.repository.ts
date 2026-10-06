@@ -57,14 +57,6 @@ export async function recalculateCollectiveStandings(
        WHERE m.championship_id = $1 AND m.season_year = $2 AND m.sport_id = $3
          AND m.naipe = $4::public.match_naipe AND m.division IS NOT DISTINCT FROM $5::public.team_division
          AND m.status = 'FINISHED'
-     ), set_totals AS (
-       SELECT m.id AS match_id,
-         COALESCE(SUM(CASE WHEN ms.home_points > ms.away_points THEN 1 ELSE 0 END), 0)::int AS home_sets,
-         COALESCE(SUM(CASE WHEN ms.away_points > ms.home_points THEN 1 ELSE 0 END), 0)::int AS away_sets,
-         COALESCE(SUM(ms.home_points), 0)::int AS home_rally,
-         COALESCE(SUM(ms.away_points), 0)::int AS away_rally
-       FROM finished m LEFT JOIN public.match_sets ms ON ms.match_id = m.id
-       GROUP BY m.id
      ), config AS (
        SELECT points_win, points_draw, points_loss FROM public.championship_sports
        WHERE championship_id = $1 AND sport_id = $3 LIMIT 1
@@ -87,10 +79,6 @@ export async function recalculateCollectiveStandings(
          COALESCE(SUM(CASE WHEN m.home_team_id = p.team_id THEN m.home_red_cards WHEN m.away_team_id = p.team_id THEN m.away_red_cards ELSE 0 END), 0)::int AS red_cards,
          COALESCE(SUM(CASE WHEN m.home_team_id = p.team_id THEN m.home_blue_cards WHEN m.away_team_id = p.team_id THEN m.away_blue_cards ELSE 0 END), 0)::int AS blue_cards,
          COALESCE(SUM(CASE WHEN m.home_team_id = p.team_id THEN m.home_two_minute_penalties WHEN m.away_team_id = p.team_id THEN m.away_two_minute_penalties ELSE 0 END), 0)::int AS two_minute_penalties,
-         COALESCE(SUM(CASE WHEN m.home_team_id = p.team_id THEN st.home_sets WHEN m.away_team_id = p.team_id THEN st.away_sets ELSE 0 END), 0)::int AS sets_for,
-         COALESCE(SUM(CASE WHEN m.home_team_id = p.team_id THEN st.away_sets WHEN m.away_team_id = p.team_id THEN st.home_sets ELSE 0 END), 0)::int AS sets_against,
-         COALESCE(SUM(CASE WHEN m.home_team_id = p.team_id THEN st.home_rally WHEN m.away_team_id = p.team_id THEN st.away_rally ELSE 0 END), 0)::int AS rally_points_for,
-         COALESCE(SUM(CASE WHEN m.home_team_id = p.team_id THEN st.away_rally WHEN m.away_team_id = p.team_id THEN st.home_rally ELSE 0 END), 0)::int AS rally_points_against,
          COALESCE(SUM(CASE
            WHEN m.id IS NULL THEN 0
            WHEN m.is_double_walkover THEN COALESCE(c.points_loss, 0)
@@ -102,7 +90,6 @@ export async function recalculateCollectiveStandings(
          END), 0)::int AS points
        FROM participants p
        LEFT JOIN finished m ON m.home_team_id = p.team_id OR m.away_team_id = p.team_id
-       LEFT JOIN set_totals st ON st.match_id = m.id
        CROSS JOIN (SELECT COALESCE((SELECT points_win FROM config), 3) AS points_win,
                           COALESCE((SELECT points_draw FROM config), 1) AS points_draw,
                           COALESCE((SELECT points_loss FROM config), 0) AS points_loss) c
@@ -111,10 +98,10 @@ export async function recalculateCollectiveStandings(
      INSERT INTO public.standings
        (championship_id, season_year, sport_id, team_id, naipe, division, played, wins, draws, losses,
         goals_for, goals_against, goal_diff, points, yellow_cards, red_cards, blue_cards, two_minute_penalties,
-        sets_for, sets_against, rally_points_for, rally_points_against, updated_at)
+        updated_at)
      SELECT $1, $2, $3, team_id, $4::public.match_naipe, $5::public.team_division,
        played, wins, draws, losses, goals_for, goals_against, goals_for - goals_against, points,
-       yellow_cards, red_cards, blue_cards, two_minute_penalties, sets_for, sets_against, rally_points_for, rally_points_against, now()
+       yellow_cards, red_cards, blue_cards, two_minute_penalties, now()
      FROM calculated`,
     [...scopeParameters, teamIds],
   );
