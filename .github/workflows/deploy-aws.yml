@@ -114,8 +114,17 @@ jobs:
           IMAGE_TAG: ${{ steps.mode.outputs.image_tag }}
         run: |
           ECR_REPOSITORY_URL="$(terraform -chdir="${TF_DIR}" output -raw staging_api_ecr_repository_url)"
-          docker build --platform linux/amd64 --tag "${ECR_REPOSITORY_URL}:${IMAGE_TAG}" .
-          docker push "${ECR_REPOSITORY_URL}:${IMAGE_TAG}"
+          ECR_REPOSITORY_NAME="${ECR_REPOSITORY_URL##*/}"
+
+          if aws ecr describe-images \
+            --repository-name "${ECR_REPOSITORY_NAME}" \
+            --image-ids "imageTag=${IMAGE_TAG}" \
+            >/dev/null 2>&1; then
+            echo "Image ${IMAGE_TAG} already exists in ECR; reusing immutable image."
+          else
+            docker build --platform linux/amd64 --tag "${ECR_REPOSITORY_URL}:${IMAGE_TAG}" .
+            docker push "${ECR_REPOSITORY_URL}:${IMAGE_TAG}"
+          fi
 
       - name: Start one Fargate staging task
         if: steps.mode.outputs.action == 'deploy'
