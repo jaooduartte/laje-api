@@ -691,32 +691,23 @@ export function createPublicRuntimeRouter(): Router {
       );
       const holidays = buildLeagueCalendarHolidays(year);
 
-      await database.query(
-        `INSERT INTO public.league_calendar_holidays
-           (holiday_date, name, scope, day_kind)
-         SELECT holiday_date, name,
-           scope::public.league_calendar_holiday_scope,
-           day_kind::public.league_calendar_holiday_day_kind
-         FROM jsonb_to_recordset($1::jsonb)
-           AS item(
-             holiday_date date,
-             name text,
-             scope text,
-             day_kind text
-           )
-         ON CONFLICT (holiday_date, name, scope, day_kind)
-         DO UPDATE SET updated_at = now()`,
-        [
-          JSON.stringify(
-            holidays.map((holiday) => ({
-              holiday_date: holiday.holidayDate,
-              name: holiday.name,
-              scope: holiday.scope,
-              day_kind: holiday.dayKind,
-            })),
-          ),
-        ],
-      );
+      await database.transaction(async (transaction) => {
+        for (const holiday of holidays) {
+          await transaction.query(
+            `INSERT INTO public.league_calendar_holidays
+               (holiday_date, name, scope, day_kind)
+             VALUES (
+               $1::date,
+               $2,
+               $3::public.league_calendar_holiday_scope,
+               $4::public.league_calendar_holiday_day_kind
+             )
+             ON CONFLICT (holiday_date, name, scope, day_kind)
+             DO UPDATE SET updated_at = now()`,
+            [holiday.holidayDate, holiday.name, holiday.scope, holiday.dayKind],
+          );
+        }
+      });
 
       response.status(200).json({ data: year });
     } catch (error) {
