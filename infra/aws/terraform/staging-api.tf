@@ -1,3 +1,7 @@
+data "aws_secretsmanager_secret" "auth_jwt" {
+  name = var.staging_auth_jwt_secret_name
+}
+
 resource "aws_ecr_repository" "api" {
   name                 = "${local.name_prefix}-api"
   image_tag_mutability = "IMMUTABLE"
@@ -91,7 +95,10 @@ resource "aws_iam_role_policy" "ecs_execution_rds_secret" {
       {
         Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue"]
-        Resource = aws_db_instance.staging.master_user_secret[0].secret_arn
+        Resource = [
+          aws_db_instance.staging.master_user_secret[0].secret_arn,
+          data.aws_secretsmanager_secret.auth_jwt.arn
+        ]
       }
     ]
   })
@@ -134,7 +141,9 @@ resource "aws_ecs_task_definition" "api" {
         { name = "DATABASE_SSLMODE", value = "require" },
         { name = "DATABASE_POOL_MAX", value = "5" },
         { name = "CORS_ORIGINS", value = var.staging_api_cors_origins },
-        { name = "AUTH_ENABLED", value = "false" },
+        { name = "AUTH_ENABLED", value = "true" },
+        { name = "AUTH_JWT_EXPIRES_IN", value = "15m" },
+        { name = "AUTH_REFRESH_EXPIRES_IN_DAYS", value = "30" },
         { name = "AWS_ENABLED", value = "false" },
         { name = "MAIL_ENABLED", value = "false" }
       ]
@@ -147,6 +156,10 @@ resource "aws_ecs_task_definition" "api" {
         {
           name      = "DATABASE_PASSWORD"
           valueFrom = "${aws_db_instance.staging.master_user_secret[0].secret_arn}:password::"
+        },
+        {
+          name      = "AUTH_JWT_SECRET"
+          valueFrom = data.aws_secretsmanager_secret.auth_jwt.arn
         }
       ]
 
