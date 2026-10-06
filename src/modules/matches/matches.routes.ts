@@ -490,7 +490,117 @@ async function persistScoreboardPatch(
 export function createMatchesRouter(authService: AuthService): Router {
   const router = Router();
   const requireAuthentication = createRequireAuthentication(authService);
+  const requireControlView = [requireAuthentication, requirePermission("control", "VIEW")] as const;
   const requireControlEdit = [requireAuthentication, requirePermission("control", "EDIT")] as const;
+
+  router.get("/operational-queue-state", ...requireControlView, async (request, response, next) => {
+    try {
+      const championshipId = requireUuid(request.query.championshipId, "championshipId");
+      const seasonYear = requireInteger(request.query.seasonYear, "seasonYear", {
+        min: 2000,
+        max: 2100,
+      });
+
+      const result = await database.query(
+        `WITH scheduled_matches AS (
+           SELECT
+             m.id,
+             row_number() OVER (
+               PARTITION BY m.location, COALESCE(m.court_name, '')
+               ORDER BY
+                 COALESCE(m.scheduled_start_time, m.start_time) ASC NULLS LAST,
+                 COALESCE(m.scheduled_slot, m.queue_position) ASC NULLS LAST,
+                 COALESCE(m.queue_position, m.scheduled_slot) ASC NULLS LAST,
+                 m.created_at ASC,
+                 m.id ASC
+             ) AS queue_position
+           FROM public.matches m
+           WHERE m.championship_id = $1
+             AND m.season_year = $2
+             AND m.status = 'SCHEDULED'
+             AND m.scheduled_date = timezone('America/Sao_Paulo', now())::date
+             AND m.is_pending_manual_relocation = false
+         ),
+         scheduled_sessions AS (
+           SELECT
+             s.id,
+             row_number() OVER (
+               PARTITION BY COALESCE(s.location_name, ''), COALESCE(s.court_name, '')
+               ORDER BY s.start_time ASC NULLS LAST, s.created_at ASC, s.id ASC
+             ) AS queue_position
+           FROM public.championship_individual_sessions s
+           WHERE s.championship_id = $1
+             AND s.season_year = $2
+             AND s.status = 'SCHEDULED'
+             AND s.scheduled_date = timezone('America/Sao_Paulo', now())::date
+         ),
+         operational_queue AS (
+           SELECT 'MATCH'::text AS item_type, m.id AS item_id
+           FROM public.matches m
+           WHERE m.championship_id = $1
+             AND m.season_year = $2
+             AND m.status = 'LIVE'
+             AND m.is_pending_manual_relocation = false
+
+           UNION ALL
+
+           SELECT 'MATCH'::text, sm.id
+           FROM scheduled_matches sm
+           WHERE sm.queue_position <= 1
+
+           UNION ALL
+
+           SELECT 'INDIVIDUAL_SESSION'::text, s.id
+           FROM public.championship_individual_sessions s
+           WHERE s.championship_id = $1
+             AND s.season_year = $2
+             AND s.status = 'LIVE'
+
+           UNION ALL
+
+           SELECT 'INDIVIDUAL_SESSION'::text, ss.id
+           FROM scheduled_sessions ss
+           WHERE ss.queue_position = 1
+         )
+         SELECT
+           COALESCE(
+             array_agg(item_id) FILTER (WHERE item_type = 'MATCH'),
+             ARRAY[]::uuid[]
+           ) AS "matchIds",
+           COALESCE(
+             array_agg(item_id) FILTER (WHERE item_type = 'INDIVIDUAL_SESSION'),
+             ARRAY[]::uuid[]
+           ) AS "individualSessionIds",
+           (
+             SELECT count(*)::bigint
+             FROM public.matches m
+             WHERE m.championship_id = $1
+               AND m.season_year = $2
+               AND m.is_pending_manual_relocation = false
+               AND m.status IN ('SCHEDULED', 'LIVE')
+           ) + (
+             SELECT count(*)::bigint
+             FROM public.championship_individual_sessions s
+             WHERE s.championship_id = $1
+               AND s.season_year = $2
+               AND s.status IN ('DRAFT', 'SCHEDULED', 'LIVE', 'FINISHED')
+           ) AS "fullQueueItemsCount"
+         FROM operational_queue`,
+        [championshipId, seasonYear],
+      );
+
+      const row = result.rows[0] ?? {};
+      response.status(200).json({
+        data: {
+          matchIds: row.matchIds ?? [],
+          individualSessionIds: row.individualSessionIds ?? [],
+          fullQueueItemsCount: Number(row.fullQueueItemsCount ?? 0),
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
 
   router.get("/", async (request, response, next) => {
     try {
