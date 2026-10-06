@@ -8,3 +8,6 @@ db_instance_class       = "db.t4g.micro"
 db_name                 = "laje_staging"
 db_master_username      = "laje_admin"
 backup_retention_days   = 1
+deletion_protection     = false
+skip_final_snapshot     = true
+jira_issue_key          = "LAJE-127"

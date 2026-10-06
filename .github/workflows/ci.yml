@@ -1,8 +1,12 @@
 name: CI
 
 on:
-  push:
   pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -17,10 +21,63 @@ jobs:
     name: Quality Gate
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    outputs:
+      postgres_integration: ${{ steps.changes.outputs.postgres_integration }}
+      database_baseline: ${{ steps.changes.outputs.database_baseline }}
+      docker: ${{ steps.changes.outputs.docker }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Detect extended validation changes
+        id: changes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "postgres_integration=true" >> "$GITHUB_OUTPUT"
+            echo "database_baseline=true" >> "$GITHUB_OUTPUT"
+            echo "docker=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            base="${{ github.event.pull_request.base.sha }}"
+            head="${{ github.event.pull_request.head.sha }}"
+          else
+            base="${{ github.event.before }}"
+            head="${{ github.sha }}"
+          fi
+
+          if [[ -z "$base" || "$base" == "0000000000000000000000000000000000000000" ]]; then
+            git ls-tree -r --name-only "$head" > "$RUNNER_TEMP/changed-files.txt"
+          else
+            git diff --name-only "$base" "$head" > "$RUNNER_TEMP/changed-files.txt"
+          fi
+
+          postgres_integration=false
+          database_baseline=false
+          docker=false
+
+          if grep -Eq '^(src/|tests/|infra/database/|scripts/migration/|package(-lock)?\.json$|tsconfig[^/]*\.json$|\.github/workflows/ci\.yml$)' "$RUNNER_TEMP/changed-files.txt"; then
+            postgres_integration=true
+          fi
+
+          if grep -Eq '^(infra/database/|scripts/migration/|package(-lock)?\.json$|\.github/workflows/ci\.yml$)' "$RUNNER_TEMP/changed-files.txt"; then
+            database_baseline=true
+          fi
+
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]] || grep -Eq '^(Dockerfile$|\.dockerignore$|src/|package(-lock)?\.json$|tsconfig[^/]*\.json$|\.github/workflows/ci\.yml$)' "$RUNNER_TEMP/changed-files.txt"; then
+            docker=true
+          fi
+
+          echo "postgres_integration=$postgres_integration" >> "$GITHUB_OUTPUT"
+          echo "database_baseline=$database_baseline" >> "$GITHUB_OUTPUT"
+          echo "docker=$docker" >> "$GITHUB_OUTPUT"
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -46,10 +103,12 @@ jobs:
       - name: Build
         run: npm run build
 
-  postgres-integration:
-    name: PostgreSQL Integration
+  postgres:
+    name: PostgreSQL Validation
+    needs: quality
+    if: needs.quality.outputs.postgres_integration == 'true' || needs.quality.outputs.database_baseline == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
 
     services:
       postgres:
@@ -68,6 +127,7 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/laje_api_test?sslmode=disable
+      PGPASSWORD: postgres
 
     steps:
       - name: Checkout repository
@@ -83,41 +143,21 @@ jobs:
         run: npm ci
 
       - name: Run PostgreSQL integration tests
+        if: needs.quality.outputs.postgres_integration == 'true'
         run: npm run test:integration
 
-  database-baseline:
-    name: PostgreSQL Baseline
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    services:
-      postgres:
-        image: postgres:17
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: laje_baseline
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-    env:
-      PGPASSWORD: postgres
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
       - name: Install PostgreSQL client
+        if: needs.quality.outputs.database_baseline == 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y postgresql-client
 
+      - name: Create baseline database
+        if: needs.quality.outputs.database_baseline == 'true'
+        run: createdb --host localhost --username postgres laje_baseline
+
       - name: Apply PostgreSQL 17 baseline
+        if: needs.quality.outputs.database_baseline == 'true'
         run: >-
           psql
           --host localhost
@@ -127,6 +167,7 @@ jobs:
           --file infra/database/baseline/schema.sql
 
       - name: Validate PostgreSQL 17 baseline
+        if: needs.quality.outputs.database_baseline == 'true'
         run: >-
           psql
           --host localhost
@@ -136,27 +177,89 @@ jobs:
           --file infra/database/baseline/validate.sql
 
       - name: Apply incremental migrations
+        if: needs.quality.outputs.database_baseline == 'true'
         run: |
           set -euo pipefail
           shopt -s nullglob
           migrations=(infra/database/migrations/*.sql)
           for migration in "${migrations[@]}"; do
             echo "Applying ${migration}"
-            psql \
-              --host localhost \
-              --username postgres \
-              --dbname laje_baseline \
-              --set ON_ERROR_STOP=1 \
-              --file "${migration}"
+            psql               --host localhost               --username postgres               --dbname laje_baseline               --set ON_ERROR_STOP=1               --file "${migration}"
           done
 
       - name: Validate LAJE-85 auth migration
+        if: needs.quality.outputs.database_baseline == 'true'
         run: |
           test "$(psql --host localhost --username postgres --dbname laje_baseline --tuples-only --no-align --command "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relname IN ('admin_auth_accounts', 'admin_auth_sessions');")" = "2"
           test "$(psql --host localhost --username postgres --dbname laje_baseline --tuples-only --no-align --command "SELECT count(*) FROM pg_constraint WHERE conname IN ('admin_auth_accounts_user_id_fkey', 'admin_auth_sessions_user_id_fkey');")" = "2"
 
+      - name: Prepare synthetic migration source
+        if: needs.quality.outputs.database_baseline == 'true'
+        run: |
+          createdb --host localhost --username postgres laje_migration_source
+          psql --host localhost --username postgres --dbname laje_migration_source --set ON_ERROR_STOP=1 --file infra/database/baseline/schema.sql
+          psql --host localhost --username postgres --dbname laje_migration_source --set ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO public.teams (id, name)
+          VALUES ('00000000-0000-0000-0000-000000000001', 'Synthetic team');
+          INSERT INTO public.league_events (id, name, event_type, organizer_type, event_date)
+          VALUES ('00000000-0000-0000-0000-000000000002', 'Synthetic event', 'HH', 'LAJE', '2026-10-01');
+          INSERT INTO public.league_event_reservation_requests (
+            team_id, event_name, event_type, event_date, requester_name,
+            requester_email, status, approved_league_event_id
+          )
+          SELECT '00000000-0000-0000-0000-000000000001',
+                 'Synthetic event', 'HH', '2026-10-01',
+                 'Synthetic requester ' || request_number,
+                 'synthetic-' || request_number || '@example.invalid',
+                 CASE WHEN request_number <= 23 THEN 'APPROVED'
+                      WHEN request_number <= 25 THEN 'PENDING'
+                      ELSE 'REJECTED' END::public.league_event_reservation_request_status,
+                 CASE WHEN request_number <= 23
+                      THEN '00000000-0000-0000-0000-000000000002'::uuid
+                      ELSE NULL END
+          FROM generate_series(1, 39) AS request_number;
+          SQL
+
+      - name: Rehearse synthetic migration and rollback guard
+        if: needs.quality.outputs.database_baseline == 'true'
+        env:
+          MIGRATION_EXECUTION_CONTEXT: controlled
+          MIGRATION_ALLOW_DESTINATION_WRITE: "true"
+          MIGRATION_SYNC_MODE: initial
+          MIGRATION_SOURCE_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/laje_migration_source?sslmode=disable
+          MIGRATION_DESTINATION_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/laje_baseline?sslmode=disable
+          MIGRATION_EXPECTED_RESERVATION_REQUEST_COUNT: "39"
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/laje-pg17"
+          cat > "$RUNNER_TEMP/laje-pg17/pg_dump" <<'SH'
+          #!/usr/bin/env bash
+          exec docker run --rm -i --network host --env PGHOST --env PGPORT --env PGUSER --env PGPASSWORD --env PGDATABASE --env PGSSLMODE --env PGAPPNAME postgres:17 pg_dump "$@"
+          SH
+          cat > "$RUNNER_TEMP/laje-pg17/psql" <<'SH'
+          #!/usr/bin/env bash
+          exec docker run --rm -i --network host --env PGHOST --env PGPORT --env PGUSER --env PGPASSWORD --env PGDATABASE --env PGSSLMODE --env PGAPPNAME postgres:17 psql "$@"
+          SH
+          chmod +x "$RUNNER_TEMP/laje-pg17/pg_dump" "$RUNNER_TEMP/laje-pg17/psql"
+          export PATH="$RUNNER_TEMP/laje-pg17:$PATH"
+          npm run migration:sync-data
+          npm run migration:verify-parity
+          if MIGRATION_DESTINATION_DATABASE_URL="$MIGRATION_SOURCE_DATABASE_URL" npm run migration:sync-data; then
+            exit 1
+          fi
+          if MIGRATION_DESTINATION_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/laje_migration_source?sslmode=disable npm run migration:sync-data; then
+            exit 1
+          fi
+          test "$(docker run --rm --network host --env PGPASSWORD postgres:17 psql --host localhost --username postgres --dbname laje_migration_source --tuples-only --no-align --command 'SELECT count(*) FROM public.league_event_reservation_requests')" = "39"
+          if MIGRATION_SOURCE_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/laje_missing_source?sslmode=disable npm run migration:sync-data; then
+            exit 1
+          fi
+          test "$(docker run --rm --network host --env PGPASSWORD postgres:17 psql --host localhost --username postgres --dbname laje_baseline --tuples-only --no-align --command 'SELECT count(*) FROM public.league_event_reservation_requests')" = "39"
+
   container-image:
     name: Docker Image
+    needs: quality
+    if: needs.quality.outputs.docker == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
