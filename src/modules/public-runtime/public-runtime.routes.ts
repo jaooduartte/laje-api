@@ -30,11 +30,11 @@ async function loadHomeDashboardMetrics(
     "SELECT COALESCE($1::integer, MAX(current_season_year))::integer AS season_year FROM public.championships",
     [seasonYear ?? null],
   );
-  const resolvedSeasonYear = Number(resolvedSeasonResult.rows[0]?.season_year ?? new Date().getFullYear());
+  const resolvedSeasonYear = Number(
+    resolvedSeasonResult.rows[0]?.season_year ?? new Date().getFullYear(),
+  );
 
-  const championshipFilter = championshipCode
-    ? "AND c.code = $1::public.championship_code"
-    : "";
+  const championshipFilter = championshipCode ? "AND c.code = $1::public.championship_code" : "";
   const championshipParameters = championshipCode ? [championshipCode] : [];
 
   const selectedChampionships = await database.query(
@@ -417,93 +417,122 @@ export function createPublicRuntimeRouter(): Router {
     }
   });
 
-  router.get("/championships/:championshipId/seasons/:seasonYear/removed-sports", async (request, response, next) => {
-    try {
-      const championshipId = requireUuid(request.params.championshipId, "championshipId");
-      const seasonYear = requireInteger(request.params.seasonYear, "seasonYear", { min: 2000, max: 2100 });
-      const result = await database.query(
-        `SELECT sport_id AS "sportId"
+  router.get(
+    "/championships/:championshipId/seasons/:seasonYear/removed-sports",
+    async (request, response, next) => {
+      try {
+        const championshipId = requireUuid(request.params.championshipId, "championshipId");
+        const seasonYear = requireInteger(request.params.seasonYear, "seasonYear", {
+          min: 2000,
+          max: 2100,
+        });
+        const result = await database.query(
+          `SELECT sport_id AS "sportId"
          FROM public.championship_season_sport_removals
          WHERE championship_id = $1 AND season_year = $2
          ORDER BY removed_at ASC`,
-        [championshipId, seasonYear],
-      );
-      response.status(200).json({ data: result.rows });
-    } catch (error) {
-      next(error);
-    }
-  });
+          [championshipId, seasonYear],
+        );
+        response.status(200).json({ data: result.rows });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
 
-  router.get("/championships/:championshipId/seasons/:seasonYear/disqualifications", async (request, response, next) => {
-    try {
-      const championshipId = requireUuid(request.params.championshipId, "championshipId");
-      const seasonYear = requireInteger(request.params.seasonYear, "seasonYear", { min: 2000, max: 2100 });
-      const result = await database.query(
-        `SELECT id, championship_id AS "championshipId", season_year AS "seasonYear",
+  router.get(
+    "/championships/:championshipId/seasons/:seasonYear/disqualifications",
+    async (request, response, next) => {
+      try {
+        const championshipId = requireUuid(request.params.championshipId, "championshipId");
+        const seasonYear = requireInteger(request.params.seasonYear, "seasonYear", {
+          min: 2000,
+          max: 2100,
+        });
+        const result = await database.query(
+          `SELECT id, championship_id AS "championshipId", season_year AS "seasonYear",
            sport_id AS "sportId", naipe, division, team_id AS "teamId",
            created_at::text AS "createdAt", created_by AS "createdBy"
          FROM public.championship_competition_team_disqualifications
          WHERE championship_id = $1 AND season_year = $2
          ORDER BY created_at ASC`,
-        [championshipId, seasonYear],
-      );
-      response.status(200).json({ data: result.rows });
-    } catch (error) {
-      next(error);
-    }
-  });
+          [championshipId, seasonYear],
+        );
+        response.status(200).json({ data: result.rows });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
 
-  router.get("/championships/:championshipId/individual-events", async (request, response, next) => {
-    try {
-      const championshipId = requireUuid(request.params.championshipId, "championshipId");
-      const seasonYear = requireInteger(request.query.seasonYear, "seasonYear", { min: 2000, max: 2100 });
-      const sportId = optionalUuid(request.query.sportId, "sportId");
-      const params: unknown[] = [championshipId, seasonYear];
-      const sportFilter = sportId ? ` AND e.sport_id = $${params.push(sportId)}` : "";
-      const result = await database.query(
-        `SELECT e.*, s.id AS "sport_join_id", s.name AS "sport_join_name",
+  router.get(
+    "/championships/:championshipId/individual-events",
+    async (request, response, next) => {
+      try {
+        const championshipId = requireUuid(request.params.championshipId, "championshipId");
+        const seasonYear = requireInteger(request.query.seasonYear, "seasonYear", {
+          min: 2000,
+          max: 2100,
+        });
+        const sportId = optionalUuid(request.query.sportId, "sportId");
+        const params: unknown[] = [championshipId, seasonYear];
+        const sportFilter = sportId ? ` AND e.sport_id = $${params.push(sportId)}` : "";
+        const result = await database.query(
+          `SELECT e.*, s.id AS "sport_join_id", s.name AS "sport_join_name",
            s.code AS "sport_join_code", s.created_at::text AS "sport_join_created_at"
          FROM public.championship_individual_events e
          JOIN public.sports s ON s.id = e.sport_id
          WHERE e.championship_id = $1 AND e.season_year = $2${sportFilter}
          ORDER BY e.scheduled_date ASC NULLS LAST, e.display_order ASC, e.created_at ASC`,
-        params,
-      );
-      response.status(200).json({ data: result.rows });
-    } catch (error) {
-      next(error);
-    }
-  });
+          params,
+        );
+        response.status(200).json({ data: result.rows });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
 
-  router.get("/championships/:championshipId/individual-sessions", async (request, response, next) => {
-    try {
-      const championshipId = requireUuid(request.params.championshipId, "championshipId");
-      const seasonYear = requireInteger(request.query.seasonYear, "seasonYear", { min: 2000, max: 2100 });
-      const sportId = optionalUuid(request.query.sportId, "sportId");
-      const status = optionalEnum(request.query.status, "status", INDIVIDUAL_SESSION_STATUSES);
-      const params: unknown[] = [championshipId, seasonYear];
-      const filters: string[] = [];
-      if (sportId) filters.push(`sesh.sport_id = $${params.push(sportId)}`);
-      if (status) filters.push(`sesh.status = $${params.push(status)}::public.championship_individual_session_status`);
-      const extraWhere = filters.length ? ` AND ${filters.join(" AND ")}` : "";
-      const result = await database.query(
-        `SELECT sesh.*, s.id AS "sport_join_id", s.name AS "sport_join_name",
+  router.get(
+    "/championships/:championshipId/individual-sessions",
+    async (request, response, next) => {
+      try {
+        const championshipId = requireUuid(request.params.championshipId, "championshipId");
+        const seasonYear = requireInteger(request.query.seasonYear, "seasonYear", {
+          min: 2000,
+          max: 2100,
+        });
+        const sportId = optionalUuid(request.query.sportId, "sportId");
+        const status = optionalEnum(request.query.status, "status", INDIVIDUAL_SESSION_STATUSES);
+        const params: unknown[] = [championshipId, seasonYear];
+        const filters: string[] = [];
+        if (sportId) filters.push(`sesh.sport_id = $${params.push(sportId)}`);
+        if (status)
+          filters.push(
+            `sesh.status = $${params.push(status)}::public.championship_individual_session_status`,
+          );
+        const extraWhere = filters.length ? ` AND ${filters.join(" AND ")}` : "";
+        const result = await database.query(
+          `SELECT sesh.*, s.id AS "sport_join_id", s.name AS "sport_join_name",
            s.code AS "sport_join_code", s.created_at::text AS "sport_join_created_at"
          FROM public.championship_individual_sessions sesh
          JOIN public.sports s ON s.id = sesh.sport_id
          WHERE sesh.championship_id = $1 AND sesh.season_year = $2${extraWhere}
          ORDER BY sesh.scheduled_date ASC NULLS LAST, sesh.created_at ASC`,
-        params,
-      );
-      response.status(200).json({ data: result.rows });
-    } catch (error) {
-      next(error);
-    }
-  });
+          params,
+        );
+        response.status(200).json({ data: result.rows });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
 
   router.get("/individual-event-entries", async (request, response, next) => {
     try {
-      const eventIds = queryValues(request.query.eventId).map((value) => requireUuid(value, "eventId"));
+      const eventIds = queryValues(request.query.eventId).map((value) =>
+        requireUuid(value, "eventId"),
+      );
       if (eventIds.length === 0) {
         response.status(200).json({ data: [], membersByEntryId: {} });
         return;
@@ -555,21 +584,26 @@ export function createPublicRuntimeRouter(): Router {
     }
   });
 
-  router.get("/championships/:championshipId/individual-standings", async (request, response, next) => {
-    try {
-      const championshipId = requireUuid(request.params.championshipId, "championshipId");
-      const seasonYear = requireInteger(request.query.seasonYear, "seasonYear", { min: 2000, max: 2100 });
-      const sportId = optionalUuid(request.query.sportId, "sportId");
-      const naipe = optionalEnum(request.query.naipe, "naipe", MATCH_NAIPES);
-      const division = optionalEnum(request.query.division, "division", TEAM_DIVISIONS);
-      const params: unknown[] = [championshipId, seasonYear];
-      const filters: string[] = [];
-      if (sportId) filters.push(`st.sport_id = $${params.push(sportId)}`);
-      if (naipe) filters.push(`st.naipe = $${params.push(naipe)}::public.match_naipe`);
-      if (division) filters.push(`st.division = $${params.push(division)}::public.team_division`);
-      const extraWhere = filters.length ? ` AND ${filters.join(" AND ")}` : "";
-      const result = await database.query(
-        `SELECT st.*,
+  router.get(
+    "/championships/:championshipId/individual-standings",
+    async (request, response, next) => {
+      try {
+        const championshipId = requireUuid(request.params.championshipId, "championshipId");
+        const seasonYear = requireInteger(request.query.seasonYear, "seasonYear", {
+          min: 2000,
+          max: 2100,
+        });
+        const sportId = optionalUuid(request.query.sportId, "sportId");
+        const naipe = optionalEnum(request.query.naipe, "naipe", MATCH_NAIPES);
+        const division = optionalEnum(request.query.division, "division", TEAM_DIVISIONS);
+        const params: unknown[] = [championshipId, seasonYear];
+        const filters: string[] = [];
+        if (sportId) filters.push(`st.sport_id = $${params.push(sportId)}`);
+        if (naipe) filters.push(`st.naipe = $${params.push(naipe)}::public.match_naipe`);
+        if (division) filters.push(`st.division = $${params.push(division)}::public.team_division`);
+        const extraWhere = filters.length ? ` AND ${filters.join(" AND ")}` : "";
+        const result = await database.query(
+          `SELECT st.*,
            t.id AS "team_join_id", t.name AS "team_join_name", t.city AS "team_join_city",
            t.division AS "team_join_division", t.created_at::text AS "team_join_created_at",
            s.id AS "sport_join_id", s.name AS "sport_join_name", s.code AS "sport_join_code",
@@ -579,19 +613,29 @@ export function createPublicRuntimeRouter(): Router {
          JOIN public.sports s ON s.id = st.sport_id
          WHERE st.championship_id = $1 AND st.season_year = $2${extraWhere}
          ORDER BY st.total_points DESC, st.first_places DESC, st.second_places DESC, st.third_places DESC`,
-        params,
-      );
-      response.status(200).json({ data: result.rows });
-    } catch (error) {
-      next(error);
-    }
-  });
+          params,
+        );
+        response.status(200).json({ data: result.rows });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
 
   router.get("/home-dashboard", async (request, response, next) => {
     try {
-      const seasonYear = optionalInteger(request.query.seasonYear, "seasonYear", { min: 2000, max: 2100 });
-      const championshipCode = optionalEnum(request.query.championshipCode, "championshipCode", CHAMPIONSHIP_CODES);
-      response.status(200).json({ data: await loadHomeDashboardMetrics(seasonYear, championshipCode) });
+      const seasonYear = optionalInteger(request.query.seasonYear, "seasonYear", {
+        min: 2000,
+        max: 2100,
+      });
+      const championshipCode = optionalEnum(
+        request.query.championshipCode,
+        "championshipCode",
+        CHAMPIONSHIP_CODES,
+      );
+      response
+        .status(200)
+        .json({ data: await loadHomeDashboardMetrics(seasonYear, championshipCode) });
     } catch (error) {
       next(error);
     }
