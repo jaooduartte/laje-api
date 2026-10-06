@@ -117,7 +117,7 @@ resource "aws_route_table_association" "db_private" {
 
 resource "aws_security_group" "alb" {
   name        = "${local.name_prefix}-alb-sg"
-  description = "Private HTTP ingress for the LAJE staging ALB from API Gateway VPC Link"
+  description = "Public HTTPS ingress for the future LAJE staging ALB"
   vpc_id      = aws_vpc.this.id
 
   ingress {
