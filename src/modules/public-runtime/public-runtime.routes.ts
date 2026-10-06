@@ -4,6 +4,7 @@ import {
   optionalEnum,
   optionalInteger,
   optionalUuid,
+  parseDate,
   requireInteger,
   requireUuid,
 } from "../../common/validation/common.schema.js";
@@ -20,6 +21,53 @@ function queryValues(value: unknown): string[] {
   }
 
   return typeof value === "string" ? [value] : [];
+}
+
+function resolveEasterDate(year: number): string {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(Date.UTC(year, month - 1, day)).toISOString().slice(0, 10);
+}
+
+function addDays(date: string, days: number): string {
+  const value = new Date(`${date}T00:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+
+function fixedDate(year: number, month: number, day: number): string {
+  return new Date(Date.UTC(year, month - 1, day)).toISOString().slice(0, 10);
+}
+
+function buildLeagueCalendarHolidays(year: number) {
+  const easterDate = resolveEasterDate(year);
+  return [
+    { holidayDate: fixedDate(year, 1, 1), name: "Ano Novo", scope: "NATIONAL", dayKind: "HOLIDAY" },
+    { holidayDate: fixedDate(year, 4, 21), name: "Tiradentes", scope: "NATIONAL", dayKind: "HOLIDAY" },
+    { holidayDate: fixedDate(year, 5, 1), name: "Dia do Trabalhador", scope: "NATIONAL", dayKind: "HOLIDAY" },
+    { holidayDate: fixedDate(year, 9, 7), name: "Independência do Brasil", scope: "NATIONAL", dayKind: "HOLIDAY" },
+    { holidayDate: fixedDate(year, 10, 12), name: "Nossa Senhora Aparecida", scope: "NATIONAL", dayKind: "HOLIDAY" },
+    { holidayDate: fixedDate(year, 11, 2), name: "Finados", scope: "NATIONAL", dayKind: "HOLIDAY" },
+    { holidayDate: fixedDate(year, 11, 15), name: "Proclamação da República", scope: "NATIONAL", dayKind: "HOLIDAY" },
+    { holidayDate: fixedDate(year, 11, 20), name: "Dia da Consciência Negra", scope: "NATIONAL", dayKind: "HOLIDAY" },
+    { holidayDate: fixedDate(year, 12, 25), name: "Natal", scope: "NATIONAL", dayKind: "HOLIDAY" },
+    { holidayDate: fixedDate(year, 3, 9), name: "Aniversário de Joinville", scope: "JOINVILLE", dayKind: "HOLIDAY" },
+    { holidayDate: addDays(easterDate, -47), name: "Carnaval", scope: "NATIONAL", dayKind: "OPTIONAL" },
+    { holidayDate: addDays(easterDate, -2), name: "Sexta-feira Santa", scope: "NATIONAL", dayKind: "HOLIDAY" },
+    { holidayDate: addDays(easterDate, 60), name: "Corpus Christi", scope: "NATIONAL", dayKind: "OPTIONAL" },
+  ] as const;
 }
 
 async function loadHomeDashboardMetrics(
@@ -464,6 +512,170 @@ export function createPublicRuntimeRouter(): Router {
       }
     },
   );
+
+  router.get(
+    "/championships/:championshipId/seasons/:seasonYear/match-context",
+    async (request, response, next) => {
+      try {
+        const championshipId = requireUuid(
+          request.params.championshipId,
+          "championshipId",
+        );
+        const seasonYear = requireInteger(request.params.seasonYear, "seasonYear", {
+          min: 2000,
+          max: 2100,
+        });
+
+        const championshipSports = await database.query(
+          `SELECT
+             cs.championship_id AS "championshipId",
+             cs.sport_id AS "sportId",
+             cs.result_rule AS "resultRule",
+             cs.default_match_duration_minutes AS "defaultMatchDurationMinutes",
+             cs.show_estimated_start_time_on_cards AS "showEstimatedStartTimeOnCards"
+           FROM public.championship_sports cs
+           WHERE cs.championship_id = $1
+           ORDER BY cs.created_at ASC`,
+          [championshipId],
+        );
+
+        const editionResult = await database.query(
+          `SELECT id, championship_id AS "championshipId",
+             season_year AS "seasonYear", payload_snapshot AS "payloadSnapshot"
+           FROM public.championship_bracket_editions
+           WHERE championship_id = $1 AND season_year = $2
+           ORDER BY reprogramming_revision DESC, updated_at DESC, created_at DESC
+           LIMIT 1`,
+          [championshipId, seasonYear],
+        );
+        const edition = editionResult.rows[0] ?? null;
+
+        let scheduleDays: Array<Record<string, unknown>> = [];
+        if (edition) {
+          const daysResult = await database.query(
+            `SELECT
+               d.event_date::text AS date,
+               d.start_time::text AS "startTime",
+               d.end_time::text AS "endTime",
+               COALESCE(
+                 json_agg(
+                   json_build_object(
+                     'breakStartTime', b.break_start_time::text,
+                     'breakEndTime', b.break_end_time::text,
+                     'position', b.position
+                   )
+                   ORDER BY b.position
+                 ) FILTER (WHERE b.id IS NOT NULL),
+                 '[]'::json
+               ) AS breaks
+             FROM public.championship_bracket_days d
+             LEFT JOIN public.championship_bracket_day_breaks b
+               ON b.bracket_day_id = d.id
+             WHERE d.bracket_edition_id = $1
+             GROUP BY d.id, d.event_date, d.start_time, d.end_time
+             ORDER BY d.event_date ASC`,
+            [edition.id],
+          );
+          scheduleDays = daysResult.rows;
+        }
+
+        response.status(200).json({
+          data: {
+            championshipSports: championshipSports.rows,
+            bracketEdition: edition
+              ? {
+                  championshipId: edition.championshipId,
+                  seasonYear: Number(edition.seasonYear),
+                  payloadSnapshot: edition.payloadSnapshot ?? null,
+                  scheduleDays,
+                }
+              : null,
+          },
+        });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.get("/league-calendar-holidays", async (request, response, next) => {
+    try {
+      const startDate = parseDate(request.query.startDate, "startDate");
+      const endDate = parseDate(request.query.endDate, "endDate");
+      if (!startDate || !endDate) {
+        response.status(422).json({
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Os filtros startDate e endDate são obrigatórios.",
+          },
+        });
+        return;
+      }
+      if (startDate > endDate) {
+        response.status(422).json({
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "startDate não pode ser posterior a endDate.",
+          },
+        });
+        return;
+      }
+
+      const result = await database.query(
+        `SELECT id, holiday_date::text AS "holidayDate", name, scope, day_kind AS "dayKind",
+           created_at::text AS "createdAt", updated_at::text AS "updatedAt"
+         FROM public.league_calendar_holidays
+         WHERE holiday_date BETWEEN $1::date AND $2::date
+         ORDER BY holiday_date ASC, day_kind ASC, name ASC`,
+        [startDate, endDate],
+      );
+      response.status(200).json({ data: result.rows });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/league-calendar-holidays/ensure-year", async (request, response, next) => {
+    try {
+      const year = requireInteger(
+        (request.body as Record<string, unknown> | undefined)?.year,
+        "year",
+        { min: 1900, max: 2100 },
+      );
+      const holidays = buildLeagueCalendarHolidays(year);
+
+      await database.query(
+        `INSERT INTO public.league_calendar_holidays
+           (holiday_date, name, scope, day_kind)
+         SELECT holiday_date, name,
+           scope::public.league_calendar_holiday_scope,
+           day_kind::public.league_calendar_holiday_day_kind
+         FROM jsonb_to_recordset($1::jsonb)
+           AS item(
+             holiday_date date,
+             name text,
+             scope text,
+             day_kind text
+           )
+         ON CONFLICT (holiday_date, name, scope, day_kind)
+         DO UPDATE SET updated_at = now()`,
+        [
+          JSON.stringify(
+            holidays.map((holiday) => ({
+              holiday_date: holiday.holidayDate,
+              name: holiday.name,
+              scope: holiday.scope,
+              day_kind: holiday.dayKind,
+            })),
+          ),
+        ],
+      );
+
+      response.status(200).json({ data: year });
+    } catch (error) {
+      next(error);
+    }
+  });
 
   router.get(
     "/championships/:championshipId/individual-events",
