@@ -11,11 +11,11 @@ Vercel / cliente HTTP
         |
         | HTTPS
         v
-CloudFront (certificado cloudfront.net)
+API Gateway HTTP API (endpoint execute-api HTTPS)
         |
-        | HTTP de origem, restrito ao prefix list da CloudFront
+        | VPC Link privado
         v
-Application Load Balancer
+Application Load Balancer interno
         |
         v
 ECS/Fargate (1 x 0.25 vCPU / 512 MiB)
@@ -25,7 +25,7 @@ ECS/Fargate (1 x 0.25 vCPU / 512 MiB)
 RDS PostgreSQL 17 privado
 ```
 
-O Fargate usa as subnets públicas e `assign_public_ip=true` apenas para obter imagem do ECR e acessar APIs AWS sem NAT Gateway. O Security Group da task não aceita tráfego direto da Internet.
+O Fargate usa as subnets públicas e `assign_public_ip=true` apenas para obter imagem do ECR e acessar APIs AWS sem NAT Gateway. O Security Group da task não aceita tráfego direto da Internet. O ALB é interno; o único caminho público é o endpoint HTTPS gerenciado pelo API Gateway, que alcança o listener do ALB por VPC Link.
 
 ## Segredos
 
@@ -44,7 +44,7 @@ O deploy usa GitHub Actions OIDC; não existem access keys AWS persistidas no Gi
 
 - nenhum NAT Gateway;
 - apenas uma task Fargate quando ativa;
-- ALB/CloudFront/ECS service removíveis por `staging_api_enabled=false`;
+- ALB/API Gateway VPC Link/ECS service removíveis por `staging_api_enabled=false`;
 - ECR mantém no máximo três imagens;
 - CloudWatch Logs retém sete dias por padrão;
 - RDS staging continua sendo o componente persistente já existente e deve ser parado quando não estiver em uso, lembrando que o RDS pode reiniciar automaticamente após o limite de parada da AWS.
@@ -52,3 +52,7 @@ O deploy usa GitHub Actions OIDC; não existem access keys AWS persistidas no Gi
 ## Não é produção
 
 Esta infraestrutura não executa o cutover produtivo. Supabase continua sendo a produção até LAJE-139.
+
+## Decisão sobre HTTPS
+
+A primeira tentativa de usar CloudFront como endpoint HTTPS foi rejeitada pela própria AWS porque a conta ainda exige verificação adicional para novos recursos CloudFront. Para não depender de suporte manual nem manter o ALB exposto à Internet, o staging usa API Gateway HTTP API com endpoint `execute-api` gerenciado pela AWS e VPC Link para o ALB interno.

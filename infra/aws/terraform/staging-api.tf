@@ -1,15 +1,3 @@
-data "aws_ec2_managed_prefix_list" "cloudfront_origin" {
-  name = "com.amazonaws.global.cloudfront.origin-facing"
-}
-
-data "aws_cloudfront_cache_policy" "caching_disabled" {
-  name = "Managed-CachingDisabled"
-}
-
-data "aws_cloudfront_origin_request_policy" "all_viewer_except_host" {
-  name = "Managed-AllViewerExceptHostHeader"
-}
-
 resource "aws_ecr_repository" "api" {
   name                 = "${local.name_prefix}-api"
   image_tag_mutability = "IMMUTABLE"
@@ -193,10 +181,10 @@ resource "aws_lb" "api" {
   count = var.staging_api_enabled ? 1 : 0
 
   name                       = "${local.name_prefix}-api"
-  internal                   = false
+  internal                   = true
   load_balancer_type         = "application"
   security_groups            = [aws_security_group.alb.id]
-  subnets                    = aws_subnet.public[*].id
+  subnets                    = aws_subnet.app_private[*].id
   enable_deletion_protection = false
   drop_invalid_header_fields = true
   idle_timeout               = 30
@@ -281,45 +269,69 @@ resource "aws_ecs_service" "api" {
   }
 }
 
-resource "aws_cloudfront_distribution" "api" {
+resource "aws_apigatewayv2_vpc_link" "api" {
   count = var.staging_api_enabled ? 1 : 0
 
-  enabled         = true
-  is_ipv6_enabled = true
-  comment         = "LAJE staging API HTTPS endpoint"
-  price_class     = "PriceClass_100"
+  name               = "${local.name_prefix}-api"
+  security_group_ids = [aws_security_group.alb.id]
+  subnet_ids         = aws_subnet.app_private[*].id
 
-  origin {
-    domain_name = aws_lb.api[0].dns_name
-    origin_id   = "laje-staging-alb"
+  tags = {
+    Jira = "LAJE-136"
+  }
+}
 
-    custom_origin_config {
-      http_port              = 80
-      https_port             = 443
-      origin_protocol_policy = "http-only"
-      origin_ssl_protocols   = ["TLSv1.2"]
-    }
+resource "aws_apigatewayv2_api" "api" {
+  count = var.staging_api_enabled ? 1 : 0
+
+  name          = "${local.name_prefix}-api"
+  protocol_type = "HTTP"
+
+  cors_configuration {
+    allow_credentials = true
+    allow_headers     = ["authorization", "content-type", "x-request-id"]
+    allow_methods     = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    allow_origins     = [for origin in split(",", var.staging_api_cors_origins) : trimspace(origin)]
+    expose_headers    = ["x-request-id"]
+    max_age           = 300
   }
 
-  default_cache_behavior {
-    target_origin_id       = "laje-staging-alb"
-    viewer_protocol_policy = "redirect-to-https"
-    allowed_methods        = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
-    cached_methods         = ["GET", "HEAD"]
-    compress               = true
-
-    cache_policy_id          = data.aws_cloudfront_cache_policy.caching_disabled.id
-    origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host.id
+  tags = {
+    Jira = "LAJE-136"
   }
+}
 
-  restrictions {
-    geo_restriction {
-      restriction_type = "none"
-    }
-  }
+resource "aws_apigatewayv2_integration" "api" {
+  count = var.staging_api_enabled ? 1 : 0
 
-  viewer_certificate {
-    cloudfront_default_certificate = true
+  api_id                 = aws_apigatewayv2_api.api[0].id
+  integration_type       = "HTTP_PROXY"
+  integration_uri        = aws_lb_listener.api_http[0].arn
+  integration_method     = "ANY"
+  connection_type        = "VPC_LINK"
+  connection_id          = aws_apigatewayv2_vpc_link.api[0].id
+  payload_format_version = "1.0"
+}
+
+resource "aws_apigatewayv2_route" "api_default" {
+  count = var.staging_api_enabled ? 1 : 0
+
+  api_id    = aws_apigatewayv2_api.api[0].id
+  route_key = "$default"
+  target    = "integrations/${aws_apigatewayv2_integration.api[0].id}"
+}
+
+resource "aws_apigatewayv2_stage" "api_default" {
+  count = var.staging_api_enabled ? 1 : 0
+
+  api_id      = aws_apigatewayv2_api.api[0].id
+  name        = "$default"
+  auto_deploy = true
+
+  default_route_settings {
+    detailed_metrics_enabled = false
+    throttling_burst_limit   = 100
+    throttling_rate_limit    = 50
   }
 
   tags = {

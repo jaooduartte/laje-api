@@ -117,15 +117,15 @@ resource "aws_route_table_association" "db_private" {
 
 resource "aws_security_group" "alb" {
   name        = "${local.name_prefix}-alb-sg"
-  description = "Public HTTPS ingress for the future LAJE staging ALB"
+  description = "Private HTTP ingress for the LAJE staging ALB from API Gateway VPC Link"
   vpc_id      = aws_vpc.this.id
 
   ingress {
-    description     = "HTTP origin traffic from CloudFront only"
-    from_port       = 80
-    to_port         = 80
-    protocol        = "tcp"
-    prefix_list_ids = [data.aws_ec2_managed_prefix_list.cloudfront_origin.id]
+    description = "HTTP from API Gateway VPC Link ENIs sharing this Security Group"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    self        = true
   }
 
   egress {

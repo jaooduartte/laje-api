@@ -26,15 +26,15 @@ The module now contains the integration/staging runtime for `laje-api`:
 
 - Amazon ECR with scan-on-push and retention of the three newest images;
 - Amazon ECS/Fargate using one 0.25 vCPU / 512 MiB task while staging is active;
-- Application Load Balancer in the existing public subnets;
-- CloudFront as the public HTTPS endpoint using the AWS-managed `cloudfront.net` certificate;
+- internal Application Load Balancer in the application subnets;
+- API Gateway HTTP API as the public HTTPS endpoint, connected through a VPC Link;
 - CloudWatch Logs with short staging retention;
 - RDS credentials injected from the RDS-managed Secrets Manager secret;
 - browser CORS configured through Terraform variables.
 
-To avoid a NAT Gateway, the staging Fargate task runs in the public subnets with a public IP **but does not accept Internet ingress**. Its Security Group permits application traffic only from the ALB. The ALB accepts origin traffic only from the AWS-managed CloudFront origin-facing prefix list. RDS remains private and accepts PostgreSQL only from the ECS Security Group.
+To avoid a NAT Gateway, the staging Fargate task runs in the public subnets with a public IP **but does not accept Internet ingress**. Its Security Group permits application traffic only from the ALB. The ALB is internal and receives traffic only from API Gateway through a VPC Link. RDS remains private and accepts PostgreSQL only from the ECS Security Group.
 
-The billable ALB, CloudFront distribution and ECS service are controlled by `staging_api_enabled`. Keep it `false` when staging is not being actively validated. ECR, the ECS cluster, task definition, execution role and short-retention log group may remain because they do not create continuous compute/load-balancer charges.
+The billable ALB, API Gateway VPC Link/runtime and ECS service are controlled by `staging_api_enabled`. Keep it `false` when staging is not being actively validated. ECR, the ECS cluster, task definition, execution role and short-retention log group may remain because they do not create continuous compute/load-balancer charges.
 
 Still intentionally outside this module/task:
 
@@ -135,6 +135,6 @@ The frontend hosting is not changed by LAJE-127. The current Vercel usage remain
 
 The GitHub Actions workflow `.github/workflows/deploy-aws.yml` uses GitHub OIDC instead of long-lived AWS keys. A deployment first applies the runtime with zero tasks, publishes an immutable image to ECR, then applies one Fargate task and validates both health endpoints.
 
-Use the manual workflow action `deploy` to start/update staging. Use `suspend` after validation to destroy the billable ALB/CloudFront/ECS service while preserving the reproducible low-cost foundation.
+Use the manual workflow action `deploy` to start/update staging. Use `suspend` after validation to destroy the billable ALB/API Gateway VPC Link/ECS service while preserving the reproducible low-cost foundation.
 
 No NAT Gateway is part of this design.

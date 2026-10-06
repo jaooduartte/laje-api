@@ -70,11 +70,11 @@ output "staging_api_ecs_cluster_name" {
 }
 
 output "staging_api_https_url" {
-  value       = var.staging_api_enabled ? "https://${aws_cloudfront_distribution.api[0].domain_name}" : null
-  description = "Public HTTPS URL for staging. Null while the billable staging runtime is suspended."
+  value       = var.staging_api_enabled ? aws_apigatewayv2_api.api[0].api_endpoint : null
+  description = "Public API Gateway HTTPS URL for staging. Null while the billable staging runtime is suspended."
 }
 
 output "staging_api_alb_dns_name" {
   value       = var.staging_api_enabled ? aws_lb.api[0].dns_name : null
-  description = "ALB DNS name used only as the CloudFront origin."
+  description = "Internal ALB DNS name used only through API Gateway VPC Link."
 }
