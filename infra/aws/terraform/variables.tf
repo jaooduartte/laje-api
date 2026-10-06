@@ -109,7 +109,7 @@ variable "staging_api_image_tag" {
 variable "staging_api_cors_origins" {
   description = "Comma-separated browser origins allowed to call the staging API."
   type        = string
-  default     = "https://ligadasatleticas.vercel.app"
+  default     = "https://laje-tcc.vercel.app"
 }
 
 variable "staging_api_log_retention_days" {
