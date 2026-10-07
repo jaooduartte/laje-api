@@ -143,9 +143,14 @@ variable "staging_brevo_api_key_secret_arn" {
 }
 
 variable "staging_mail_from" {
-  description = "Sender email for reservation notifications."
+  description = "Verified Brevo sender email for reservation notifications."
   type        = string
-  default     = "laje.eventos.co@gmail.com"
+  default     = ""
+
+  validation {
+    condition     = !var.staging_mail_enabled || length(trimspace(var.staging_mail_from)) > 0
+    error_message = "staging_mail_from is required when staging_mail_enabled=true."
+  }
 }
 
 variable "staging_mail_from_name" {
@@ -157,13 +162,23 @@ variable "staging_mail_from_name" {
 variable "staging_co_events_email" {
   description = "Operational recipient for pending reservation requests."
   type        = string
-  default     = "laje.eventos.co@gmail.com"
+  default     = ""
+
+  validation {
+    condition     = !var.staging_mail_enabled || length(trimspace(var.staging_co_events_email)) > 0
+    error_message = "staging_co_events_email is required when staging_mail_enabled=true."
+  }
 }
 
 variable "staging_co_presidency_email" {
   description = "Presidency recipient for pending reservation requests."
   type        = string
-  default     = "laje.eventos.co@gmail.com"
+  default     = ""
+
+  validation {
+    condition     = !var.staging_mail_enabled || length(trimspace(var.staging_co_presidency_email)) > 0
+    error_message = "staging_co_presidency_email is required when staging_mail_enabled=true."
+  }
 }
 
 variable "staging_app_url" {
