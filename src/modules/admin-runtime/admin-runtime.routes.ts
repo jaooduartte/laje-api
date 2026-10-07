@@ -7,31 +7,16 @@ import {
   parsePagination,
 } from "../../common/validation/common.schema.js";
 import { database } from "../../database/index.js";
-import {
-  createRequireAuthentication,
-  requirePermission,
-} from "../auth/auth.middleware.js";
+import { createRequireAuthentication, requirePermission } from "../auth/auth.middleware.js";
 import type { AuthService } from "../auth/auth.service.js";
 
-const ADMIN_ACTION_TYPES = [
-  "INSERT",
-  "UPDATE",
-  "DELETE",
-  "PASSWORD_CHANGED",
-  "LOGIN",
-] as const;
+const ADMIN_ACTION_TYPES = ["INSERT", "UPDATE", "DELETE", "PASSWORD_CHANGED", "LOGIN"] as const;
 
 export function createAdminRuntimeRouter(authService: AuthService): Router {
   const router = Router();
   const requireAuthentication = createRequireAuthentication(authService);
-  const requireUsersView = [
-    requireAuthentication,
-    requirePermission("users", "VIEW"),
-  ] as const;
-  const requireLogsView = [
-    requireAuthentication,
-    requirePermission("logs", "VIEW"),
-  ] as const;
+  const requireUsersView = [requireAuthentication, requirePermission("users", "VIEW")] as const;
+  const requireLogsView = [requireAuthentication, requirePermission("logs", "VIEW")] as const;
 
   router.get("/users", ...requireUsersView, async (_request, response, next) => {
     try {
@@ -92,21 +77,13 @@ export function createAdminRuntimeRouter(authService: AuthService): Router {
 
   router.get("/logs", ...requireLogsView, async (request, response, next) => {
     try {
-      const { page, pageSize, offset } = parsePagination(
-        request.query as Record<string, unknown>,
-      );
+      const { page, pageSize, offset } = parsePagination(request.query as Record<string, unknown>);
       const userId = optionalUuid(request.query.userId, "userId");
-      const actionType = optionalEnum(
-        request.query.actionType,
-        "actionType",
-        ADMIN_ACTION_TYPES,
-      );
+      const actionType = optionalEnum(request.query.actionType, "actionType", ADMIN_ACTION_TYPES);
       const search = optionalString(request.query.search, "search", 200);
 
       const parameters: unknown[] = [];
-      const conditions = [
-        "resource_table <> 'league_event_organizer_teams'",
-      ];
+      const conditions = ["resource_table <> 'league_event_organizer_teams'"];
 
       if (userId) {
         parameters.push(userId);
@@ -115,9 +92,7 @@ export function createAdminRuntimeRouter(authService: AuthService): Router {
 
       if (actionType) {
         parameters.push(actionType);
-        conditions.push(
-          `action_type = $${parameters.length}::public.admin_action_type`,
-        );
+        conditions.push(`action_type = ${parameters.length}::public.admin_action_type`);
       }
 
       if (search) {
