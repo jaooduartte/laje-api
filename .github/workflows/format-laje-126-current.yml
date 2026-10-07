@@ -1,7 +1,11 @@
 name: Format LAJE-126 Current
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - LAJE-126
+    paths:
+      - ".github/workflows/format-laje-126-current.yml"
 
 permissions:
   contents: write
