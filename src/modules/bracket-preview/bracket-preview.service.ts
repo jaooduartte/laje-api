@@ -1,9 +1,5 @@
 import { ApiError } from "../../common/errors/api-error.js";
-import type {
-  DatabaseConnection,
-  DatabaseQueryExecutor,
-  DatabaseRow,
-} from "../../database/types.js";
+import type { DatabaseConnection, DatabaseQueryExecutor } from "../../database/types.js";
 
 interface PreviewQueue {
   sendProcessJob(jobId: string, delaySeconds?: number): Promise<void>;
