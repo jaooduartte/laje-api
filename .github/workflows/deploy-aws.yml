@@ -79,7 +79,7 @@ jobs:
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
             echo "action=${INPUT_ACTION}" >> "${GITHUB_OUTPUT}"
           else
-            echo "action=deploy" >> "${GITHUB_OUTPUT}"
+            echo "action=suspend" >> "${GITHUB_OUTPUT}"
           fi
           echo "image_tag=sha-${GITHUB_SHA::12}" >> "${GITHUB_OUTPUT}"
 
