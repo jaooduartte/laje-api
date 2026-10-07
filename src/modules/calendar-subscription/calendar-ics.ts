@@ -74,7 +74,10 @@ function formatIcsDateTime(value: string): string {
 }
 
 function formatIcsUtcDateTime(value: string): string {
-  return new Date(value).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+  return new Date(value)
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\.\d{3}Z$/, "Z");
 }
 
 function foldIcsLine(line: string): string {

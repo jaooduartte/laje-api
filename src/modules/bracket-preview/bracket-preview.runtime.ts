@@ -3,9 +3,7 @@ import { database } from "../../database/index.js";
 import { AwsSqsClient } from "../../integrations/aws/sqs.client.js";
 import { BracketPreviewService } from "./bracket-preview.service.js";
 
-type QueueMessage =
-  | { type: "PROCESS_PREVIEW"; jobId: string }
-  | { type: "MAINTENANCE" };
+type QueueMessage = { type: "PROCESS_PREVIEW"; jobId: string } | { type: "MAINTENANCE" };
 
 class BracketPreviewQueue {
   private readonly client: AwsSqsClient | null;

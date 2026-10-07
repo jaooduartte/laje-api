@@ -8,15 +8,15 @@ Remover do estado-alvo do LAJE as dependências operacionais de `pgmq`, `pg_cron
 
 O ambiente Supabase legado possui:
 
-| Origem | Uso legado | Alvo AWS |
-| --- | --- | --- |
-| `pgmq` / fila `championship_bracket_preview` | Prévia assíncrona de chaveamento | Amazon SQS + DLQ |
-| `pg_cron` a cada 2 minutos | Recovery/cleanup de previews | Amazon EventBridge Scheduler |
-| Edge Function `process-championship-bracket-preview` | Consumidor HTTP da fila/RPC | Worker Node dentro da `laje-api` |
-| Edge Function `send-reservation-email` | E-mails Brevo de reserva | Serviço de notificação da `laje-api` |
-| Edge Function `calendar-subscription-feed` | Feed iCalendar público | Endpoint PostgreSQL da `laje-api` |
-| Supabase service role / segredos de função | Acesso privilegiado | IAM + AWS Secrets Manager |
-| Logs da Edge Function | Diagnóstico | CloudWatch Logs/Metrics/Alarms |
+| Origem                                               | Uso legado                       | Alvo AWS                             |
+| ---------------------------------------------------- | -------------------------------- | ------------------------------------ |
+| `pgmq` / fila `championship_bracket_preview`         | Prévia assíncrona de chaveamento | Amazon SQS + DLQ                     |
+| `pg_cron` a cada 2 minutos                           | Recovery/cleanup de previews     | Amazon EventBridge Scheduler         |
+| Edge Function `process-championship-bracket-preview` | Consumidor HTTP da fila/RPC      | Worker Node dentro da `laje-api`     |
+| Edge Function `send-reservation-email`               | E-mails Brevo de reserva         | Serviço de notificação da `laje-api` |
+| Edge Function `calendar-subscription-feed`           | Feed iCalendar público           | Endpoint PostgreSQL da `laje-api`    |
+| Supabase service role / segredos de função           | Acesso privilegiado              | IAM + AWS Secrets Manager            |
+| Logs da Edge Function                                | Diagnóstico                      | CloudWatch Logs/Metrics/Alarms       |
 
 Os componentes legados permanecem intactos durante a coexistência. Eles só podem ser desligados/removidos no cutover controlado da LAJE-139.
 

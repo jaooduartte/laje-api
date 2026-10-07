@@ -77,7 +77,6 @@ O inventário detalhado de cada rotina, trigger e policy será usado por domíni
 
 Nenhuma Edge Function exige `verify_jwt` no deploy atual. Essa configuração não será reproduzida: os endpoints da API deverão aplicar autenticação ou autorização conforme o contrato de cada fluxo.
 
-
 ### Estado da substituição — LAJE-126
 
 A implementação AWS foi versionada mantendo coexistência segura com o ambiente legado:

@@ -3,9 +3,7 @@ import { resolve } from "node:path";
 
 import { database } from "../database/index.js";
 
-const MIGRATIONS = [
-  "20261007160000_create_championship_bracket_preview_jobs.sql",
-] as const;
+const MIGRATIONS = ["20261007160000_create_championship_bracket_preview_jobs.sql"] as const;
 
 async function main(): Promise<void> {
   await database.checkConnection();

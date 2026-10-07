@@ -1,7 +1,11 @@
 import { createHash } from "node:crypto";
 
 import { ApiError } from "../../common/errors/api-error.js";
-import type { DatabaseConnection, DatabaseQueryExecutor, DatabaseRow } from "../../database/types.js";
+import type {
+  DatabaseConnection,
+  DatabaseQueryExecutor,
+  DatabaseRow,
+} from "../../database/types.js";
 
 const ALGORITHM_VERSION = "aws-structural-v1";
 
@@ -137,15 +141,15 @@ function stableValue(value: unknown): unknown {
 }
 
 function signature(value: unknown): string {
-  return createHash("sha256").update(JSON.stringify(stableValue(value)), "utf8").digest("hex");
+  return createHash("sha256")
+    .update(JSON.stringify(stableValue(value)), "utf8")
+    .digest("hex");
 }
 
 function competitionKey(competition: Competition): string {
-  return [
-    competition.sport_id,
-    competition.naipe,
-    competition.division ?? "WITHOUT_DIVISION",
-  ].join("::");
+  return [competition.sport_id, competition.naipe, competition.division ?? "WITHOUT_DIVISION"].join(
+    "::",
+  );
 }
 
 function parseCompetitions(payload: Record<string, unknown>): Competition[] {
@@ -276,12 +280,12 @@ async function loadNames(
   const competitions = parseCompetitions(payload);
   const teamIds = [
     ...new Set(
-      competitions.flatMap((competition) =>
-        competition.groups.flatMap((group) => group.team_ids),
-      ),
+      competitions.flatMap((competition) => competition.groups.flatMap((group) => group.team_ids)),
     ),
   ];
-  const sportIds = [...new Set(competitions.map((competition) => competition.sport_id).filter(Boolean))];
+  const sportIds = [
+    ...new Set(competitions.map((competition) => competition.sport_id).filter(Boolean)),
+  ];
 
   const teamNames = new Map<string, string>();
   const sportNames = new Map<string, string>();
@@ -312,9 +316,16 @@ export function buildBracketPreviewResult(
 ) {
   const competitions = parseCompetitions(payload);
   const slots = parseStructuralSlots(payload).sort((left, right) =>
-    [left.date, left.start_time, left.location_name, left.court_name, left.phase_slot_number].join("|")
+    [left.date, left.start_time, left.location_name, left.court_name, left.phase_slot_number]
+      .join("|")
       .localeCompare(
-        [right.date, right.start_time, right.location_name, right.court_name, right.phase_slot_number].join("|"),
+        [
+          right.date,
+          right.start_time,
+          right.location_name,
+          right.court_name,
+          right.phase_slot_number,
+        ].join("|"),
       ),
   );
   if (slots.length === 0) {
@@ -359,10 +370,7 @@ export function buildBracketPreviewResult(
         available_minutes: 0,
         utilization_percentage: 0,
         free_windows: 0,
-        breaks:
-          breakStart && breakEnd
-            ? [{ start_time: breakStart, end_time: breakEnd }]
-            : [],
+        breaks: breakStart && breakEnd ? [{ start_time: breakStart, end_time: breakEnd }] : [],
         locations: [],
       };
       days.set(slot.date, day);
@@ -517,16 +525,25 @@ export function buildBracketPreviewResult(
     day.available_minutes = totalAvailable;
     day.utilization_percentage =
       totalAvailable > 0
-        ? Math.min(100, Math.round((numberValue(day.occupied_minutes) / totalAvailable) * 10000) / 100)
+        ? Math.min(
+            100,
+            Math.round((numberValue(day.occupied_minutes) / totalAvailable) * 10000) / 100,
+          )
         : 0;
-    day.free_windows = Math.max(0, courts.length - courts.filter((court) => numberValue(court.occupied_minutes) > 0).length);
+    day.free_windows = Math.max(
+      0,
+      courts.length - courts.filter((court) => numberValue(court.occupied_minutes) > 0).length,
+    );
 
     for (const court of courts) {
       const courtAvailable = Math.max(0, baseMinutes - breakMinutes);
       court.available_minutes = courtAvailable;
       court.utilization_percentage =
         courtAvailable > 0
-          ? Math.min(100, Math.round((numberValue(court.occupied_minutes) / courtAvailable) * 10000) / 100)
+          ? Math.min(
+              100,
+              Math.round((numberValue(court.occupied_minutes) / courtAvailable) * 10000) / 100,
+            )
           : 0;
       court.free_windows = numberValue(court.occupied_minutes) < courtAvailable ? 1 : 0;
     }
@@ -536,7 +553,10 @@ export function buildBracketPreviewResult(
     String(left.date).localeCompare(String(right.date)),
   );
   const totalMatches = groupStageMatches + knockoutMatches;
-  const availableMinutes = dayList.reduce((sum, day) => sum + numberValue(day.available_minutes), 0);
+  const availableMinutes = dayList.reduce(
+    (sum, day) => sum + numberValue(day.available_minutes),
+    0,
+  );
   const summary = {
     total_matches: totalMatches,
     group_stage_matches: groupStageMatches,
@@ -555,10 +575,7 @@ export function buildBracketPreviewResult(
       date: day.date,
       matches: (day.locations as Array<Record<string, unknown>>)
         .flatMap((location) => location.courts as Array<Record<string, unknown>>)
-        .reduce(
-          (sum, court) => sum + (court.entries as Array<Record<string, unknown>>).length,
-          0,
-        ),
+        .reduce((sum, court) => sum + (court.entries as Array<Record<string, unknown>>).length, 0),
     })),
   };
 
@@ -626,7 +643,14 @@ export class BracketPreviewService {
          AND status IN ('QUEUED','INITIALIZING','SCHEDULING','FINALIZING','COMPLETED')
        ORDER BY created_at DESC
        LIMIT 1`,
-      [championshipId, seasonYear, requestedBy, payloadSignature, dependencySignature, ALGORITHM_VERSION],
+      [
+        championshipId,
+        seasonYear,
+        requestedBy,
+        payloadSignature,
+        dependencySignature,
+        ALGORITHM_VERSION,
+      ],
     );
     const reusable = asJob(existing.rows[0]);
     if (reusable) return reusable;
@@ -695,7 +719,9 @@ export class BracketPreviewService {
     const job = await this.get(jobId);
     const result = job.result;
     const days = array(result?.days);
-    return (days.find((rawDay) => text(record(rawDay).date) === date) as Record<string, unknown>) ?? null;
+    return (
+      (days.find((rawDay) => text(record(rawDay).date) === date) as Record<string, unknown>) ?? null
+    );
   }
 
   async cancel(jobId: string): Promise<PreviewJobRow> {

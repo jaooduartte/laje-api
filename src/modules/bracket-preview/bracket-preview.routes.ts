@@ -1,11 +1,7 @@
 import { Router } from "express";
 
 import { ApiError } from "../../common/errors/api-error.js";
-import {
-  parseDate,
-  requireRecord,
-  requireUuid,
-} from "../../common/validation/common.schema.js";
+import { parseDate, requireRecord, requireUuid } from "../../common/validation/common.schema.js";
 import {
   createRequireAuthentication,
   requirePermission,
@@ -34,8 +30,7 @@ export function createBracketPreviewRouter(authService: AuthService): Router {
         "championshipId",
       );
       const payload = requireRecord(request.body, "Payload de prévia inválido.");
-      const requestedBy =
-        (request as AuthenticatedRequest).authPrincipal?.userId ?? null;
+      const requestedBy = (request as AuthenticatedRequest).authPrincipal?.userId ?? null;
       const job = await bracketPreviewService.start(championshipId, payload, requestedBy);
       response.status(job.status === "QUEUED" ? 202 : 200).json({
         data: serializePreviewJob(job),
@@ -104,7 +99,6 @@ export function createBracketPreviewRouter(authService: AuthService): Router {
   return router;
 }
 
-
 export function createGlobalBracketPreviewRouter(authService: AuthService): Router {
   const router = Router();
   const requireAuthentication = createRequireAuthentication(authService);
@@ -120,7 +114,9 @@ export function createGlobalBracketPreviewRouter(authService: AuthService): Rout
   router.get("/:jobId", ...requirePreviewView, async (request, response, next) => {
     try {
       const jobId = requireUuid(request.params.jobId, "jobId");
-      response.status(200).json({ data: serializePreviewJob(await bracketPreviewService.get(jobId)) });
+      response
+        .status(200)
+        .json({ data: serializePreviewJob(await bracketPreviewService.get(jobId)) });
     } catch (error) {
       next(error);
     }

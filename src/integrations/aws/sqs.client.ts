@@ -1,7 +1,4 @@
-import {
-  createHash,
-  createHmac,
-} from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 
 interface AwsCredentials {
   accessKeyId: string;

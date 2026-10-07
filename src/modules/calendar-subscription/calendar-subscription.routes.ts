@@ -22,8 +22,7 @@ const SCOPES = [
 
 type CalendarScope = (typeof SCOPES)[number];
 
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function stringQuery(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
@@ -197,11 +196,7 @@ async function loadEvents(input: ReturnType<typeof parseRequest>): Promise<Calen
     }
   }
 
-  if (
-    input.scope === "SESSION" ||
-    input.scope === "SPORT_NAIPE" ||
-    input.scope === "TEAM"
-  ) {
+  if (input.scope === "SESSION" || input.scope === "SPORT_NAIPE" || input.scope === "TEAM") {
     const parameters: unknown[] = [input.championshipId, input.seasonYear];
     const conditions = [
       "s.championship_id = $1",

@@ -91,11 +91,7 @@ test("AWS preview engine deterministically assigns group round-robin matches to 
 });
 
 test("AWS preview engine reports structural capacity gaps as blocking diagnostics", () => {
-  const result = buildBracketPreviewResult(
-    payload([slot(0), slot(1)]),
-    new Map(),
-    new Map(),
-  );
+  const result = buildBracketPreviewResult(payload([slot(0), slot(1)]), new Map(), new Map());
 
   assert.equal(result.ok, false);
   assert.equal(result.summary.conflict_count, 1);

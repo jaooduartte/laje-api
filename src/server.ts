@@ -1,7 +1,10 @@
 import { app } from "./app.js";
 import { appConfig } from "./config/app.config.js";
 import { database } from "./database/index.js";
-import { startBracketPreviewWorker, stopBracketPreviewWorker } from "./modules/bracket-preview/bracket-preview.runtime.js";
+import {
+  startBracketPreviewWorker,
+  stopBracketPreviewWorker,
+} from "./modules/bracket-preview/bracket-preview.runtime.js";
 
 async function startServer(): Promise<void> {
   await database.checkConnection();

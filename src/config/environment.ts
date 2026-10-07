@@ -156,7 +156,12 @@ if (authEnabled) {
 const awsRegion = optional("AWS_REGION");
 const bracketPreviewQueueUrl = optional("BRACKET_PREVIEW_QUEUE_URL");
 const bracketPreviewWorkerEnabled = booleanValue("BRACKET_PREVIEW_WORKER_ENABLED", false);
-const bracketPreviewPollWaitSeconds = optionalInteger("BRACKET_PREVIEW_POLL_WAIT_SECONDS", 20, 1, 20);
+const bracketPreviewPollWaitSeconds = optionalInteger(
+  "BRACKET_PREVIEW_POLL_WAIT_SECONDS",
+  20,
+  1,
+  20,
+);
 const bracketPreviewVisibilityTimeoutSeconds = optionalInteger(
   "BRACKET_PREVIEW_VISIBILITY_TIMEOUT_SECONDS",
   180,

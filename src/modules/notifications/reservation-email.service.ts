@@ -132,10 +132,9 @@ export async function sendReservationEmail(input: ReservationEmailInput): Promis
 
   if (input.type !== "PENDING") return;
 
-  const adminRecipients = [
-    mailConfig.coEventsEmail,
-    mailConfig.coPresidencyEmail,
-  ].filter((email): email is string => Boolean(email));
+  const adminRecipients = [mailConfig.coEventsEmail, mailConfig.coPresidencyEmail].filter(
+    (email): email is string => Boolean(email),
+  );
 
   if (adminRecipients.length === 0) return;
 
