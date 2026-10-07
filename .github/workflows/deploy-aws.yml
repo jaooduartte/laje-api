@@ -3,7 +3,7 @@ name: Deploy AWS
 on:
   push:
     branches:
-      - LAJE-136
+      - LAJE-126
     paths:
       - ".github/workflows/deploy-aws.yml"
       - "infra/aws/terraform/**"
