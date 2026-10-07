@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS public.championship_bracket_preview_jobs (
   status text NOT NULL DEFAULT 'QUEUED'
     CHECK (status IN ('QUEUED','INITIALIZING','SCHEDULING','FINALIZING','COMPLETED','FAILED','CANCELLED','CONSUMED')),
   stage text NOT NULL DEFAULT 'Na fila',
-  current_date date,
+  current_preview_date date,
   progress_percentage numeric(5,2) NOT NULL DEFAULT 0 CHECK (progress_percentage BETWEEN 0 AND 100),
   processed_slots integer NOT NULL DEFAULT 0 CHECK (processed_slots >= 0),
   total_slots integer NOT NULL DEFAULT 0 CHECK (total_slots >= 0),
