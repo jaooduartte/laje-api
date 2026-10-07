@@ -32,11 +32,7 @@ class BracketPreviewQueue {
 
 const queue = new BracketPreviewQueue();
 
-export const bracketPreviewService = new BracketPreviewService(
-  database,
-  queue,
-  awsConfig.bracketPreviewMaxReceiveCount,
-);
+export const bracketPreviewService = new BracketPreviewService(database, queue);
 
 let workerRunning = false;
 let stopRequested = false;
