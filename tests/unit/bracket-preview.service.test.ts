@@ -103,7 +103,6 @@ test("AWS preview engine reports structural capacity gaps as blocking diagnostic
   assert.equal(result.diagnostics[0]?.severity, "ERROR");
 });
 
-
 function retryDatabase(attemptCount: number) {
   const calls: Array<{ sql: string; params: unknown[] | undefined }> = [];
   const database = {
