@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildBracketPreviewResult } from "../../src/modules/bracket-preview/bracket-preview.service.js";
+import type { DatabaseConnection } from "../../src/database/types.js";
+import {
+  BracketPreviewService,
+  buildBracketPreviewResult,
+} from "../../src/modules/bracket-preview/bracket-preview.service.js";
 
 function payload(slots: Array<Record<string, unknown>>) {
   return {
@@ -97,4 +101,81 @@ test("AWS preview engine reports structural capacity gaps as blocking diagnostic
   assert.equal(result.summary.conflict_count, 1);
   assert.equal(result.diagnostics[0]?.code, "MISSING_GROUP_STAGE_SLOTS");
   assert.equal(result.diagnostics[0]?.severity, "ERROR");
+});
+
+
+function retryDatabase(attemptCount: number) {
+  const calls: Array<{ sql: string; params: unknown[] | undefined }> = [];
+  const database = {
+    async query(sql: string, params?: unknown[]) {
+      calls.push({ sql, params });
+      if (sql.includes("SET status='INITIALIZING'")) {
+        return { rows: [{ payload: {}, attemptCount }], rowCount: 1 };
+      }
+      return { rows: [], rowCount: 0 };
+    },
+  } as unknown as DatabaseConnection;
+  return { database, calls };
+}
+
+test("preview worker returns retryable failures to QUEUED while SQS still has attempts", async () => {
+  const { database, calls } = retryDatabase(1);
+  const queue = { sendProcessJob: async () => undefined };
+  const service = new BracketPreviewService(database, queue, 5);
+
+  await assert.rejects(() => service.process("55555555-5555-4555-8555-555555555555"));
+
+  const retryUpdate = calls.find((call) =>
+    call.sql.includes("completed_at=CASE WHEN $3 = 'FAILED'"),
+  );
+  assert.ok(retryUpdate);
+  assert.equal(retryUpdate.params?.[2], "QUEUED");
+  assert.equal(retryUpdate.params?.[3], "Aguardando nova tentativa");
+});
+
+test("preview worker marks the job FAILED only after the configured retry limit", async () => {
+  const { database, calls } = retryDatabase(5);
+  const queue = { sendProcessJob: async () => undefined };
+  const service = new BracketPreviewService(database, queue, 5);
+
+  await assert.rejects(() => service.process("66666666-6666-4666-8666-666666666666"));
+
+  const finalUpdate = calls.find((call) =>
+    call.sql.includes("completed_at=CASE WHEN $3 = 'FAILED'"),
+  );
+  assert.ok(finalUpdate);
+  assert.equal(finalUpdate.params?.[2], "FAILED");
+  assert.equal(finalUpdate.params?.[3], "Falha após esgotar tentativas");
+});
+
+test("preview maintenance resets stale jobs without publishing duplicate SQS messages", async () => {
+  let queuePublishes = 0;
+  let queryCount = 0;
+  const database = {
+    async query() {
+      queryCount += 1;
+      if (queryCount === 1) {
+        return {
+          rows: [
+            { id: "77777777-7777-4777-8777-777777777777" },
+            { id: "88888888-8888-4888-8888-888888888888" },
+          ],
+          rowCount: 2,
+        };
+      }
+      return { rows: [], rowCount: 0 };
+    },
+  } as unknown as DatabaseConnection;
+  const service = new BracketPreviewService(
+    database,
+    {
+      async sendProcessJob() {
+        queuePublishes += 1;
+      },
+    },
+    5,
+  );
+
+  assert.equal(await service.recoverAndCleanup(), 2);
+  assert.equal(queuePublishes, 0);
 });
