@@ -61,7 +61,7 @@ test("starts the exact preview under the authenticated identity and publishes on
     }
     throw new Error(`Unexpected SQL: ${sql}`);
   });
-  const published: Array<{ jobId: string; delaySeconds?: number }> = [];
+  const published: Array<{ jobId: string; delaySeconds: number | undefined }> = [];
   const service = new BracketPreviewService(database, {
     async sendProcessJob(jobId, delaySeconds) {
       published.push({ jobId, delaySeconds });
@@ -112,7 +112,7 @@ test("delegates resumable processing to the exact v8 engine and schedules only t
     }
     throw new Error(`Unexpected SQL: ${sql}`);
   });
-  const published: Array<{ jobId: string; delaySeconds?: number }> = [];
+  const published: Array<{ jobId: string; delaySeconds: number | undefined }> = [];
   const service = new BracketPreviewService(database, {
     async sendProcessJob(jobId, delaySeconds) {
       published.push({ jobId, delaySeconds });
