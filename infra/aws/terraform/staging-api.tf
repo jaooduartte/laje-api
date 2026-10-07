@@ -70,6 +70,48 @@ resource "aws_cloudwatch_metric_alarm" "bracket_preview_age" {
   }
 }
 
+resource "aws_cloudwatch_metric_alarm" "staging_rds_low_free_storage" {
+  alarm_name          = "${local.name_prefix}-rds-low-free-storage"
+  alarm_description   = "LAJE-126: staging RDS free storage is below 5 GiB."
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = 2
+  threshold           = 5368709120
+  metric_name         = "FreeStorageSpace"
+  namespace           = "AWS/RDS"
+  period              = 300
+  statistic           = "Minimum"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    DBInstanceIdentifier = aws_db_instance.staging.identifier
+  }
+
+  tags = {
+    Jira = "LAJE-126"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "staging_rds_high_cpu" {
+  alarm_name          = "${local.name_prefix}-rds-high-cpu"
+  alarm_description   = "LAJE-126: staging RDS CPU stayed above 80 percent for 15 minutes."
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 3
+  threshold           = 80
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/RDS"
+  period              = 300
+  statistic           = "Average"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    DBInstanceIdentifier = aws_db_instance.staging.identifier
+  }
+
+  tags = {
+    Jira = "LAJE-126"
+  }
+}
+
 resource "aws_iam_role" "bracket_preview_scheduler" {
   name = "${local.name_prefix}-bracket-preview-scheduler"
 
