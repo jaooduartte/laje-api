@@ -198,6 +198,12 @@ jobs:
         run: |
           createdb --host localhost --username postgres laje_migration_source
           psql --host localhost --username postgres --dbname laje_migration_source --set ON_ERROR_STOP=1 --file infra/database/baseline/schema.sql
+          shopt -s nullglob
+          source_migrations=(infra/database/migrations/*.sql)
+          for migration in "${source_migrations[@]}"; do
+            echo "Applying ${migration} to synthetic migration source"
+            psql --host localhost --username postgres --dbname laje_migration_source --set ON_ERROR_STOP=1 --file "${migration}"
+          done
           psql --host localhost --username postgres --dbname laje_migration_source --set ON_ERROR_STOP=1 <<'SQL'
           INSERT INTO public.teams (id, name)
           VALUES ('00000000-0000-0000-0000-000000000001', 'Synthetic team');
