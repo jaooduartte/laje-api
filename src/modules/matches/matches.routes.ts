@@ -487,7 +487,6 @@ async function persistScoreboardPatch(
   }
 }
 
-
 interface ScoreSheetSelectionInput {
   playerId?: string;
   playerName?: string;
@@ -513,7 +512,9 @@ function parseScoreSheetSelections(value: unknown, field: string): ScoreSheetSel
   return value.map((rawSelection, index) => {
     const selection = requireRecord(rawSelection, `${field}[${index}] inválido.`);
     const playerId =
-      selection.playerId == null ? undefined : requireUuid(selection.playerId, `${field}[${index}].playerId`);
+      selection.playerId == null
+        ? undefined
+        : requireUuid(selection.playerId, `${field}[${index}].playerId`);
     const playerName =
       selection.playerName == null
         ? undefined
@@ -976,10 +977,19 @@ export function createMatchesRouter(authService: AuthService): Router {
 
           if (match.isWalkover === true) {
             await Promise.all([
-              transaction.query("DELETE FROM public.match_award_goal_scorers WHERE match_id = $1", [matchId]),
-              transaction.query("DELETE FROM public.match_yellow_card_players WHERE match_id = $1", [matchId]),
-              transaction.query("DELETE FROM public.match_red_card_players WHERE match_id = $1", [matchId]),
-              transaction.query("DELETE FROM public.match_blue_card_players WHERE match_id = $1", [matchId]),
+              transaction.query("DELETE FROM public.match_award_goal_scorers WHERE match_id = $1", [
+                matchId,
+              ]),
+              transaction.query(
+                "DELETE FROM public.match_yellow_card_players WHERE match_id = $1",
+                [matchId],
+              ),
+              transaction.query("DELETE FROM public.match_red_card_players WHERE match_id = $1", [
+                matchId,
+              ]),
+              transaction.query("DELETE FROM public.match_blue_card_players WHERE match_id = $1", [
+                matchId,
+              ]),
             ]);
             await transaction.query(
               "UPDATE public.matches SET is_score_sheet_reviewed = true, updated_at = now() WHERE id = $1",
@@ -988,20 +998,58 @@ export function createMatchesRouter(authService: AuthService): Router {
             return { match_id: matchId, is_walkover: true, is_score_sheet_reviewed: true };
           }
 
-          if (requiresGoalScorers && payload.homeGoalScorers.length !== Number(match.homeScore ?? 0)) {
-            throw new ApiError(422, "INVALID_SCORE_SHEET", "A soma de gols da casa precisa ser igual ao placar final.");
+          if (
+            requiresGoalScorers &&
+            payload.homeGoalScorers.length !== Number(match.homeScore ?? 0)
+          ) {
+            throw new ApiError(
+              422,
+              "INVALID_SCORE_SHEET",
+              "A soma de gols da casa precisa ser igual ao placar final.",
+            );
           }
-          if (requiresGoalScorers && payload.awayGoalScorers.length !== Number(match.awayScore ?? 0)) {
-            throw new ApiError(422, "INVALID_SCORE_SHEET", "A soma de gols do visitante precisa ser igual ao placar final.");
+          if (
+            requiresGoalScorers &&
+            payload.awayGoalScorers.length !== Number(match.awayScore ?? 0)
+          ) {
+            throw new ApiError(
+              422,
+              "INVALID_SCORE_SHEET",
+              "A soma de gols do visitante precisa ser igual ao placar final.",
+            );
           }
 
           const disciplineChecks: Array<[number, number, string]> = [
-            [payload.homeYellowCardPlayers.length, Number(match.homeYellowCards ?? 0), "cartões amarelos da casa"],
-            [payload.awayYellowCardPlayers.length, Number(match.awayYellowCards ?? 0), "cartões amarelos do visitante"],
-            [payload.homeRedCardPlayers.length, Number(match.homeRedCards ?? 0), "cartões vermelhos da casa"],
-            [payload.awayRedCardPlayers.length, Number(match.awayRedCards ?? 0), "cartões vermelhos do visitante"],
-            [payload.homeBlueCardPlayers.length, Number(match.homeBlueCards ?? 0), "cartões azuis da casa"],
-            [payload.awayBlueCardPlayers.length, Number(match.awayBlueCards ?? 0), "cartões azuis do visitante"],
+            [
+              payload.homeYellowCardPlayers.length,
+              Number(match.homeYellowCards ?? 0),
+              "cartões amarelos da casa",
+            ],
+            [
+              payload.awayYellowCardPlayers.length,
+              Number(match.awayYellowCards ?? 0),
+              "cartões amarelos do visitante",
+            ],
+            [
+              payload.homeRedCardPlayers.length,
+              Number(match.homeRedCards ?? 0),
+              "cartões vermelhos da casa",
+            ],
+            [
+              payload.awayRedCardPlayers.length,
+              Number(match.awayRedCards ?? 0),
+              "cartões vermelhos do visitante",
+            ],
+            [
+              payload.homeBlueCardPlayers.length,
+              Number(match.homeBlueCards ?? 0),
+              "cartões azuis da casa",
+            ],
+            [
+              payload.awayBlueCardPlayers.length,
+              Number(match.awayBlueCards ?? 0),
+              "cartões azuis do visitante",
+            ],
           ];
 
           if (!supportsCards && disciplineChecks.some(([actual]) => actual > 0)) {
@@ -1056,10 +1104,18 @@ export function createMatchesRouter(authService: AuthService): Router {
           ]);
 
           await Promise.all([
-            transaction.query("DELETE FROM public.match_award_goal_scorers WHERE match_id = $1", [matchId]),
-            transaction.query("DELETE FROM public.match_yellow_card_players WHERE match_id = $1", [matchId]),
-            transaction.query("DELETE FROM public.match_red_card_players WHERE match_id = $1", [matchId]),
-            transaction.query("DELETE FROM public.match_blue_card_players WHERE match_id = $1", [matchId]),
+            transaction.query("DELETE FROM public.match_award_goal_scorers WHERE match_id = $1", [
+              matchId,
+            ]),
+            transaction.query("DELETE FROM public.match_yellow_card_players WHERE match_id = $1", [
+              matchId,
+            ]),
+            transaction.query("DELETE FROM public.match_red_card_players WHERE match_id = $1", [
+              matchId,
+            ]),
+            transaction.query("DELETE FROM public.match_blue_card_players WHERE match_id = $1", [
+              matchId,
+            ]),
           ]);
 
           const insertOrdered = async (
@@ -1077,14 +1133,54 @@ export function createMatchesRouter(authService: AuthService): Router {
             }
           };
 
-          await insertOrdered("match_award_goal_scorers", "goal_order", String(match.homeTeamId), homeGoals);
-          await insertOrdered("match_award_goal_scorers", "goal_order", String(match.awayTeamId), awayGoals);
-          await insertOrdered("match_yellow_card_players", "card_order", String(match.homeTeamId), homeYellow);
-          await insertOrdered("match_yellow_card_players", "card_order", String(match.awayTeamId), awayYellow);
-          await insertOrdered("match_red_card_players", "card_order", String(match.homeTeamId), homeRed);
-          await insertOrdered("match_red_card_players", "card_order", String(match.awayTeamId), awayRed);
-          await insertOrdered("match_blue_card_players", "card_order", String(match.homeTeamId), homeBlue);
-          await insertOrdered("match_blue_card_players", "card_order", String(match.awayTeamId), awayBlue);
+          await insertOrdered(
+            "match_award_goal_scorers",
+            "goal_order",
+            String(match.homeTeamId),
+            homeGoals,
+          );
+          await insertOrdered(
+            "match_award_goal_scorers",
+            "goal_order",
+            String(match.awayTeamId),
+            awayGoals,
+          );
+          await insertOrdered(
+            "match_yellow_card_players",
+            "card_order",
+            String(match.homeTeamId),
+            homeYellow,
+          );
+          await insertOrdered(
+            "match_yellow_card_players",
+            "card_order",
+            String(match.awayTeamId),
+            awayYellow,
+          );
+          await insertOrdered(
+            "match_red_card_players",
+            "card_order",
+            String(match.homeTeamId),
+            homeRed,
+          );
+          await insertOrdered(
+            "match_red_card_players",
+            "card_order",
+            String(match.awayTeamId),
+            awayRed,
+          );
+          await insertOrdered(
+            "match_blue_card_players",
+            "card_order",
+            String(match.homeTeamId),
+            homeBlue,
+          );
+          await insertOrdered(
+            "match_blue_card_players",
+            "card_order",
+            String(match.awayTeamId),
+            awayBlue,
+          );
 
           await transaction.query(
             "UPDATE public.matches SET is_score_sheet_reviewed = true, updated_at = now() WHERE id = $1",
