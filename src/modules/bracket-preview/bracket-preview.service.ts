@@ -597,6 +597,7 @@ export class BracketPreviewService {
   constructor(
     private readonly database: DatabaseConnection,
     private readonly queue: PreviewQueue,
+    private readonly maxProcessAttempts = 5,
   ) {}
 
   async start(
@@ -740,10 +741,12 @@ export class BracketPreviewService {
           SET status='INITIALIZING', stage='Preparando prévia', started_at=COALESCE(started_at, now()),
               heartbeat_at=now(), attempt_count=attempt_count+1, updated_at=now()
         WHERE id=$1 AND status='QUEUED'
-        RETURNING payload`,
+        RETURNING payload, attempt_count AS "attemptCount"`,
       [jobId],
     );
     if (!claimed.rows[0]) return;
+
+    const attemptCount = numberValue(claimed.rows[0].attemptCount, 1);
 
     try {
       const payload = record(claimed.rows[0].payload);
@@ -786,12 +789,19 @@ export class BracketPreviewService {
       if (!completed.rows[0]) return;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Falha ao processar a prévia.";
+      const exhausted = attemptCount >= this.maxProcessAttempts;
       await this.database.query(
         `UPDATE public.championship_bracket_preview_jobs
-            SET status='FAILED', stage='Falha', error_message=$2,
-                completed_at=now(), heartbeat_at=now(), updated_at=now()
+            SET status=$3, stage=$4, error_message=$2,
+                completed_at=CASE WHEN $3 = 'FAILED' THEN now() ELSE NULL END,
+                heartbeat_at=now(), updated_at=now()
           WHERE id=$1 AND status IN ('INITIALIZING','SCHEDULING','FINALIZING')`,
-        [jobId, message],
+        [
+          jobId,
+          message,
+          exhausted ? "FAILED" : "QUEUED",
+          exhausted ? "Falha após esgotar tentativas" : "Aguardando nova tentativa",
+        ],
       );
       throw error;
     }
@@ -800,30 +810,19 @@ export class BracketPreviewService {
   async recoverAndCleanup(): Promise<number> {
     const stale = await this.database.query(
       `UPDATE public.championship_bracket_preview_jobs
-          SET status='QUEUED', stage='Na fila', heartbeat_at=now(), updated_at=now()
+          SET status='QUEUED', stage='Aguardando nova tentativa', heartbeat_at=now(), updated_at=now()
         WHERE status IN ('INITIALIZING','SCHEDULING','FINALIZING')
           AND COALESCE(heartbeat_at, updated_at) < now() - interval '90 seconds'
           AND expires_at > now()
         RETURNING id`,
     );
 
-    const queued = await this.database.query(
-      `SELECT id FROM public.championship_bracket_preview_jobs
-        WHERE status='QUEUED' AND expires_at > now()
-        ORDER BY created_at
-        LIMIT 20`,
-    );
-    const ids = [...new Set([...stale.rows, ...queued.rows].map((row) => String(row.id)))];
-    for (const id of ids) {
-      await this.queue.sendProcessJob(id);
-    }
-
     await this.database.query(
       `DELETE FROM public.championship_bracket_preview_jobs
         WHERE expires_at < now()
           AND status IN ('COMPLETED','FAILED','CANCELLED','CONSUMED')`,
     );
-    return ids.length;
+    return stale.rows.length;
   }
 }
 
