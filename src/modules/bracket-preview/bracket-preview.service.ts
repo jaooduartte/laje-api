@@ -735,6 +735,15 @@ export class BracketPreviewService {
     return this.get(jobId);
   }
 
+  async heartbeat(jobId: string): Promise<void> {
+    await this.database.query(
+      `UPDATE public.championship_bracket_preview_jobs
+          SET heartbeat_at=now(), updated_at=now()
+        WHERE id=$1 AND status IN ('INITIALIZING','SCHEDULING','FINALIZING')`,
+      [jobId],
+    );
+  }
+
   async process(jobId: string): Promise<void> {
     const claimed = await this.database.query(
       `UPDATE public.championship_bracket_preview_jobs
