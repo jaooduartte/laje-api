@@ -857,6 +857,40 @@ export function createPublicRuntimeRouter(): Router {
                 [locationIds],
               );
 
+        const courtIds = courtsResult.rows.map((row) => String(row.id));
+        const courtSportsResult =
+          courtIds.length === 0
+            ? { rows: [] as Array<Record<string, unknown>> }
+            : await database.query(
+                `SELECT bracket_court_id AS "bracketCourtId",
+                   sport_id AS "sportId",
+                   preferred_naipe AS "preferredNaipe",
+                   preferred_division AS "preferredDivision",
+                   sequence_mode AS "sequenceMode",
+                   alternate_naipe_after_exclusive_knockout_phase AS "alternateNaipeAfterExclusiveKnockoutPhase"
+                 FROM public.championship_bracket_court_sports
+                 WHERE bracket_court_id = ANY($1::uuid[])
+                 ORDER BY bracket_court_id, sport_id`,
+                [courtIds],
+              );
+
+        const courtSportsByCourtId = new Map<string, Array<Record<string, unknown>>>();
+        for (const row of courtSportsResult.rows) {
+          const courtId = String(row.bracketCourtId);
+          courtSportsByCourtId.set(courtId, [
+            ...(courtSportsByCourtId.get(courtId) ?? []),
+            {
+              sport_id: String(row.sportId),
+              preferred_naipe: row.preferredNaipe == null ? null : String(row.preferredNaipe),
+              preferred_division:
+                row.preferredDivision == null ? null : String(row.preferredDivision),
+              sequence_mode: String(row.sequenceMode),
+              alternate_naipe_after_exclusive_knockout_phase:
+                row.alternateNaipeAfterExclusiveKnockoutPhase === true,
+            },
+          ]);
+        }
+
         const courtsByLocationId = new Map<string, Array<Record<string, unknown>>>();
         for (const row of courtsResult.rows) {
           const locationId = String(row.bracketLocationId);
@@ -867,6 +901,7 @@ export function createPublicRuntimeRouter(): Router {
               name: String(row.name),
               position: Number(row.position),
               court_group_id: String(row.courtGroupId),
+              championship_bracket_court_sports: courtSportsByCourtId.get(String(row.id)) ?? [],
             },
           ]);
         }
