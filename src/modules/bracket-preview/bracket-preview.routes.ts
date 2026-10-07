@@ -54,7 +54,11 @@ export function createBracketPreviewRouter(authService: AuthService): Router {
       );
       const jobId = requireUuid(request.params.jobId, "jobId");
       const requestedBy = requireRequestUserId(request as AuthenticatedRequest);
-      const job = await bracketPreviewService.getForChampionship(jobId, championshipId, requestedBy);
+      const job = await bracketPreviewService.getForChampionship(
+        jobId,
+        championshipId,
+        requestedBy,
+      );
       response.status(200).json({ data: job });
     } catch (error) {
       next(error);

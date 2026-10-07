@@ -40,10 +40,7 @@ async function isApplied(migration: string): Promise<boolean> {
   return result.rows.length > 0;
 }
 
-async function applyMigration(
-  migration: string,
-  statements: string[],
-): Promise<void> {
+async function applyMigration(migration: string, statements: string[]): Promise<void> {
   await database.transaction(async (executor: DatabaseQueryExecutor) => {
     for (const statement of statements) {
       await executor.query(statement);
@@ -70,9 +67,7 @@ async function main(): Promise<void> {
     const script = await readFile(path, "utf8");
     const statements = splitSqlStatements(script);
 
-    console.log(
-      `Applying operational migration ${migration} (${statements.length} statement(s))`,
-    );
+    console.log(`Applying operational migration ${migration} (${statements.length} statement(s))`);
     await applyMigration(migration, statements);
   }
 

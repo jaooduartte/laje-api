@@ -97,8 +97,7 @@ test("rejects oversized preview payloads before touching PostgreSQL or SQS", asy
         "33333333-3333-4333-8333-333333333333",
       ),
     (error: unknown) =>
-      error instanceof Error &&
-      error.message.includes("excede o limite seguro de 2 MiB"),
+      error instanceof Error && error.message.includes("excede o limite seguro de 2 MiB"),
   );
 
   assert.equal(calls.length, 0);
@@ -122,9 +121,7 @@ test("delegates resumable processing to the exact v8 engine and schedules only t
   const processing = await service.process("44444444-4444-4444-8444-444444444444");
 
   assert.deepEqual(processing, { continue: true, delaySeconds: 7 });
-  assert.deepEqual(published, [
-    { jobId: "44444444-4444-4444-8444-444444444444", delaySeconds: 7 },
-  ]);
+  assert.deepEqual(published, [{ jobId: "44444444-4444-4444-8444-444444444444", delaySeconds: 7 }]);
 });
 
 test("maintenance only performs bounded cleanup and never duplicates PROCESS_PREVIEW messages", async () => {
