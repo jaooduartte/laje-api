@@ -9,7 +9,15 @@ import {
 } from "../auth/auth.middleware.js";
 import type { AuthService } from "../auth/auth.service.js";
 import { bracketPreviewService } from "./bracket-preview.runtime.js";
-import { serializePreviewJob } from "./bracket-preview.service.js";
+import { exactPreviewJobStatus } from "./bracket-preview.service.js";
+
+function requireRequestUserId(request: AuthenticatedRequest): string {
+  const userId = request.authPrincipal?.userId;
+  if (!userId) {
+    throw new ApiError(401, "AUTHENTICATION_REQUIRED", "Autenticação obrigatória.");
+  }
+  return userId;
+}
 
 export function createBracketPreviewRouter(authService: AuthService): Router {
   const router = Router({ mergeParams: true });
@@ -30,11 +38,9 @@ export function createBracketPreviewRouter(authService: AuthService): Router {
         "championshipId",
       );
       const payload = requireRecord(request.body, "Payload de prévia inválido.");
-      const requestedBy = (request as AuthenticatedRequest).authPrincipal?.userId ?? null;
+      const requestedBy = requireRequestUserId(request as AuthenticatedRequest);
       const job = await bracketPreviewService.start(championshipId, payload, requestedBy);
-      response.status(job.status === "QUEUED" ? 202 : 200).json({
-        data: serializePreviewJob(job),
-      });
+      response.status(exactPreviewJobStatus(job) === "QUEUED" ? 202 : 200).json({ data: job });
     } catch (error) {
       next(error);
     }
@@ -47,11 +53,9 @@ export function createBracketPreviewRouter(authService: AuthService): Router {
         "championshipId",
       );
       const jobId = requireUuid(request.params.jobId, "jobId");
-      const job = await bracketPreviewService.get(jobId);
-      if (job.championshipId !== championshipId) {
-        throw new ApiError(404, "PREVIEW_JOB_NOT_FOUND", "Prévia não encontrada.");
-      }
-      response.status(200).json({ data: serializePreviewJob(job) });
+      const requestedBy = requireRequestUserId(request as AuthenticatedRequest);
+      const job = await bracketPreviewService.getForChampionship(jobId, championshipId, requestedBy);
+      response.status(200).json({ data: job });
     } catch (error) {
       next(error);
     }
@@ -68,11 +72,11 @@ export function createBracketPreviewRouter(authService: AuthService): Router {
       if (!date) {
         throw new ApiError(422, "VALIDATION_ERROR", "Data da prévia inválida.");
       }
-      const job = await bracketPreviewService.get(jobId);
-      if (job.championshipId !== championshipId) {
-        throw new ApiError(404, "PREVIEW_JOB_NOT_FOUND", "Prévia não encontrada.");
-      }
-      response.status(200).json({ data: await bracketPreviewService.getDay(jobId, date) });
+      const requestedBy = requireRequestUserId(request as AuthenticatedRequest);
+      await bracketPreviewService.getForChampionship(jobId, championshipId, requestedBy);
+      response.status(200).json({
+        data: await bracketPreviewService.getDay(jobId, date, requestedBy),
+      });
     } catch (error) {
       next(error);
     }
@@ -85,12 +89,32 @@ export function createBracketPreviewRouter(authService: AuthService): Router {
         "championshipId",
       );
       const jobId = requireUuid(request.params.jobId, "jobId");
-      const existing = await bracketPreviewService.get(jobId);
-      if (existing.championshipId !== championshipId) {
-        throw new ApiError(404, "PREVIEW_JOB_NOT_FOUND", "Prévia não encontrada.");
-      }
-      const job = await bracketPreviewService.cancel(jobId);
-      response.status(200).json({ data: serializePreviewJob(job) });
+      const requestedBy = requireRequestUserId(request as AuthenticatedRequest);
+      await bracketPreviewService.getForChampionship(jobId, championshipId, requestedBy);
+      const job = await bracketPreviewService.cancel(jobId, requestedBy);
+      response.status(200).json({ data: job });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/:jobId/create", ...requirePreviewEdit, async (request, response, next) => {
+    try {
+      const championshipId = requireUuid(
+        (request.params as Record<string, unknown>).championshipId,
+        "championshipId",
+      );
+      const jobId = requireUuid(request.params.jobId, "jobId");
+      const payload = requireRecord(request.body, "Payload de chaveamento inválido.");
+      const requestedBy = requireRequestUserId(request as AuthenticatedRequest);
+      await bracketPreviewService.getForChampionship(jobId, championshipId, requestedBy);
+      const editionId = await bracketPreviewService.createBracket(
+        jobId,
+        championshipId,
+        payload,
+        requestedBy,
+      );
+      response.status(201).json({ data: { editionId } });
     } catch (error) {
       next(error);
     }
@@ -114,9 +138,8 @@ export function createGlobalBracketPreviewRouter(authService: AuthService): Rout
   router.get("/:jobId", ...requirePreviewView, async (request, response, next) => {
     try {
       const jobId = requireUuid(request.params.jobId, "jobId");
-      response
-        .status(200)
-        .json({ data: serializePreviewJob(await bracketPreviewService.get(jobId)) });
+      const requestedBy = requireRequestUserId(request as AuthenticatedRequest);
+      response.status(200).json({ data: await bracketPreviewService.get(jobId, requestedBy) });
     } catch (error) {
       next(error);
     }
@@ -127,7 +150,10 @@ export function createGlobalBracketPreviewRouter(authService: AuthService): Rout
       const jobId = requireUuid(request.params.jobId, "jobId");
       const date = parseDate(request.params.date, "date");
       if (!date) throw new ApiError(422, "VALIDATION_ERROR", "Data da prévia inválida.");
-      response.status(200).json({ data: await bracketPreviewService.getDay(jobId, date) });
+      const requestedBy = requireRequestUserId(request as AuthenticatedRequest);
+      response.status(200).json({
+        data: await bracketPreviewService.getDay(jobId, date, requestedBy),
+      });
     } catch (error) {
       next(error);
     }
@@ -136,8 +162,9 @@ export function createGlobalBracketPreviewRouter(authService: AuthService): Rout
   router.post("/:jobId/cancel", ...requirePreviewEdit, async (request, response, next) => {
     try {
       const jobId = requireUuid(request.params.jobId, "jobId");
+      const requestedBy = requireRequestUserId(request as AuthenticatedRequest);
       response.status(200).json({
-        data: serializePreviewJob(await bracketPreviewService.cancel(jobId)),
+        data: await bracketPreviewService.cancel(jobId, requestedBy),
       });
     } catch (error) {
       next(error);
