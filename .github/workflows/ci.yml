@@ -95,10 +95,7 @@ jobs:
         run: npm run lint
 
       - name: Check formatting
-        run: |
-          npx prettier src/modules/matches/matches.routes.ts src/modules/public-runtime/public-runtime.routes.ts --write
-          git diff -- src/modules/matches/matches.routes.ts src/modules/public-runtime/public-runtime.routes.ts
-          exit 1
+        run: npm run format:check
 
       - name: Run tests
         run: npm test
