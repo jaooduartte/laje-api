@@ -138,14 +138,16 @@ export async function sendReservationEmail(input: ReservationEmailInput): Promis
 
   if (adminRecipients.length === 0) return;
 
-  try {
-    await sendBrevoEmail(
-      [...new Set(adminRecipients)].map((email) => ({ email })),
-      `Nova solicitação de reserva: ${input.eventName}`,
-      buildAdminHtml(input),
-    );
-  } catch (error) {
-    console.error("reservation-admin-email-failed", error);
+  for (const email of [...new Set(adminRecipients)]) {
+    try {
+      await sendBrevoEmail(
+        [{ email }],
+        `Nova solicitação de reserva: ${input.eventName} (${input.teamName})`,
+        buildAdminHtml(input),
+      );
+    } catch (error) {
+      console.error(`reservation-admin-email-failed recipient=${email}`, error);
+    }
   }
 }
 
