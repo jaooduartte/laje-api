@@ -3,7 +3,7 @@ name: Deploy AWS
 on:
   push:
     branches:
-      - LAJE-126
+      - LAJE-136
     paths:
       - ".github/workflows/deploy-aws.yml"
       - "infra/aws/terraform/**"
@@ -79,7 +79,7 @@ jobs:
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
             echo "action=${INPUT_ACTION}" >> "${GITHUB_OUTPUT}"
           else
-            echo "action=suspend" >> "${GITHUB_OUTPUT}"
+            echo "action=deploy" >> "${GITHUB_OUTPUT}"
           fi
           echo "image_tag=sha-${GITHUB_SHA::12}" >> "${GITHUB_OUTPUT}"
 
