@@ -671,7 +671,7 @@ export class BracketPreviewService {
          dependency_signature, algorithm_version, total_slots, heartbeat_at)
        VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, now())
        RETURNING id AS "jobId", championship_id AS "championshipId", season_year AS "seasonYear",
-         status, stage, current_date::text AS "currentDate",
+         status, stage, current_preview_date::text AS "currentDate",
          progress_percentage::float8 AS "progressPercentage", processed_slots AS "processedSlots",
          total_slots AS "totalSlots", attempt_count AS "attemptCount", error_message AS "errorMessage",
          summary, diagnostics, payload, payload_signature AS "payloadSignature",
