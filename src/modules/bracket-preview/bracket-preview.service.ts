@@ -3,11 +3,17 @@ import { createHash } from "node:crypto";
 import { ApiError } from "../../common/errors/api-error.js";
 import type { DatabaseConnection, DatabaseQueryExecutor, DatabaseRow } from "../../database/types.js";
 
-const ACTIVE_STATUSES = ["QUEUED", "INITIALIZING", "SCHEDULING", "FINALIZING"] as const;
-const TERMINAL_STATUSES = ["COMPLETED", "FAILED", "CANCELLED", "CONSUMED"] as const;
 const ALGORITHM_VERSION = "aws-structural-v1";
 
-type PreviewStatus = (typeof ACTIVE_STATUSES)[number] | (typeof TERMINAL_STATUSES)[number];
+type PreviewStatus =
+  | "QUEUED"
+  | "INITIALIZING"
+  | "SCHEDULING"
+  | "FINALIZING"
+  | "COMPLETED"
+  | "FAILED"
+  | "CANCELLED"
+  | "CONSUMED";
 
 interface PreviewQueue {
   sendProcessJob(jobId: string, delaySeconds?: number): Promise<void>;
@@ -388,7 +394,7 @@ export function buildBracketPreviewResult(
       courts.push(court);
     }
 
-    let descriptor: ScheduledMatchDescriptor | null = null;
+    let descriptor: ScheduledMatchDescriptor | null;
     if (slot.phase === "GROUP_STAGE") {
       const queue = matchQueues.get(slot.competition_key) ?? [];
       const cursor = matchCursor.get(slot.competition_key) ?? 0;
