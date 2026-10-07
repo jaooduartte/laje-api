@@ -297,7 +297,7 @@ async function loadNames(
   return { teamNames, sportNames };
 }
 
-function buildPreviewResult(
+export function buildBracketPreviewResult(
   payload: Record<string, unknown>,
   teamNames: Map<string, string>,
   sportNames: Map<string, string>,
@@ -722,7 +722,7 @@ export class BracketPreviewService {
       );
 
       const names = await loadNames(this.database, payload);
-      const result = buildPreviewResult(payload, names.teamNames, names.sportNames);
+      const result = buildBracketPreviewResult(payload, names.teamNames, names.sportNames);
       const generationSignature = signature(result.days);
       result.generation_signature = generationSignature;
 
