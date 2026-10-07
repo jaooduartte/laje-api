@@ -43,18 +43,18 @@ Por isso:
 
 ## 3. Decisão de serviços AWS
 
-| Responsabilidade                | Serviço / tecnologia escolhida | Decisão                                                                                                                  |
-| ------------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
-| Runtime da API                  | Amazon ECS com AWS Fargate     | Executar containers sem manter servidor EC2, preservando controle de imagem, rede, task definition e deploy.             |
-| Registry                        | Amazon ECR                     | Armazenar imagens versionadas da `laje-api`.                                                                             |
-| Entrada HTTP/HTTPS              | Application Load Balancer      | Terminar TLS, executar health checks e encaminhar somente tráfego permitido para as tasks ECS.                           |
-| Certificado TLS da API          | AWS Certificate Manager        | Certificado gerenciado para o domínio/subdomínio da API.                                                                 |
-| Persistência                    | Amazon RDS for PostgreSQL 17   | Compatibilidade direta com o baseline PostgreSQL 17 e menor complexidade operacional que manter PostgreSQL em container. |
-| Segredos                        | AWS Secrets Manager            | Credenciais de banco e segredos de integração ficam fora do GitHub e fora de variáveis públicas.                         |
-| Logs e métricas                 | Amazon CloudWatch              | Logs da API, métricas de ECS/ALB/RDS e alarmes operacionais mínimos.                                                     |
-| Processamento assíncrono        | Amazon SQS + DLQ               | Implementado na LAJE-126 para substituir `pgmq`, com retry/redrive e worker da `laje-api`.                               |
-| Agendamentos                    | Amazon EventBridge Scheduler   | Implementado na LAJE-126 para substituir `pg_cron` operacional.                                                          |
-| CI/CD                           | GitHub Actions + OIDC para AWS | Evitar access keys AWS de longa duração no GitHub; build, push da imagem e deploy automatizado.                          |
+| Responsabilidade         | Serviço / tecnologia escolhida | Decisão                                                                                                                  |
+| ------------------------ | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| Runtime da API           | Amazon ECS com AWS Fargate     | Executar containers sem manter servidor EC2, preservando controle de imagem, rede, task definition e deploy.             |
+| Registry                 | Amazon ECR                     | Armazenar imagens versionadas da `laje-api`.                                                                             |
+| Entrada HTTP/HTTPS       | Application Load Balancer      | Terminar TLS, executar health checks e encaminhar somente tráfego permitido para as tasks ECS.                           |
+| Certificado TLS da API   | AWS Certificate Manager        | Certificado gerenciado para o domínio/subdomínio da API.                                                                 |
+| Persistência             | Amazon RDS for PostgreSQL 17   | Compatibilidade direta com o baseline PostgreSQL 17 e menor complexidade operacional que manter PostgreSQL em container. |
+| Segredos                 | AWS Secrets Manager            | Credenciais de banco e segredos de integração ficam fora do GitHub e fora de variáveis públicas.                         |
+| Logs e métricas          | Amazon CloudWatch              | Logs da API, métricas de ECS/ALB/RDS e alarmes operacionais mínimos.                                                     |
+| Processamento assíncrono | Amazon SQS + DLQ               | Implementado na LAJE-126 para substituir `pgmq`, com retry/redrive e worker da `laje-api`.                               |
+| Agendamentos             | Amazon EventBridge Scheduler   | Implementado na LAJE-126 para substituir `pg_cron` operacional.                                                          |
+| CI/CD                    | GitHub Actions + OIDC para AWS | Evitar access keys AWS de longa duração no GitHub; build, push da imagem e deploy automatizado.                          |
 
 ### Por que ECS/Fargate
 
