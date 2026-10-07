@@ -168,6 +168,12 @@ const bracketPreviewVisibilityTimeoutSeconds = optionalInteger(
   30,
   900,
 );
+const bracketPreviewMaxReceiveCount = optionalInteger(
+  "BRACKET_PREVIEW_MAX_RECEIVE_COUNT",
+  5,
+  1,
+  100,
+);
 if (awsEnabled && !awsRegion) {
   issues.push("AWS_REGION is required when AWS_ENABLED=true.");
 }
@@ -241,6 +247,7 @@ export const environment = createRedactedConfig(
       bracketPreviewWorkerEnabled,
       bracketPreviewPollWaitSeconds,
       bracketPreviewVisibilityTimeoutSeconds,
+      bracketPreviewMaxReceiveCount,
     }),
     mail,
   },
