@@ -8,4 +8,5 @@ export const awsConfig = Object.freeze({
   bracketPreviewWorkerEnabled: environment.aws.bracketPreviewWorkerEnabled,
   bracketPreviewPollWaitSeconds: environment.aws.bracketPreviewPollWaitSeconds,
   bracketPreviewVisibilityTimeoutSeconds: environment.aws.bracketPreviewVisibilityTimeoutSeconds,
+  bracketPreviewMaxReceiveCount: environment.aws.bracketPreviewMaxReceiveCount,
 });
