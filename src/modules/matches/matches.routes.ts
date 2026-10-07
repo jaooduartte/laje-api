@@ -487,11 +487,307 @@ async function persistScoreboardPatch(
   }
 }
 
+
+interface ScoreSheetSelectionInput {
+  playerId?: string;
+  playerName?: string;
+}
+
+interface ScoreSheetSavePayload {
+  homeGoalScorers: ScoreSheetSelectionInput[];
+  awayGoalScorers: ScoreSheetSelectionInput[];
+  homeYellowCardPlayers: ScoreSheetSelectionInput[];
+  awayYellowCardPlayers: ScoreSheetSelectionInput[];
+  homeRedCardPlayers: ScoreSheetSelectionInput[];
+  awayRedCardPlayers: ScoreSheetSelectionInput[];
+  homeBlueCardPlayers: ScoreSheetSelectionInput[];
+  awayBlueCardPlayers: ScoreSheetSelectionInput[];
+}
+
+function parseScoreSheetSelections(value: unknown, field: string): ScoreSheetSelectionInput[] {
+  if (value == null) return [];
+  if (!Array.isArray(value)) {
+    throw new ApiError(422, "VALIDATION_ERROR", `O campo ${field} deve ser uma lista.`);
+  }
+
+  return value.map((rawSelection, index) => {
+    const selection = requireRecord(rawSelection, `${field}[${index}] inválido.`);
+    const playerId =
+      selection.playerId == null ? undefined : requireUuid(selection.playerId, `${field}[${index}].playerId`);
+    const playerName =
+      selection.playerName == null
+        ? undefined
+        : optionalString(selection.playerName, `${field}[${index}].playerName`, 180);
+
+    if (!playerId && !playerName) {
+      throw new ApiError(
+        422,
+        "VALIDATION_ERROR",
+        `Informe playerId ou playerName em ${field}[${index}].`,
+      );
+    }
+
+    return {
+      ...(playerId ? { playerId } : {}),
+      ...(playerName ? { playerName } : {}),
+    };
+  });
+}
+
+function parseScoreSheetSavePayload(body: unknown): ScoreSheetSavePayload {
+  const payload = requireRecord(body);
+  return {
+    homeGoalScorers: parseScoreSheetSelections(payload.homeGoalScorers, "homeGoalScorers"),
+    awayGoalScorers: parseScoreSheetSelections(payload.awayGoalScorers, "awayGoalScorers"),
+    homeYellowCardPlayers: parseScoreSheetSelections(
+      payload.homeYellowCardPlayers,
+      "homeYellowCardPlayers",
+    ),
+    awayYellowCardPlayers: parseScoreSheetSelections(
+      payload.awayYellowCardPlayers,
+      "awayYellowCardPlayers",
+    ),
+    homeRedCardPlayers: parseScoreSheetSelections(payload.homeRedCardPlayers, "homeRedCardPlayers"),
+    awayRedCardPlayers: parseScoreSheetSelections(payload.awayRedCardPlayers, "awayRedCardPlayers"),
+    homeBlueCardPlayers: parseScoreSheetSelections(
+      payload.homeBlueCardPlayers,
+      "homeBlueCardPlayers",
+    ),
+    awayBlueCardPlayers: parseScoreSheetSelections(
+      payload.awayBlueCardPlayers,
+      "awayBlueCardPlayers",
+    ),
+  };
+}
+
+function normalizeAwardPlayerName(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLocaleLowerCase("pt-BR");
+}
+
+async function resolveScoreSheetPlayerId(
+  executor: DatabaseQueryExecutor,
+  selection: ScoreSheetSelectionInput,
+  scope: {
+    championshipId: string;
+    seasonYear: number;
+    sportId: string;
+    teamId: string;
+    naipe: string;
+    division: string | null;
+  },
+): Promise<string> {
+  if (selection.playerId) {
+    const existing = await executor.query(
+      `SELECT id
+       FROM public.championship_award_players
+       WHERE id = $1
+         AND championship_id = $2
+         AND season_year = $3
+         AND sport_id = $4
+         AND team_id = $5
+         AND naipe = $6::public.match_naipe
+         AND division IS NOT DISTINCT FROM $7::public.team_division
+       LIMIT 1`,
+      [
+        selection.playerId,
+        scope.championshipId,
+        scope.seasonYear,
+        scope.sportId,
+        scope.teamId,
+        scope.naipe,
+        scope.division,
+      ],
+    );
+
+    if (existing.rows[0]?.id) return String(existing.rows[0].id);
+    throw new ApiError(422, "INVALID_SCORE_SHEET_PLAYER", "Atleta inválido para esta súmula.");
+  }
+
+  const name = selection.playerName?.trim() ?? "";
+  if (!name) {
+    throw new ApiError(422, "INVALID_SCORE_SHEET_PLAYER", "Nome do atleta não informado.");
+  }
+  const normalizedName = normalizeAwardPlayerName(name);
+
+  const findPlayer = async () =>
+    executor.query(
+      `SELECT id
+       FROM public.championship_award_players
+       WHERE championship_id = $1
+         AND season_year = $2
+         AND sport_id = $3
+         AND team_id = $4
+         AND naipe = $5::public.match_naipe
+         AND division IS NOT DISTINCT FROM $6::public.team_division
+         AND normalized_name = $7
+       LIMIT 1`,
+      [
+        scope.championshipId,
+        scope.seasonYear,
+        scope.sportId,
+        scope.teamId,
+        scope.naipe,
+        scope.division,
+        normalizedName,
+      ],
+    );
+
+  const existing = await findPlayer();
+  if (existing.rows[0]?.id) return String(existing.rows[0].id);
+
+  await executor.query(
+    `INSERT INTO public.championship_award_players
+       (championship_id, season_year, sport_id, team_id, naipe, division, name, normalized_name)
+     VALUES ($1, $2, $3, $4, $5::public.match_naipe, $6::public.team_division, $7, $8)
+     ON CONFLICT DO NOTHING`,
+    [
+      scope.championshipId,
+      scope.seasonYear,
+      scope.sportId,
+      scope.teamId,
+      scope.naipe,
+      scope.division,
+      name,
+      normalizedName,
+    ],
+  );
+
+  const createdOrExisting = await findPlayer();
+  if (!createdOrExisting.rows[0]?.id) {
+    throw new ApiError(500, "SCORE_SHEET_PLAYER_SAVE_FAILED", "Não foi possível salvar o atleta.");
+  }
+  return String(createdOrExisting.rows[0].id);
+}
+
+async function getScoreSheetAwardsContext(executor: DatabaseQueryExecutor, matchId: string) {
+  const result = await executor.query(
+    `WITH match_context AS (
+       SELECT
+         m.*,
+         c.code AS championship_code,
+         s.name AS sport_name,
+         COALESCE(m.supports_cards, false) OR COALESCE(cs.supports_cards, false) AS supports_cards,
+         (
+           c.code = 'SOCIETY'::public.championship_code
+           AND COALESCE(cs.supports_individual_awards, false)
+           AND lower(trim(s.name)) = 'futebol society'
+         ) AS requires_goal_scorers
+       FROM public.matches m
+       JOIN public.championships c ON c.id = m.championship_id
+       JOIN public.sports s ON s.id = m.sport_id
+       JOIN public.championship_sports cs
+         ON cs.championship_id = m.championship_id AND cs.sport_id = m.sport_id
+       WHERE m.id = $1
+       LIMIT 1
+     )
+     SELECT jsonb_build_object(
+       'match_id', mc.id,
+       'home_team_id', mc.home_team_id,
+       'away_team_id', mc.away_team_id,
+       'requires_goal_scorers', mc.requires_goal_scorers,
+       'required_home_goals', CASE WHEN mc.requires_goal_scorers THEN COALESCE(mc.home_score, 0) ELSE 0 END,
+       'required_away_goals', CASE WHEN mc.requires_goal_scorers THEN COALESCE(mc.away_score, 0) ELSE 0 END,
+       'required_home_yellow_cards', CASE WHEN mc.supports_cards THEN COALESCE(mc.home_yellow_cards, 0) ELSE 0 END,
+       'required_away_yellow_cards', CASE WHEN mc.supports_cards THEN COALESCE(mc.away_yellow_cards, 0) ELSE 0 END,
+       'required_home_red_cards', CASE WHEN mc.supports_cards THEN COALESCE(mc.home_red_cards, 0) ELSE 0 END,
+       'required_away_red_cards', CASE WHEN mc.supports_cards THEN COALESCE(mc.away_red_cards, 0) ELSE 0 END,
+       'required_home_blue_cards', CASE WHEN mc.supports_cards THEN COALESCE(mc.home_blue_cards, 0) ELSE 0 END,
+       'required_away_blue_cards', CASE WHEN mc.supports_cards THEN COALESCE(mc.away_blue_cards, 0) ELSE 0 END,
+       'supports_cards', mc.supports_cards,
+       'is_walkover', COALESCE(mc.is_walkover, false),
+       'home_players', COALESCE((
+         SELECT jsonb_agg(jsonb_build_object('id', p.id, 'name', p.name) ORDER BY p.name)
+         FROM public.championship_award_players p
+         WHERE p.championship_id = mc.championship_id
+           AND p.season_year = mc.season_year
+           AND p.sport_id = mc.sport_id
+           AND p.team_id = mc.home_team_id
+           AND p.naipe = mc.naipe
+           AND p.division IS NOT DISTINCT FROM mc.division
+       ), '[]'::jsonb),
+       'away_players', COALESCE((
+         SELECT jsonb_agg(jsonb_build_object('id', p.id, 'name', p.name) ORDER BY p.name)
+         FROM public.championship_award_players p
+         WHERE p.championship_id = mc.championship_id
+           AND p.season_year = mc.season_year
+           AND p.sport_id = mc.sport_id
+           AND p.team_id = mc.away_team_id
+           AND p.naipe = mc.naipe
+           AND p.division IS NOT DISTINCT FROM mc.division
+       ), '[]'::jsonb),
+       'home_goals', COALESCE((
+         SELECT jsonb_agg(jsonb_build_object('player_id', r.player_id, 'player_name', p.name) ORDER BY r.goal_order)
+         FROM public.match_award_goal_scorers r
+         JOIN public.championship_award_players p ON p.id = r.player_id
+         WHERE r.match_id = mc.id AND r.team_id = mc.home_team_id
+       ), '[]'::jsonb),
+       'away_goals', COALESCE((
+         SELECT jsonb_agg(jsonb_build_object('player_id', r.player_id, 'player_name', p.name) ORDER BY r.goal_order)
+         FROM public.match_award_goal_scorers r
+         JOIN public.championship_award_players p ON p.id = r.player_id
+         WHERE r.match_id = mc.id AND r.team_id = mc.away_team_id
+       ), '[]'::jsonb),
+       'home_yellow_cards', COALESCE((
+         SELECT jsonb_agg(jsonb_build_object('player_id', r.player_id, 'player_name', p.name) ORDER BY r.card_order)
+         FROM public.match_yellow_card_players r
+         JOIN public.championship_award_players p ON p.id = r.player_id
+         WHERE r.match_id = mc.id AND r.team_id = mc.home_team_id
+       ), '[]'::jsonb),
+       'away_yellow_cards', COALESCE((
+         SELECT jsonb_agg(jsonb_build_object('player_id', r.player_id, 'player_name', p.name) ORDER BY r.card_order)
+         FROM public.match_yellow_card_players r
+         JOIN public.championship_award_players p ON p.id = r.player_id
+         WHERE r.match_id = mc.id AND r.team_id = mc.away_team_id
+       ), '[]'::jsonb),
+       'home_red_cards', COALESCE((
+         SELECT jsonb_agg(jsonb_build_object('player_id', r.player_id, 'player_name', p.name) ORDER BY r.card_order)
+         FROM public.match_red_card_players r
+         JOIN public.championship_award_players p ON p.id = r.player_id
+         WHERE r.match_id = mc.id AND r.team_id = mc.home_team_id
+       ), '[]'::jsonb),
+       'away_red_cards', COALESCE((
+         SELECT jsonb_agg(jsonb_build_object('player_id', r.player_id, 'player_name', p.name) ORDER BY r.card_order)
+         FROM public.match_red_card_players r
+         JOIN public.championship_award_players p ON p.id = r.player_id
+         WHERE r.match_id = mc.id AND r.team_id = mc.away_team_id
+       ), '[]'::jsonb),
+       'home_blue_cards', COALESCE((
+         SELECT jsonb_agg(jsonb_build_object('player_id', r.player_id, 'player_name', p.name) ORDER BY r.card_order)
+         FROM public.match_blue_card_players r
+         JOIN public.championship_award_players p ON p.id = r.player_id
+         WHERE r.match_id = mc.id AND r.team_id = mc.home_team_id
+       ), '[]'::jsonb),
+       'away_blue_cards', COALESCE((
+         SELECT jsonb_agg(jsonb_build_object('player_id', r.player_id, 'player_name', p.name) ORDER BY r.card_order)
+         FROM public.match_blue_card_players r
+         JOIN public.championship_award_players p ON p.id = r.player_id
+         WHERE r.match_id = mc.id AND r.team_id = mc.away_team_id
+       ), '[]'::jsonb)
+     ) AS context
+     FROM match_context mc`,
+    [matchId],
+  );
+  return result.rows[0]?.context ?? null;
+}
+
 export function createMatchesRouter(authService: AuthService): Router {
   const router = Router();
   const requireAuthentication = createRequireAuthentication(authService);
   const requireControlView = [requireAuthentication, requirePermission("control", "VIEW")] as const;
   const requireControlEdit = [requireAuthentication, requirePermission("control", "EDIT")] as const;
+  const requireScoreSheetReviewView = [
+    requireAuthentication,
+    requirePermission("score_sheet_review", "VIEW"),
+  ] as const;
+  const requireScoreSheetReviewEdit = [
+    requireAuthentication,
+    requirePermission("score_sheet_review", "EDIT"),
+  ] as const;
 
   router.get("/operational-queue-state", ...requireControlView, async (request, response, next) => {
     try {
@@ -601,6 +897,248 @@ export function createMatchesRouter(authService: AuthService): Router {
       next(error);
     }
   });
+
+  router.get(
+    "/:matchId/score-sheet-awards",
+    ...requireScoreSheetReviewView,
+    async (request, response, next) => {
+      try {
+        const matchId = requireUuid(request.params.matchId, "matchId");
+        const context = await getScoreSheetAwardsContext(database, matchId);
+        if (!context) {
+          throw new ApiError(404, "MATCH_NOT_FOUND", "Jogo não encontrado.");
+        }
+        response.status(200).json({ data: context });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.put(
+    "/:matchId/score-sheet-awards",
+    ...requireScoreSheetReviewEdit,
+    async (request, response, next) => {
+      try {
+        const matchId = requireUuid(request.params.matchId, "matchId");
+        const payload = parseScoreSheetSavePayload(request.body);
+
+        const data = await database.transaction(async (transaction) => {
+          const matchResult = await transaction.query(
+            `SELECT
+               m.id,
+               m.championship_id AS "championshipId",
+               m.season_year AS "seasonYear",
+               m.sport_id AS "sportId",
+               m.home_team_id AS "homeTeamId",
+               m.away_team_id AS "awayTeamId",
+               m.naipe,
+               m.division,
+               m.status,
+               m.home_score AS "homeScore",
+               m.away_score AS "awayScore",
+               m.home_yellow_cards AS "homeYellowCards",
+               m.away_yellow_cards AS "awayYellowCards",
+               m.home_red_cards AS "homeRedCards",
+               m.away_red_cards AS "awayRedCards",
+               m.home_blue_cards AS "homeBlueCards",
+               m.away_blue_cards AS "awayBlueCards",
+               m.is_walkover AS "isWalkover",
+               c.code AS "championshipCode",
+               s.name AS "sportName",
+               cs.supports_individual_awards AS "supportsIndividualAwards",
+               (COALESCE(m.supports_cards, false) OR COALESCE(cs.supports_cards, false)) AS "supportsCards"
+             FROM public.matches m
+             JOIN public.championships c ON c.id = m.championship_id
+             JOIN public.sports s ON s.id = m.sport_id
+             JOIN public.championship_sports cs
+               ON cs.championship_id = m.championship_id AND cs.sport_id = m.sport_id
+             WHERE m.id = $1
+             LIMIT 1
+             FOR UPDATE OF m`,
+            [matchId],
+          );
+          const match = matchResult.rows[0];
+          if (!match) throw new ApiError(404, "MATCH_NOT_FOUND", "Jogo não encontrado.");
+          if (match.status !== "FINISHED") {
+            throw new ApiError(
+              409,
+              "MATCH_STATE_CONFLICT",
+              "Só é possível revisar súmulas de jogos encerrados.",
+            );
+          }
+
+          const requiresGoalScorers =
+            match.championshipCode === "SOCIETY" &&
+            match.supportsIndividualAwards === true &&
+            String(match.sportName).trim().toLocaleLowerCase("pt-BR") === "futebol society";
+          const supportsCards = match.supportsCards === true;
+
+          if (match.isWalkover === true) {
+            await Promise.all([
+              transaction.query("DELETE FROM public.match_award_goal_scorers WHERE match_id = $1", [matchId]),
+              transaction.query("DELETE FROM public.match_yellow_card_players WHERE match_id = $1", [matchId]),
+              transaction.query("DELETE FROM public.match_red_card_players WHERE match_id = $1", [matchId]),
+              transaction.query("DELETE FROM public.match_blue_card_players WHERE match_id = $1", [matchId]),
+            ]);
+            await transaction.query(
+              "UPDATE public.matches SET is_score_sheet_reviewed = true, updated_at = now() WHERE id = $1",
+              [matchId],
+            );
+            return { match_id: matchId, is_walkover: true, is_score_sheet_reviewed: true };
+          }
+
+          if (requiresGoalScorers && payload.homeGoalScorers.length !== Number(match.homeScore ?? 0)) {
+            throw new ApiError(422, "INVALID_SCORE_SHEET", "A soma de gols da casa precisa ser igual ao placar final.");
+          }
+          if (requiresGoalScorers && payload.awayGoalScorers.length !== Number(match.awayScore ?? 0)) {
+            throw new ApiError(422, "INVALID_SCORE_SHEET", "A soma de gols do visitante precisa ser igual ao placar final.");
+          }
+
+          const disciplineChecks: Array<[number, number, string]> = [
+            [payload.homeYellowCardPlayers.length, Number(match.homeYellowCards ?? 0), "cartões amarelos da casa"],
+            [payload.awayYellowCardPlayers.length, Number(match.awayYellowCards ?? 0), "cartões amarelos do visitante"],
+            [payload.homeRedCardPlayers.length, Number(match.homeRedCards ?? 0), "cartões vermelhos da casa"],
+            [payload.awayRedCardPlayers.length, Number(match.awayRedCards ?? 0), "cartões vermelhos do visitante"],
+            [payload.homeBlueCardPlayers.length, Number(match.homeBlueCards ?? 0), "cartões azuis da casa"],
+            [payload.awayBlueCardPlayers.length, Number(match.awayBlueCards ?? 0), "cartões azuis do visitante"],
+          ];
+
+          if (!supportsCards && disciplineChecks.some(([actual]) => actual > 0)) {
+            throw new ApiError(422, "INVALID_SCORE_SHEET", "Esta modalidade não utiliza cartões.");
+          }
+          if (supportsCards) {
+            const mismatch = disciplineChecks.find(([actual, expected]) => actual !== expected);
+            if (mismatch) {
+              throw new ApiError(
+                422,
+                "INVALID_SCORE_SHEET",
+                `A quantidade de ${mismatch[2]} precisa corresponder à súmula.`,
+              );
+            }
+          }
+
+          const baseScope = {
+            championshipId: String(match.championshipId),
+            seasonYear: Number(match.seasonYear),
+            sportId: String(match.sportId),
+            naipe: String(match.naipe),
+            division: match.division == null ? null : String(match.division),
+          };
+          const resolveSelections = async (
+            selections: ScoreSheetSelectionInput[],
+            teamId: string,
+          ) =>
+            Promise.all(
+              selections.map((selection) =>
+                resolveScoreSheetPlayerId(transaction, selection, { ...baseScope, teamId }),
+              ),
+            );
+
+          const [
+            homeGoals,
+            awayGoals,
+            homeYellow,
+            awayYellow,
+            homeRed,
+            awayRed,
+            homeBlue,
+            awayBlue,
+          ] = await Promise.all([
+            resolveSelections(payload.homeGoalScorers, String(match.homeTeamId)),
+            resolveSelections(payload.awayGoalScorers, String(match.awayTeamId)),
+            resolveSelections(payload.homeYellowCardPlayers, String(match.homeTeamId)),
+            resolveSelections(payload.awayYellowCardPlayers, String(match.awayTeamId)),
+            resolveSelections(payload.homeRedCardPlayers, String(match.homeTeamId)),
+            resolveSelections(payload.awayRedCardPlayers, String(match.awayTeamId)),
+            resolveSelections(payload.homeBlueCardPlayers, String(match.homeTeamId)),
+            resolveSelections(payload.awayBlueCardPlayers, String(match.awayTeamId)),
+          ]);
+
+          await Promise.all([
+            transaction.query("DELETE FROM public.match_award_goal_scorers WHERE match_id = $1", [matchId]),
+            transaction.query("DELETE FROM public.match_yellow_card_players WHERE match_id = $1", [matchId]),
+            transaction.query("DELETE FROM public.match_red_card_players WHERE match_id = $1", [matchId]),
+            transaction.query("DELETE FROM public.match_blue_card_players WHERE match_id = $1", [matchId]),
+          ]);
+
+          const insertOrdered = async (
+            table: string,
+            orderColumn: string,
+            teamId: string,
+            playerIds: string[],
+          ) => {
+            for (const [index, playerId] of playerIds.entries()) {
+              await transaction.query(
+                `INSERT INTO public.${table} (match_id, team_id, player_id, ${orderColumn})
+                 VALUES ($1, $2, $3, $4)`,
+                [matchId, teamId, playerId, index + 1],
+              );
+            }
+          };
+
+          await insertOrdered("match_award_goal_scorers", "goal_order", String(match.homeTeamId), homeGoals);
+          await insertOrdered("match_award_goal_scorers", "goal_order", String(match.awayTeamId), awayGoals);
+          await insertOrdered("match_yellow_card_players", "card_order", String(match.homeTeamId), homeYellow);
+          await insertOrdered("match_yellow_card_players", "card_order", String(match.awayTeamId), awayYellow);
+          await insertOrdered("match_red_card_players", "card_order", String(match.homeTeamId), homeRed);
+          await insertOrdered("match_red_card_players", "card_order", String(match.awayTeamId), awayRed);
+          await insertOrdered("match_blue_card_players", "card_order", String(match.homeTeamId), homeBlue);
+          await insertOrdered("match_blue_card_players", "card_order", String(match.awayTeamId), awayBlue);
+
+          await transaction.query(
+            "UPDATE public.matches SET is_score_sheet_reviewed = true, updated_at = now() WHERE id = $1",
+            [matchId],
+          );
+
+          return { match_id: matchId, is_walkover: false, is_score_sheet_reviewed: true };
+        });
+
+        response.status(200).json({ data });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.patch(
+    "/score-sheet-review-state",
+    ...requireScoreSheetReviewEdit,
+    async (request, response, next) => {
+      try {
+        const payload = requireRecord(request.body);
+        if (!Array.isArray(payload.matchIds) || payload.matchIds.length === 0) {
+          throw new ApiError(422, "VALIDATION_ERROR", "Informe ao menos um jogo.");
+        }
+        if (payload.matchIds.length > 500) {
+          throw new ApiError(422, "VALIDATION_ERROR", "O limite é de 500 jogos por atualização.");
+        }
+        const matchIds = payload.matchIds.map((matchId, index) =>
+          requireUuid(matchId, `matchIds[${index}]`),
+        );
+        if (typeof payload.reviewed !== "boolean") {
+          throw new ApiError(422, "VALIDATION_ERROR", "O campo reviewed deve ser booleano.");
+        }
+
+        const result = await database.query(
+          `UPDATE public.matches
+           SET is_score_sheet_reviewed = $1, updated_at = now()
+           WHERE id = ANY($2::uuid[])
+           RETURNING id`,
+          [payload.reviewed, matchIds],
+        );
+
+        response.status(200).json({
+          data: {
+            updatedMatchIds: result.rows.map((row) => String(row.id)),
+            reviewed: payload.reviewed,
+          },
+        });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
 
   router.get("/", async (request, response, next) => {
     try {
