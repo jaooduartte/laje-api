@@ -33,7 +33,9 @@ O modo `rehearsal` não transforma divergências em sucesso. Ele apenas fornece 
 5. Aplicar baseline e migrations incrementais no RDS de produção vazio por `scripts/apply-rds-baseline.sh`, com `PGHOST`, `PGUSER`, `PGDATABASE`, `PGPASSWORD`, `PGSSLROOTCERT`, `PGSSLMODE=verify-full` e os gates de execução controlada, a partir de uma execução temporária autorizada na VPC.
 6. Carregar conexões de origem e destino por Secrets Manager e confirmar TLS, CA e conectividade sem imprimir URLs ou senhas.
 7. Executar `npm run migration:export-schema` para registrar somente o checksum estrutural da origem.
-8. Antes do corte, executar ao menos um rehearsal no staging. Usar `MIGRATION_PARITY_MODE=rehearsal` no `migration:verify-parity` e registrar apenas evidências agregadas, sem PII. Se houver diferenças, verificar se a origem sofreu alterações após o início do dump antes de classificar o resultado como falha da migração.
+8. Medir o tamanho atual de `public` na origem e do banco de destino. Manter os guardrails padrão do `migration:sync-data` quando suficientes; se for necessário ampliá-los, definir explicitamente `MIGRATION_MAX_SOURCE_PUBLIC_BYTES` e `MIGRATION_MAX_DESTINATION_DATABASE_BYTES` com margem documentada e ainda abaixo da capacidade provisionada.
+9. Confirmar que nenhum fluxo de rehearsal está tentando copiar `championship_bracket_preview_private`: o sync de dados é exclusivamente do schema `public`.
+10. Antes do corte, executar ao menos um rehearsal no staging. Usar `MIGRATION_PARITY_MODE=rehearsal` no `migration:verify-parity` e registrar apenas evidências agregadas, sem PII. Se houver diferenças, verificar se a origem sofreu alterações após o início do dump antes de classificar o resultado como falha da migração.
 
 ## Merge do tooling x conclusão da tarefa
 
@@ -46,7 +48,7 @@ O merge da PR não conclui a LAJE-88. A tarefa permanece aberta até que o Postg
 1. Criar snapshot manual do RDS de produção e confirmar backups automáticos habilitados.
 2. Colocar todas as gravações que ainda atingem o Supabase em manutenção controlada. Somente depois da pausa efetiva registrar o horário em `MIGRATION_WRITES_PAUSED_AT`.
 3. Com a origem congelada, capturar o número esperado de solicitações de reserva diretamente da origem e armazená-lo em `MIGRATION_EXPECTED_RESERVATION_REQUEST_COUNT`. Não usar uma contagem histórica fixa no runbook.
-4. Definir `MIGRATION_SYNC_MODE=final`, manter `MIGRATION_EXECUTION_CONTEXT=controlled` e `MIGRATION_ALLOW_DESTINATION_WRITE=true`, e executar `npm run migration:sync-data`.
+4. Definir `MIGRATION_SYNC_MODE=final`, manter `MIGRATION_EXECUTION_CONTEXT=controlled` e `MIGRATION_ALLOW_DESTINATION_WRITE=true`, confirmar os dois orçamentos de storage com as métricas capturadas na própria janela de corte e só então executar `npm run migration:sync-data`.
 5. Definir `MIGRATION_PARITY_MODE=final` e executar `npm run migration:verify-parity`. O comando deve validar tabelas, IDs, checksums, estrutura, enums, distribuição de status, FKs e a contagem capturada após o write freeze.
 6. Qualquer diferença no modo `final` bloqueia o cutover. Não liberar escrita no RDS até a causa ser entendida e a paridade estrita passar.
 7. Executar smoke tests da API pelo endpoint de produção, incluindo autenticação de primeiro acesso, leitura pública, administração de eventos, reservas e operação de campeonatos.
