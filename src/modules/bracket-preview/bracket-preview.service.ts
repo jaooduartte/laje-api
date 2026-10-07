@@ -243,7 +243,8 @@ export class BracketPreviewService {
     // SQS already provides durable redelivery after the visibility timeout.
     // Maintenance must not publish duplicate PROCESS_PREVIEW messages.
     return 0;
-  }}
+  }
+}
 
 export function exactPreviewJobStatus(job: ExactPreviewJob): string {
   return jobStatus(job);
