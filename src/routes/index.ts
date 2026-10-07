@@ -3,6 +3,7 @@ import { Router } from "express";
 import { environment } from "../config/environment.js";
 import { database } from "../database/index.js";
 import { AuthRepository } from "../modules/auth/auth.repository.js";
+import { createAdminRuntimeRouter } from "../modules/admin-runtime/admin-runtime.routes.js";
 import { createAuthRouter } from "../modules/auth/auth.routes.js";
 import { AuthService } from "../modules/auth/auth.service.js";
 import { createChampionshipsRouter } from "../modules/championships/championships.routes.js";
@@ -36,6 +37,7 @@ apiRouter.get("/", (_request, response) => {
 
 apiRouter.use("/health", createHealthRouter(healthService));
 apiRouter.use("/auth", createAuthRouter(authService));
+apiRouter.use("/admin-runtime", createAdminRuntimeRouter(authService));
 apiRouter.use("/matches", createMatchesRouter(authService));
 apiRouter.use("/championships", createChampionshipsRouter(authService));
 apiRouter.use("/league-events", createLeagueEventConflictsRouter());
