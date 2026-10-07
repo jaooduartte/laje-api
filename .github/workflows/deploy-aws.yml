@@ -3,7 +3,7 @@ name: Deploy AWS
 on:
   push:
     branches:
-      - LAJE-136
+      - LAJE-126
     paths:
       - ".github/workflows/deploy-aws.yml"
       - "infra/aws/terraform/**"
@@ -125,6 +125,33 @@ jobs:
             docker build --platform linux/amd64 --tag "${ECR_REPOSITORY_URL}:${IMAGE_TAG}" .
             docker push "${ECR_REPOSITORY_URL}:${IMAGE_TAG}"
           fi
+
+      - name: Apply operational database migrations
+        if: steps.mode.outputs.action == 'deploy'
+        run: |
+          CLUSTER_NAME="$(terraform -chdir="${TF_DIR}" output -raw staging_api_ecs_cluster_name)"
+          TASK_DEFINITION="$(terraform -chdir="${TF_DIR}" output -raw staging_api_ecs_task_definition_arn)"
+          SECURITY_GROUP="$(terraform -chdir="${TF_DIR}" output -raw ecs_security_group_id)"
+          SUBNETS="$(terraform -chdir="${TF_DIR}" output -json public_subnet_ids | jq -r 'join(",")')"
+
+          TASK_ARN="$(aws ecs run-task             --cluster "${CLUSTER_NAME}"             --task-definition "${TASK_DEFINITION}"             --launch-type FARGATE             --network-configuration "awsvpcConfiguration={subnets=[${SUBNETS}],securityGroups=[${SECURITY_GROUP}],assignPublicIp=ENABLED}"             --overrides '{"containerOverrides":[{"name":"api","command":["node","dist/operations/apply-operational-migrations.js"]}]}'             --query 'tasks[0].taskArn'             --output text)"
+
+          if [[ -z "${TASK_ARN}" || "${TASK_ARN}" == "None" ]]; then
+            echo "Unable to start database migration task."
+            exit 1
+          fi
+
+          aws ecs wait tasks-stopped --cluster "${CLUSTER_NAME}" --tasks "${TASK_ARN}"
+
+          EXIT_CODE="$(aws ecs describe-tasks             --cluster "${CLUSTER_NAME}"             --tasks "${TASK_ARN}"             --query 'tasks[0].containers[?name==`api`].exitCode | [0]'             --output text)"
+
+          if [[ "${EXIT_CODE}" != "0" ]]; then
+            aws ecs describe-tasks --cluster "${CLUSTER_NAME}" --tasks "${TASK_ARN}"
+            echo "Operational database migrations failed with exit code ${EXIT_CODE}."
+            exit 1
+          fi
+
+          echo "Operational database migrations completed."
 
       - name: Start one Fargate staging task
         if: steps.mode.outputs.action == 'deploy'
