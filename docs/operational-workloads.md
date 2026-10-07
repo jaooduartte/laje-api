@@ -127,7 +127,9 @@ A implementação adiciona:
 - CloudWatch Logs da própria `laje-api`;
 - alarme quando a DLQ contém mensagem;
 - alarme quando a mensagem mais antiga da fila supera cinco minutos;
-- métricas nativas do SQS;
+- alarme quando o RDS de staging fica abaixo de 5 GiB livres;
+- alarme quando a CPU média do RDS de staging permanece acima de 80% por 15 minutos;
+- métricas nativas do SQS e RDS;
 - estado do EventBridge Scheduler reproduzível via Terraform.
 
 Logs de erro incluem falhas do consumidor, identificador da mensagem e receive count sem registrar payloads sensíveis.
