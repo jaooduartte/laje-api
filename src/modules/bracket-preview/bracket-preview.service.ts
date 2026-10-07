@@ -225,7 +225,9 @@ function phaseLabel(phase: string): string {
 
 function minutesBetween(startTime: string, endTime: string): number {
   const parse = (value: string) => {
-    const [hours, minutes] = value.split(":").map(Number);
+    const parts = value.split(":");
+    const hours = Number(parts[0] ?? "");
+    const minutes = Number(parts[1] ?? "");
     return Number.isFinite(hours) && Number.isFinite(minutes) ? hours * 60 + minutes : 0;
   };
   return Math.max(0, parse(endTime) - parse(startTime));
