@@ -227,6 +227,7 @@ A migração deve ser tratada como uma sequência rastreável, não como um dump
 - [Acesso PostgreSQL](docs/database-access.md): contratos da camada de persistência e requisitos de conexão;
 - [Healthchecks](docs/healthchecks.md): semântica dos endpoints operacionais;
 - [Staging AWS](docs/staging-aws.md): topologia, operação e evidências E2E da LAJE-136;
+- [Workloads operacionais AWS](docs/operational-workloads.md): SQS/DLQ, EventBridge, e-mail, calendário e observabilidade da LAJE-126;
 - [Arquitetura operacional](docs/architecture.md): estado-alvo Vercel + AWS + RDS;
 - [ADR da arquitetura](docs/adr/0001-arquitetura-operacional-final.md): decisão formal e trade-offs.
 
