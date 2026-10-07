@@ -64,10 +64,11 @@ function environmentCredentials(): AwsCredentials | null {
 
   if (!accessKeyId || !secretAccessKey) return null;
 
+  const sessionToken = process.env.AWS_SESSION_TOKEN?.trim();
   return {
     accessKeyId,
     secretAccessKey,
-    sessionToken: process.env.AWS_SESSION_TOKEN?.trim(),
+    ...(sessionToken ? { sessionToken } : {}),
   };
 }
 
@@ -100,13 +101,14 @@ async function loadCredentials(): Promise<AwsCredentials> {
     throw new Error("ECS task credentials response is incomplete.");
   }
 
-  cachedCredentials = {
+  const resolvedCredentials: AwsCredentials = {
     accessKeyId: payload.AccessKeyId,
     secretAccessKey: payload.SecretAccessKey,
-    sessionToken: payload.Token,
-    expiration: payload.Expiration,
+    ...(payload.Token ? { sessionToken: payload.Token } : {}),
+    ...(payload.Expiration ? { expiration: payload.Expiration } : {}),
   };
-  return cachedCredentials;
+  cachedCredentials = resolvedCredentials;
+  return resolvedCredentials;
 }
 
 function formatAmzDate(now: Date): { amzDate: string; dateStamp: string } {
