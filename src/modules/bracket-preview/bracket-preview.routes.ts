@@ -103,3 +103,50 @@ export function createBracketPreviewRouter(authService: AuthService): Router {
 
   return router;
 }
+
+
+export function createGlobalBracketPreviewRouter(authService: AuthService): Router {
+  const router = Router();
+  const requireAuthentication = createRequireAuthentication(authService);
+  const requirePreviewView = [
+    requireAuthentication,
+    requirePermission("bracket_setup", "VIEW"),
+  ] as const;
+  const requirePreviewEdit = [
+    requireAuthentication,
+    requirePermission("bracket_setup", "EDIT"),
+  ] as const;
+
+  router.get("/:jobId", ...requirePreviewView, async (request, response, next) => {
+    try {
+      const jobId = requireUuid(request.params.jobId, "jobId");
+      response.status(200).json({ data: serializePreviewJob(await bracketPreviewService.get(jobId)) });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/:jobId/days/:date", ...requirePreviewView, async (request, response, next) => {
+    try {
+      const jobId = requireUuid(request.params.jobId, "jobId");
+      const date = parseDate(request.params.date, "date");
+      if (!date) throw new ApiError(422, "VALIDATION_ERROR", "Data da prévia inválida.");
+      response.status(200).json({ data: await bracketPreviewService.getDay(jobId, date) });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/:jobId/cancel", ...requirePreviewEdit, async (request, response, next) => {
+    try {
+      const jobId = requireUuid(request.params.jobId, "jobId");
+      response.status(200).json({
+        data: serializePreviewJob(await bracketPreviewService.cancel(jobId)),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  return router;
+}
