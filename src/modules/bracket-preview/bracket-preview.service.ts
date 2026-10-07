@@ -11,6 +11,9 @@ interface PreviewQueue {
 
 export type ExactPreviewJob = Record<string, unknown>;
 
+const MAX_PREVIEW_PAYLOAD_BYTES = 2 * 1024 * 1024;
+const PREVIEW_CLEANUP_BATCH_SIZE = 25;
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value != null && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -58,13 +61,22 @@ export class BracketPreviewService {
     payload: Record<string, unknown>,
     requestedBy: string,
   ): Promise<ExactPreviewJob> {
+    const serializedPayload = JSON.stringify(payload);
+    if (Buffer.byteLength(serializedPayload, "utf8") > MAX_PREVIEW_PAYLOAD_BYTES) {
+      throw new ApiError(
+        413,
+        "PREVIEW_PAYLOAD_TOO_LARGE",
+        "A configuração da prévia excede o limite seguro de 2 MiB.",
+      );
+    }
+
     const job = await this.withIdentity(requestedBy, async (executor) => {
       const result = await executor.query(
         `SELECT public.start_championship_bracket_preview_job(
            $1::uuid,
            $2::jsonb
          ) AS job`,
-        [championshipId, JSON.stringify(payload)],
+        [championshipId, serializedPayload],
       );
       return requireJob(result.rows[0]?.job);
     });
@@ -201,38 +213,37 @@ export class BracketPreviewService {
   }
 
   async recoverAndCleanup(): Promise<number> {
-    const stale = await this.database.query(
-      `UPDATE championship_bracket_preview_private.jobs
-          SET heartbeat_at=now(), updated_at=now()
-        WHERE id IN (
-          SELECT id
-          FROM championship_bracket_preview_private.jobs
-          WHERE status IN ('QUEUED','INITIALIZING','SCHEDULING','FINALIZING')
-            AND (heartbeat_at IS NULL OR heartbeat_at < now() - interval '90 seconds')
-            AND expires_at > now()
-          ORDER BY created_at
-          LIMIT 20
-          FOR UPDATE SKIP LOCKED
-        )
-        RETURNING id::text AS id`,
+    const cleanup = await this.database.query(
+      `WITH removable AS (
+         SELECT id
+         FROM championship_bracket_preview_private.jobs
+         WHERE (
+             status = 'CONSUMED'
+             AND consumed_at IS NOT NULL
+             AND consumed_at < now() - interval '1 hour'
+           )
+           OR (
+             status IN ('COMPLETED','FAILED','CANCELLED')
+             AND expires_at < now()
+           )
+         ORDER BY COALESCE(consumed_at, completed_at, expires_at, created_at)
+         LIMIT ${PREVIEW_CLEANUP_BATCH_SIZE}
+         FOR UPDATE SKIP LOCKED
+       )
+       DELETE FROM championship_bracket_preview_private.jobs AS jobs
+       USING removable
+       WHERE jobs.id = removable.id
+       RETURNING jobs.id`,
     );
 
-    let published = 0;
-    for (const row of stale.rows) {
-      if (typeof row.id !== "string") continue;
-      await this.queue.sendProcessJob(row.id);
-      published += 1;
+    if (cleanup.rows.length > 0) {
+      console.log(`Bracket preview cleanup removed ${cleanup.rows.length} terminal job(s).`);
     }
 
-    await this.database.query(
-      `DELETE FROM championship_bracket_preview_private.jobs
-        WHERE expires_at < now()
-          AND status IN ('COMPLETED','FAILED','CANCELLED','CONSUMED')`,
-    );
-
-    return published;
-  }
-}
+    // SQS already provides durable redelivery after the visibility timeout.
+    // Maintenance must not publish duplicate PROCESS_PREVIEW messages.
+    return 0;
+  }}
 
 export function exactPreviewJobStatus(job: ExactPreviewJob): string {
   return jobStatus(job);
