@@ -44,7 +44,9 @@ O EventBridge Scheduler envia uma mensagem `MAINTENANCE` a cada dois minutos. O 
 
 O recovery não publica uma segunda mensagem para jobs já representados na fila. A mensagem SQS original volta a ficar visível após o visibility timeout, evitando duplicação artificial de tentativas.
 
-O SQS é configurado com long polling e visibility timeout explícito. Em erro de processamento, o job volta para `QUEUED` enquanto houver tentativas disponíveis e a mensagem não é removida, permitindo o retry nativo do SQS. No limite configurado de tentativas, o job passa para `FAILED` e a política de redrive move a mensagem para a DLQ.
+O SQS é configurado com long polling e visibility timeout explícito. Enquanto um preview está em execução, o worker renova tanto o `heartbeat_at` do job quanto a visibilidade da mensagem SQS em aproximadamente um terço do timeout configurado. Isso impede que o recovery classifique um job longo e saudável como abandonado e evita processamento concorrente da mesma mensagem.
+
+Em erro de processamento, o job volta para `QUEUED` enquanto houver tentativas disponíveis e a mensagem não é removida, permitindo o retry nativo do SQS. No limite configurado de tentativas, o job passa para `FAILED` e a política de redrive move a mensagem para a DLQ.
 
 ### Motor da prévia
 
