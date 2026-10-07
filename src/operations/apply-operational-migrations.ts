@@ -12,9 +12,16 @@ async function main(): Promise<void> {
 
   for (const migration of MIGRATIONS) {
     const path = resolve(process.cwd(), "infra", "database", "migrations", migration);
-    const statement = await readFile(path, "utf8");
+    const script = await readFile(path, "utf8");
     console.log(`Applying operational migration ${migration}`);
-    await database.query(statement);
+    const statements = script
+      .split(/;\s*(?:\n|$)/)
+      .map((statement) => statement.trim())
+      .filter(Boolean);
+
+    for (const statement of statements) {
+      await database.query(statement);
+    }
   }
 
   await database.close();
