@@ -715,6 +715,215 @@ export function createPublicRuntimeRouter(): Router {
     }
   });
 
+  router.get("/bracket-location-templates", async (_request, response, next) => {
+    try {
+      const templatesResult = await database.query(
+        `SELECT id, name, created_at::text AS "createdAt", updated_at::text AS "updatedAt"
+         FROM public.championship_bracket_location_templates
+         ORDER BY name ASC`,
+      );
+      const templateIds = templatesResult.rows.map((row) => String(row.id));
+
+      if (templateIds.length === 0) {
+        response.status(200).json({ data: [] });
+        return;
+      }
+
+      const courtsResult = await database.query(
+        `SELECT id, location_template_id AS "locationTemplateId", name, position
+         FROM public.championship_bracket_location_template_courts
+         WHERE location_template_id = ANY($1::uuid[])
+         ORDER BY position ASC, name ASC`,
+        [templateIds],
+      );
+      const courtIds = courtsResult.rows.map((row) => String(row.id));
+      const courtSportsResult =
+        courtIds.length === 0
+          ? { rows: [] as Array<Record<string, unknown>> }
+          : await database.query(
+              `SELECT location_template_court_id AS "courtId", sport_id AS "sportId"
+               FROM public.championship_bracket_location_template_court_sports
+               WHERE location_template_court_id = ANY($1::uuid[])
+               ORDER BY location_template_court_id, sport_id`,
+              [courtIds],
+            );
+
+      const sportIdsByCourtId = new Map<string, string[]>();
+      for (const row of courtSportsResult.rows) {
+        const courtId = String(row.courtId);
+        sportIdsByCourtId.set(courtId, [
+          ...(sportIdsByCourtId.get(courtId) ?? []),
+          String(row.sportId),
+        ]);
+      }
+
+      const courtsByTemplateId = new Map<string, Array<Record<string, unknown>>>();
+      for (const row of courtsResult.rows) {
+        const templateId = String(row.locationTemplateId);
+        courtsByTemplateId.set(templateId, [
+          ...(courtsByTemplateId.get(templateId) ?? []),
+          {
+            id: String(row.id),
+            name: String(row.name),
+            position: Number(row.position),
+            sportIds: [...new Set(sportIdsByCourtId.get(String(row.id)) ?? [])],
+          },
+        ]);
+      }
+
+      response.status(200).json({
+        data: templatesResult.rows.map((row) => ({
+          id: String(row.id),
+          name: String(row.name),
+          createdAt: String(row.createdAt),
+          updatedAt: String(row.updatedAt),
+          courts: courtsByTemplateId.get(String(row.id)) ?? [],
+        })),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get(
+    "/bracket-editions/:bracketEditionId/day-schedules",
+    async (request, response, next) => {
+      try {
+        const bracketEditionId = requireUuid(request.params.bracketEditionId, "bracketEditionId");
+
+        const [daysResult, editionResult] = await Promise.all([
+          database.query(
+            `SELECT id, event_date::text AS "eventDate",
+               start_time::text AS "startTime", end_time::text AS "endTime",
+               break_start_time::text AS "breakStartTime",
+               break_end_time::text AS "breakEndTime"
+             FROM public.championship_bracket_days
+             WHERE bracket_edition_id = $1
+             ORDER BY event_date ASC`,
+            [bracketEditionId],
+          ),
+          database.query(
+            `SELECT payload_snapshot AS "payloadSnapshot"
+             FROM public.championship_bracket_editions
+             WHERE id = $1
+             LIMIT 1`,
+            [bracketEditionId],
+          ),
+        ]);
+
+        const dayIds = daysResult.rows.map((row) => String(row.id));
+        if (dayIds.length === 0) {
+          response.status(200).json({
+            data: {
+              days: [],
+              payloadSnapshot: editionResult.rows[0]?.payloadSnapshot ?? null,
+            },
+          });
+          return;
+        }
+
+        const [locationsResult, breaksResult] = await Promise.all([
+          database.query(
+            `SELECT id, bracket_day_id AS "bracketDayId", name, position,
+               location_group_id AS "locationGroupId"
+             FROM public.championship_bracket_locations
+             WHERE bracket_day_id = ANY($1::uuid[])
+             ORDER BY position ASC, name ASC`,
+            [dayIds],
+          ),
+          database.query(
+            `SELECT id, bracket_day_id AS "bracketDayId",
+               break_start_time::text AS "breakStartTime",
+               break_end_time::text AS "breakEndTime",
+               position, scope_type AS "scopeType",
+               bracket_court_id AS "bracketCourtId"
+             FROM public.championship_bracket_day_breaks
+             WHERE bracket_day_id = ANY($1::uuid[])
+             ORDER BY position ASC, break_start_time ASC`,
+            [dayIds],
+          ),
+        ]);
+
+        const locationIds = locationsResult.rows.map((row) => String(row.id));
+        const courtsResult =
+          locationIds.length === 0
+            ? { rows: [] as Array<Record<string, unknown>> }
+            : await database.query(
+                `SELECT id, bracket_location_id AS "bracketLocationId", name, position,
+                   court_group_id AS "courtGroupId"
+                 FROM public.championship_bracket_courts
+                 WHERE bracket_location_id = ANY($1::uuid[])
+                 ORDER BY position ASC, name ASC`,
+                [locationIds],
+              );
+
+        const courtsByLocationId = new Map<string, Array<Record<string, unknown>>>();
+        for (const row of courtsResult.rows) {
+          const locationId = String(row.bracketLocationId);
+          courtsByLocationId.set(locationId, [
+            ...(courtsByLocationId.get(locationId) ?? []),
+            {
+              id: String(row.id),
+              name: String(row.name),
+              position: Number(row.position),
+              court_group_id: String(row.courtGroupId),
+            },
+          ]);
+        }
+
+        const locationsByDayId = new Map<string, Array<Record<string, unknown>>>();
+        for (const row of locationsResult.rows) {
+          const dayId = String(row.bracketDayId);
+          locationsByDayId.set(dayId, [
+            ...(locationsByDayId.get(dayId) ?? []),
+            {
+              id: String(row.id),
+              name: String(row.name),
+              position: Number(row.position),
+              location_group_id: String(row.locationGroupId),
+              championship_bracket_courts: courtsByLocationId.get(String(row.id)) ?? [],
+            },
+          ]);
+        }
+
+        const breaksByDayId = new Map<string, Array<Record<string, unknown>>>();
+        for (const row of breaksResult.rows) {
+          const dayId = String(row.bracketDayId);
+          breaksByDayId.set(dayId, [
+            ...(breaksByDayId.get(dayId) ?? []),
+            {
+              id: String(row.id),
+              bracket_day_id: dayId,
+              break_start_time: String(row.breakStartTime),
+              break_end_time: String(row.breakEndTime),
+              position: Number(row.position),
+              scope_type: String(row.scopeType),
+              bracket_court_id: row.bracketCourtId == null ? null : String(row.bracketCourtId),
+            },
+          ]);
+        }
+
+        response.status(200).json({
+          data: {
+            days: daysResult.rows.map((row) => ({
+              id: String(row.id),
+              event_date: String(row.eventDate),
+              start_time: String(row.startTime),
+              end_time: String(row.endTime),
+              break_start_time: row.breakStartTime == null ? null : String(row.breakStartTime),
+              break_end_time: row.breakEndTime == null ? null : String(row.breakEndTime),
+              championship_bracket_locations: locationsByDayId.get(String(row.id)) ?? [],
+              championship_bracket_day_breaks: breaksByDayId.get(String(row.id)) ?? [],
+            })),
+            payloadSnapshot: editionResult.rows[0]?.payloadSnapshot ?? null,
+          },
+        });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
   router.get(
     "/championships/:championshipId/individual-events",
     async (request, response, next) => {
