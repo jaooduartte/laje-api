@@ -106,7 +106,7 @@ resource "aws_iam_role_policy" "bracket_preview_scheduler" {
 resource "aws_scheduler_schedule" "bracket_preview_maintenance" {
   name                = "${local.name_prefix}-bracket-preview-maintenance"
   schedule_expression = var.bracket_preview_maintenance_schedule
-  state               = "ENABLED"
+  state               = var.staging_api_enabled ? "ENABLED" : "DISABLED"
 
   flexible_time_window {
     mode = "OFF"
