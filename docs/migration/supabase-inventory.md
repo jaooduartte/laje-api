@@ -77,6 +77,20 @@ O inventário detalhado de cada rotina, trigger e policy será usado por domíni
 
 Nenhuma Edge Function exige `verify_jwt` no deploy atual. Essa configuração não será reproduzida: os endpoints da API deverão aplicar autenticação ou autorização conforme o contrato de cada fluxo.
 
+
+### Estado da substituição — LAJE-126
+
+A implementação AWS foi versionada mantendo coexistência segura com o ambiente legado:
+
+- `pgmq championship_bracket_preview` -> SQS + DLQ, com worker da `laje-api`;
+- `pg_cron */2 * * * *` -> EventBridge Scheduler enviando mensagem de manutenção à fila;
+- `process-championship-bracket-preview` -> serviço/worker Node, persistência no RDS e contratos HTTP;
+- `send-reservation-email` -> serviço Brevo da `laje-api`, com chave prevista no Secrets Manager;
+- `calendar-subscription-feed` -> endpoint público da `laje-api` consultando PostgreSQL;
+- falhas e backlog -> CloudWatch Logs + alarmes da fila/DLQ.
+
+Os objetos Supabase permanecem disponíveis apenas durante a coexistência. A remoção física será feita somente depois do cutover da LAJE-139.
+
 ## Sequência de migração
 
 1. Criar o baseline estrutural no RDS sem dados produtivos e validar as extensões estritamente necessárias.
