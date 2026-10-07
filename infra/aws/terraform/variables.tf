@@ -123,3 +123,81 @@ variable "staging_api_log_retention_days" {
   type        = number
   default     = 7
 }
+
+
+variable "staging_mail_enabled" {
+  description = "Enables Brevo reservation email delivery in staging."
+  type        = bool
+  default     = false
+}
+
+variable "staging_brevo_api_key_secret_arn" {
+  description = "Secrets Manager ARN containing the Brevo API key. Required only when staging_mail_enabled=true."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = !var.staging_mail_enabled || length(trimspace(var.staging_brevo_api_key_secret_arn)) > 0
+    error_message = "staging_brevo_api_key_secret_arn is required when staging_mail_enabled=true."
+  }
+}
+
+variable "staging_mail_from" {
+  description = "Sender email for reservation notifications."
+  type        = string
+  default     = "laje.eventos.co@gmail.com"
+}
+
+variable "staging_mail_from_name" {
+  description = "Sender display name for reservation notifications."
+  type        = string
+  default     = "C.O. - Liga das Atléticas de Joinville"
+}
+
+variable "staging_co_events_email" {
+  description = "Operational recipient for pending reservation requests."
+  type        = string
+  default     = "laje.eventos.co@gmail.com"
+}
+
+variable "staging_co_presidency_email" {
+  description = "Presidency recipient for pending reservation requests."
+  type        = string
+  default     = "laje.eventos.co@gmail.com"
+}
+
+variable "staging_app_url" {
+  description = "Public frontend URL used in reservation emails."
+  type        = string
+  default     = "https://laje-tcc.vercel.app"
+}
+
+variable "bracket_preview_message_retention_seconds" {
+  description = "Retention period for bracket preview SQS messages."
+  type        = number
+  default     = 86400
+}
+
+variable "bracket_preview_visibility_timeout_seconds" {
+  description = "Visibility timeout for bracket preview SQS jobs."
+  type        = number
+  default     = 180
+}
+
+variable "bracket_preview_dlq_retention_seconds" {
+  description = "Retention period for failed bracket preview messages."
+  type        = number
+  default     = 604800
+}
+
+variable "bracket_preview_max_receive_count" {
+  description = "Number of processing attempts before SQS moves a preview message to the DLQ."
+  type        = number
+  default     = 5
+}
+
+variable "bracket_preview_maintenance_schedule" {
+  description = "EventBridge Scheduler expression for preview recovery/cleanup."
+  type        = string
+  default     = "rate(2 minutes)"
+}
