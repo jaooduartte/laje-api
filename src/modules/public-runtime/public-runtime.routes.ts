@@ -901,8 +901,7 @@ export function createPublicRuntimeRouter(): Router {
               name: String(row.name),
               position: Number(row.position),
               court_group_id: String(row.courtGroupId),
-              championship_bracket_court_sports:
-                courtSportsByCourtId.get(String(row.id)) ?? [],
+              championship_bracket_court_sports: courtSportsByCourtId.get(String(row.id)) ?? [],
             },
           ]);
         }
