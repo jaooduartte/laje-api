@@ -135,6 +135,29 @@ infra/database/migrations/20261007160000_create_championship_bracket_preview_job
 
 Durante o deploy de staging, uma task Fargate efêmera executa o runner de migrations antes de iniciar/atualizar o serviço principal. O banco continua privado; não é aberta conectividade PostgreSQL pública para aplicar a migration.
 
+## Evidência de staging — 07/10/2026
+
+A branch `LAJE-126` foi implantada temporariamente no staging AWS para validação antes do corte de tráfego.
+
+Validações concluídas:
+
+- migration incremental aplicada por task Fargate efêmera;
+- `/api/v1/health` respondeu com serviço saudável;
+- `/api/v1/health/database` confirmou PostgreSQL alcançável;
+- CORS validado para `https://laje-tcc.vercel.app`;
+- smoke core concluiu com 3 edições e 19 competições carregadas;
+- SQS principal com long polling de 20 s, visibility timeout de 180 s e redrive para DLQ após 5 tentativas;
+- DLQ permaneceu vazia durante a validação;
+- EventBridge Scheduler executou `MAINTENANCE` a cada 2 minutos;
+- CloudWatch registrou mensagens enviadas, recebidas e removidas na mesma cadência, sem backlog;
+- logs do worker registraram repetidamente `Bracket preview maintenance completed; requeued=0.`;
+- alarmes `laje-staging-bracket-preview-dlq-not-empty` e `laje-staging-bracket-preview-oldest-message` ficaram em `OK`;
+- task ECS/Fargate executou com 1 instância durante o smoke e foi suspensa após a validação;
+- scheduler foi desabilitado junto com a suspensão do runtime para evitar processamento/custo desnecessário fora da janela de testes;
+- CI da `laje-api`, validação Terraform, imagem Docker e CI do frontend AWS-only passaram.
+
+O envio Brevo permanece propositalmente desabilitado no staging até existir remetente verificado e secret `BREVO_API_KEY` provisionado no Secrets Manager. Isso não bloqueia a migração de código, mas uma entrega transacional real deve ser evidenciada antes da LAJE-139.
+
 ## Coexistência e cutover
 
 Antes da LAJE-139:
