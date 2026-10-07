@@ -71,7 +71,30 @@ async function workerLoop(): Promise<void> {
             const requeued = await bracketPreviewService.recoverAndCleanup();
             console.log(`Bracket preview maintenance completed; requeued=${requeued}.`);
           } else {
-            await bracketPreviewService.process(payload.jobId);
+            const heartbeatIntervalMs = Math.max(
+              15_000,
+              Math.floor((awsConfig.bracketPreviewVisibilityTimeoutSeconds * 1_000) / 3),
+            );
+            const heartbeatTimer = setInterval(() => {
+              void Promise.all([
+                bracketPreviewService.heartbeat(payload.jobId),
+                client.changeMessageVisibility(
+                  message.receiptHandle,
+                  awsConfig.bracketPreviewVisibilityTimeoutSeconds,
+                ),
+              ]).catch((error: unknown) => {
+                console.error(
+                  `Bracket preview heartbeat failed (jobId=${payload.jobId}, messageId=${message.messageId}).`,
+                  error,
+                );
+              });
+            }, heartbeatIntervalMs);
+
+            try {
+              await bracketPreviewService.process(payload.jobId);
+            } finally {
+              clearInterval(heartbeatTimer);
+            }
           }
           await client.deleteMessage(message.receiptHandle);
         } catch (error) {
