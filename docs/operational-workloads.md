@@ -162,26 +162,31 @@ Esses limites são guardrails operacionais, não cotas do provedor. Antes do cut
 
 ## Evidência de staging — 07/10/2026
 
-A branch `LAJE-126` foi implantada temporariamente no staging AWS para validação antes do corte de tráfego.
+A branch `LAJE-126` foi implantada temporariamente no staging AWS para validar a portabilidade do motor exato v8 e os workloads operacionais antes do corte de tráfego.
 
 Validações concluídas:
 
-- migration incremental aplicada por task Fargate efêmera;
+- migrations `20261007160300..161000` aplicadas por task Fargate efêmera;
+- schema privado validado com 27 tabelas e 73 funções no RDS;
+- banco de staging medido em aproximadamente 45 MB, com cerca de 0,7 MB no schema privado de preview e nenhum job ativo após o smoke;
+- `pgmq` e `pg_cron` não estão instalados no runtime alvo;
+- a tabela pública obsoleta `championship_bracket_preview_jobs` não existe no RDS;
 - `/api/v1/health` respondeu com serviço saudável;
 - `/api/v1/health/database` confirmou PostgreSQL alcançável;
 - CORS validado para `https://laje-tcc.vercel.app`;
-- smoke core concluiu com 3 edições e 19 competições carregadas;
-- SQS principal com long polling de 20 s, visibility timeout de 180 s e redrive para DLQ após 5 tentativas;
-- DLQ permaneceu vazia durante a validação;
+- smoke core concluiu com 3 campeonatos, 442 jogos, 239 linhas de standings, 3 edições e 19 competições;
+- SQS principal usa long polling de 20 s, visibility timeout de 180 s e redrive para DLQ após 5 tentativas;
+- DLQ permaneceu sem backlog durante a validação;
 - EventBridge Scheduler executou `MAINTENANCE` a cada 2 minutos;
-- CloudWatch registrou mensagens enviadas, recebidas e removidas na mesma cadência, sem backlog;
-- logs do worker registraram repetidamente `Bracket preview maintenance completed; requeued=0.`;
-- alarmes `laje-staging-bracket-preview-dlq-not-empty` e `laje-staging-bracket-preview-oldest-message` ficaram em `OK`;
-- task ECS/Fargate executou com 1 instância durante o smoke e foi suspensa após a validação;
-- scheduler foi desabilitado junto com a suspensão do runtime para evitar processamento/custo desnecessário fora da janela de testes;
-- CI da `laje-api`, validação Terraform, imagem Docker e CI do frontend AWS-only passaram para a infraestrutura assíncrona inicial.
+- o maintenance não reenfileirou jobs e os logs registraram `Bracket preview maintenance completed; requeued=0.`;
+- alarmes de DLQ, idade da fila, CPU do RDS e espaço livre do RDS ficaram em `OK`;
+- o RDS manteve aproximadamente 18,28 GB de espaço livre durante a janela de validação;
+- CI, PostgreSQL Validation, Docker Image, Terraform e CI do frontend AWS-only passaram;
+- os guardrails de storage foram testados no CI e bloquearam a sincronização antes de qualquer escrita destrutiva quando configurados com limites deliberadamente insuficientes;
+- task ECS/Fargate e Scheduler foram suspensos após o smoke para evitar custo e carga desnecessária;
+- o trust OIDC temporário da branch `LAJE-126` foi removido depois da validação.
 
-Essa evidência antecede a portabilidade completa do motor exato v8. Portanto, depois das migrations `20261007160300..161000`, é obrigatório repetir o staging smoke da prévia real antes de considerar a LAJE-126 concluída.
+A produção Supabase permaneceu intacta durante o ensaio. O sync continua restrito ao schema `public`, sem replicação contínua nem cópia do schema transitório `championship_bracket_preview_private`.
 
 O envio Brevo permanece propositalmente desabilitado no staging até existir remetente verificado e secret `BREVO_API_KEY` provisionado no Secrets Manager. Isso não bloqueia a migração de código, mas uma entrega transacional real deve ser evidenciada antes da LAJE-139.
 
