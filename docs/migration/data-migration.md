@@ -13,13 +13,13 @@ Migrar os dados do schema `public` do Supabase para um RDS PostgreSQL 17 sem ver
 
 ## Interfaces dos scripts
 
-| Script                    | Entrada                                           | Efeito                                                                                                                                           |
-| ------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `migration:export-schema` | `MIGRATION_SOURCE_DATABASE_URL`                   | Emite somente o SHA-256 do schema `public`.                                                                                                      |
-| `migration:export-data`   | origem e `MIGRATION_EXECUTION_CONTEXT=controlled` | Emite um stream `pg_dump` e recusa terminal interativo.                                                                                          |
-| `migration:import-data`   | destino, stream no stdin e autorização de escrita | Importa o stream em transação e deixa contas administrativas em primeiro acesso.                                                                 |
+| Script                    | Entrada                                             | Efeito                                                                                                                                                       |
+| ------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `migration:export-schema` | `MIGRATION_SOURCE_DATABASE_URL`                     | Emite somente o SHA-256 do schema `public`.                                                                                                                  |
+| `migration:export-data`   | origem e `MIGRATION_EXECUTION_CONTEXT=controlled`   | Emite um stream `pg_dump` e recusa terminal interativo.                                                                                                      |
+| `migration:import-data`   | destino, stream no stdin e autorização de escrita   | Importa o stream em transação e deixa contas administrativas em primeiro acesso.                                                                             |
 | `migration:sync-data`     | origem, destino, autorização e orçamento de storage | Mede o volume, bloqueia projeções acima do orçamento, limpa o destino, transfere apenas `public` por pipe e deixa contas administrativas em primeiro acesso. |
-| `migration:verify-parity` | origem e destino                                  | Compara estrutura, contagens, hashes de PK e dos dados de cada tabela; valida reservas por contagem, IDs, campos, status e FKs sem retornar PII. |
+| `migration:verify-parity` | origem e destino                                    | Compara estrutura, contagens, hashes de PK e dos dados de cada tabela; valida reservas por contagem, IDs, campos, status e FKs sem retornar PII.             |
 
 As conexões são configuradas por `MIGRATION_SOURCE_DATABASE_URL` e `MIGRATION_DESTINATION_DATABASE_URL`. Quando necessário, os caminhos de CA podem ser fornecidos por `MIGRATION_SOURCE_SSL_ROOT_CERT` e `MIGRATION_DESTINATION_SSL_ROOT_CERT`.
 
