@@ -311,6 +311,7 @@ resource "aws_ecs_task_definition" "api" {
         { name = "BRACKET_PREVIEW_WORKER_ENABLED", value = "true" },
         { name = "BRACKET_PREVIEW_POLL_WAIT_SECONDS", value = "20" },
         { name = "BRACKET_PREVIEW_VISIBILITY_TIMEOUT_SECONDS", value = tostring(var.bracket_preview_visibility_timeout_seconds) },
+        { name = "BRACKET_PREVIEW_MAX_RECEIVE_COUNT", value = tostring(var.bracket_preview_max_receive_count) },
         { name = "MAIL_ENABLED", value = tostring(var.staging_mail_enabled) },
         { name = "MAIL_FROM", value = var.staging_mail_from },
         { name = "MAIL_FROM_NAME", value = var.staging_mail_from_name },
