@@ -36,6 +36,11 @@ export interface ReservationParity {
   teamForeignKeyViolations: number;
 }
 
+export interface MigrationStorageFootprint {
+  databaseBytes: bigint;
+  publicBytes: bigint;
+}
+
 const dataDumpArguments = [
   "--data-only",
   "--format=plain",
@@ -53,6 +58,19 @@ function requiredEnvironment(name: string): string {
 function optionalEnvironment(name: string): string | undefined {
   const value = process.env[name]?.trim();
   return value || undefined;
+}
+
+function byteBudgetEnvironment(name: string, fallback: bigint): bigint {
+  const raw = process.env[name]?.trim();
+  if (!raw) return fallback;
+  if (!/^\d+$/.test(raw)) {
+    throw new Error(`${name} must be a positive integer byte budget.`);
+  }
+  const value = BigInt(raw);
+  if (value <= 0n) {
+    throw new Error(`${name} must be greater than zero.`);
+  }
+  return value;
 }
 
 function connectionVariable(name: MigrationConnectionName): string {
@@ -173,6 +191,82 @@ export async function executeQuery(
   process.stdout.on("data", (chunk: Buffer) => output.push(chunk));
   await waitForCommand("psql", process);
   return Buffer.concat(output).toString("utf8").trim();
+}
+
+async function getStorageFootprint(
+  connection: MigrationConnection,
+  applicationName: string,
+): Promise<MigrationStorageFootprint> {
+  const output = await executeQuery(
+    connection,
+    applicationName,
+    `SELECT json_build_object(
+       'databaseBytes', pg_database_size(current_database()),
+       'publicBytes', COALESCE((
+         SELECT sum(pg_total_relation_size(format('%I.%I', schemaname, tablename)::regclass))
+         FROM pg_tables
+         WHERE schemaname = 'public'
+       ), 0)
+     );`,
+  );
+  const parsed = JSON.parse(output) as {
+    databaseBytes: number | string;
+    publicBytes: number | string;
+  };
+  return {
+    databaseBytes: BigInt(parsed.databaseBytes),
+    publicBytes: BigInt(parsed.publicBytes),
+  };
+}
+
+export async function assertMigrationStorageBudget(
+  source: MigrationConnection,
+  destination: MigrationConnection,
+): Promise<void> {
+  const maxSourcePublicBytes = byteBudgetEnvironment(
+    "MIGRATION_MAX_SOURCE_PUBLIC_BYTES",
+    256n * 1024n * 1024n,
+  );
+  const maxDestinationDatabaseBytes = byteBudgetEnvironment(
+    "MIGRATION_MAX_DESTINATION_DATABASE_BYTES",
+    2n * 1024n * 1024n * 1024n,
+  );
+
+  const [sourceFootprint, destinationFootprint] = await Promise.all([
+    getStorageFootprint(source, "laje-migration-source-storage-budget"),
+    getStorageFootprint(destination, "laje-migration-destination-storage-budget"),
+  ]);
+
+  if (sourceFootprint.publicBytes > maxSourcePublicBytes) {
+    throw new Error(
+      `Source public schema uses ${sourceFootprint.publicBytes} bytes, above MIGRATION_MAX_SOURCE_PUBLIC_BYTES=${maxSourcePublicBytes}.`,
+    );
+  }
+
+  // synchronizeData truncates the destination before import, so this intentionally
+  // overestimates peak usage by adding the current destination size to the source
+  // public footprint. The guard fails early instead of risking storage exhaustion.
+  const conservativeProjectedDestinationBytes =
+    destinationFootprint.databaseBytes + sourceFootprint.publicBytes;
+
+  if (conservativeProjectedDestinationBytes > maxDestinationDatabaseBytes) {
+    throw new Error(
+      `Conservative destination projection is ${conservativeProjectedDestinationBytes} bytes, above MIGRATION_MAX_DESTINATION_DATABASE_BYTES=${maxDestinationDatabaseBytes}.`,
+    );
+  }
+
+  process.stdout.write(
+    JSON.stringify({
+      migrationStorageBudget: {
+        sourceDatabaseBytes: sourceFootprint.databaseBytes.toString(),
+        sourcePublicBytes: sourceFootprint.publicBytes.toString(),
+        destinationDatabaseBytes: destinationFootprint.databaseBytes.toString(),
+        conservativeProjectedDestinationBytes: conservativeProjectedDestinationBytes.toString(),
+        maxSourcePublicBytes: maxSourcePublicBytes.toString(),
+        maxDestinationDatabaseBytes: maxDestinationDatabaseBytes.toString(),
+      },
+    }) + "\n",
+  );
 }
 
 export async function assertDistinctDatabases(
