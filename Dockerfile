@@ -20,6 +20,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
 COPY --from=build --chown=node:node /app/dist ./dist
+COPY --chown=node:node infra/database/migrations ./infra/database/migrations
 
 USER node
 
