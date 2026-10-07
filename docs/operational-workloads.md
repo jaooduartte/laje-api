@@ -27,37 +27,41 @@ Os componentes legados permanecem intactos durante a coexistência. Eles só pod
 ```text
 Frontend AWS-only
   -> POST laje-api preview-jobs
-  -> PostgreSQL/RDS: championship_bracket_preview_jobs
+  -> PostgreSQL/RDS: championship_bracket_preview_private.*
   -> Amazon SQS
   -> worker Node na task ECS/Fargate
-  -> PostgreSQL/RDS: resultado/diagnósticos
+  -> motor exato v8 no PostgreSQL/RDS, orquestrado pela laje-api
   -> frontend consulta status/dia pela laje-api
+  -> criação aprovada também passa pela laje-api
 ```
 
-A fila principal possui DLQ e política de redrive. A entrega é tratada como at-least-once: o worker só processa jobs em estado `QUEUED`; uma repetição de mensagem para job já concluído é inócua.
+A fila principal possui DLQ e política de redrive. A entrega é tratada como at-least-once. Cada mensagem executa um passo retomável do motor v8; quando o próprio motor indica `continue=true`, a `laje-api` publica exatamente a continuação solicitada e só então encerra a mensagem atual.
 
-O EventBridge Scheduler envia uma mensagem `MAINTENANCE` a cada dois minutos. O worker então:
+O EventBridge Scheduler envia uma mensagem `MAINTENANCE` a cada dois minutos. Esse fluxo não reenfileira jobs de processamento. O SQS já mantém a mensagem de forma durável e a reapresenta após o visibility timeout se o consumidor cair antes do `DeleteMessage`. Evitar requeue pelo maintenance remove uma fonte de processamento duplicado e de carga desnecessária no PostgreSQL.
 
-1. identifica jobs em processamento com heartbeat antigo;
-2. devolve esses jobs para `QUEUED`;
-3. remove registros terminais expirados.
+O maintenance executa apenas limpeza limitada de estado terminal:
 
-O recovery não publica uma segunda mensagem para jobs já representados na fila. A mensagem SQS original volta a ficar visível após o visibility timeout, evitando duplicação artificial de tentativas.
+1. jobs `CONSUMED` são elegíveis para remoção uma hora após a materialização do campeonato;
+2. jobs `COMPLETED`, `FAILED` e `CANCELLED` só são removidos depois de `expires_at`;
+3. cada execução remove no máximo 25 jobs, com `FOR UPDATE SKIP LOCKED`, evitando picos de I/O.
 
-O SQS é configurado com long polling e visibility timeout explícito. Enquanto um preview está em execução, o worker renova tanto o `heartbeat_at` do job quanto a visibilidade da mensagem SQS em aproximadamente um terço do timeout configurado. Isso impede que o recovery classifique um job longo e saudável como abandonado e evita processamento concorrente da mesma mensagem.
-
-Em erro de processamento, o job volta para `QUEUED` enquanto houver tentativas disponíveis e a mensagem não é removida, permitindo o retry nativo do SQS. No limite configurado de tentativas, o job passa para `FAILED` e a política de redrive move a mensagem para a DLQ.
+O SQS usa long polling e visibility timeout explícito. Enquanto um passo está em execução, o worker renova o `heartbeat_at` do job e a visibilidade da mensagem em aproximadamente um terço do timeout configurado. Se ocorrer falha de transporte ou processo antes da exclusão da mensagem, o retry é feito pelo próprio SQS; depois do limite de redrive, a mensagem segue para a DLQ.
 
 ### Motor da prévia
 
-O frontend já calcula `structural_schedule_slots` antes da prévia exata. A implementação AWS `aws-structural-v1` usa essa estrutura como skeleton determinístico:
+A primeira implementação AWS simplificada (`aws-structural-v1`) foi descartada antes do cutover porque não reproduzia integralmente o comportamento do motor exato v8 já validado no Supabase.
 
-- fase de grupos: combinações round-robin são associadas sequencialmente aos slots estruturais da competição;
-- mata-mata: os slots são preservados como partidas projetadas, pois os participantes dependem de resultados futuros;
-- falta de capacidade estrutural vira diagnóstico impeditivo;
-- payload, dependências e resultado recebem assinaturas SHA-256 para deduplicação e rastreabilidade.
+A LAJE-126 passa a portar para o RDS o motor exato v8 necessário à prévia e à materialização do chaveamento:
 
-A implementação deliberadamente não copia para o RDS o schema privado/RPCs do Supabase. Regra operacional e orchestration ficam na API; o PostgreSQL persiste estado e resultado.
+- schema transitório `championship_bracket_preview_private`;
+- tabelas, índices, constraints, funções e triggers do motor v8;
+- helpers públicos estritamente necessários ao cálculo;
+- funções de status, consulta por dia e criação final do campeonato;
+- shim de identidade `auth.uid()` baseado em `laje.request_user_id`, definido apenas para compatibilidade das funções portadas.
+
+Não são portados `pgmq`, `pg_cron`, Edge Functions, Vault ou dados históricos do schema privado. `enqueue` vira apenas um ponto de compatibilidade sem fila local; a fila real é Amazon SQS e a orquestração é da `laje-api`.
+
+As migrations carregam somente definição estrutural e código SQL. Nenhuma linha de job/slot/assignment do Supabase é copiada para o RDS. O estado transitório do motor AWS começa vazio e passa a existir apenas quando o frontend AWS-only solicitar uma nova prévia.
 
 ## Feed iCalendar
 
@@ -128,15 +132,31 @@ A implementação adiciona:
 
 Logs de erro incluem falhas do consumidor, identificador da mensagem e receive count sem registrar payloads sensíveis.
 
-## Deploy e migration
+## Deploy e migrations
 
-A tabela operacional de preview é uma migration incremental, não uma alteração retroativa de baseline:
+A portabilidade do motor exato é incremental e permanece fora do baseline. As migrations da LAJE-126 começam em `20261007160300` e terminam em `20261007161000`, cobrindo limpeza do protótipo público, helpers, schema privado, funções, triggers e contratos de API.
 
-```text
-infra/database/migrations/20261007160000_create_championship_bracket_preview_jobs.sql
-```
+Durante o deploy de staging, uma task Fargate efêmera executa o runner antes de iniciar/atualizar o serviço principal. O runner:
 
-Durante o deploy de staging, uma task Fargate efêmera executa o runner de migrations antes de iniciar/atualizar o serviço principal. O banco continua privado; não é aberta conectividade PostgreSQL pública para aplicar a migration.
+- mantém um registro idempotente em `laje_api_internal.operational_migrations`, fora do schema `public`;
+- ignora migrations já aplicadas;
+- separa SQL respeitando funções dollar-quoted, strings e comentários;
+- executa cada migration em transação própria;
+- não abre conectividade PostgreSQL pública.
+
+### Proteção de armazenamento e carga
+
+A migração foi ajustada para não transformar a coexistência em duplicação descontrolada:
+
+- `migration:sync-data` continua exportando somente o schema `public`; `championship_bracket_preview_private` nunca entra no dump de dados;
+- não existe replicação contínua nem dual-write Supabase -> RDS nesta etapa;
+- o dump é transmitido por pipe `pg_dump -> psql`, sem arquivo intermediário;
+- antes de sincronizar, o script mede origem e destino e aplica um orçamento conservador;
+- por padrão, o sync é bloqueado se o `public` da origem ultrapassar 256 MiB ou se a projeção conservadora do destino ultrapassar 2 GiB; os limites só podem ser ampliados explicitamente por `MIGRATION_MAX_SOURCE_PUBLIC_BYTES` e `MIGRATION_MAX_DESTINATION_DATABASE_BYTES`;
+- payloads de prévia acima de 2 MiB são recusados antes de escrever no PostgreSQL;
+- estado transitório consumido/expirado é apagado em batches pequenos pelo maintenance.
+
+Esses limites são guardrails operacionais, não cotas do provedor. Antes do cutover final, devem ser recalibrados a partir das métricas reais do Supabase e da capacidade provisionada do RDS.
 
 ## Evidência de staging — 07/10/2026
 
@@ -157,7 +177,9 @@ Validações concluídas:
 - alarmes `laje-staging-bracket-preview-dlq-not-empty` e `laje-staging-bracket-preview-oldest-message` ficaram em `OK`;
 - task ECS/Fargate executou com 1 instância durante o smoke e foi suspensa após a validação;
 - scheduler foi desabilitado junto com a suspensão do runtime para evitar processamento/custo desnecessário fora da janela de testes;
-- CI da `laje-api`, validação Terraform, imagem Docker e CI do frontend AWS-only passaram.
+- CI da `laje-api`, validação Terraform, imagem Docker e CI do frontend AWS-only passaram para a infraestrutura assíncrona inicial.
+
+Essa evidência antecede a portabilidade completa do motor exato v8. Portanto, depois das migrations `20261007160300..161000`, é obrigatório repetir o staging smoke da prévia real antes de considerar a LAJE-126 concluída.
 
 O envio Brevo permanece propositalmente desabilitado no staging até existir remetente verificado e secret `BREVO_API_KEY` provisionado no Secrets Manager. Isso não bloqueia a migração de código, mas uma entrega transacional real deve ser evidenciada antes da LAJE-139.
 
