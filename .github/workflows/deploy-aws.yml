@@ -39,6 +39,14 @@ env:
   TF_STATE_BUCKET: laje-terraform-state-549243453554-sa-east-1
   AWS_DEPLOY_ROLE_ARN: arn:aws:iam::549243453554:role/laje-github-actions-staging-deploy
   CORS_ORIGINS: https://laje-tcc.vercel.app
+  # Operational settings only. The Brevo credential itself remains in AWS Secrets Manager.
+  TF_VAR_staging_mail_enabled: ${{ vars.STAGING_MAIL_ENABLED || 'false' }}
+  TF_VAR_staging_brevo_api_key_secret_arn: ${{ vars.STAGING_BREVO_API_KEY_SECRET_ARN }}
+  TF_VAR_staging_mail_from: ${{ vars.STAGING_MAIL_FROM }}
+  TF_VAR_staging_mail_from_name: ${{ vars.STAGING_MAIL_FROM_NAME || 'C.O. - Liga das Atléticas de Joinville' }}
+  TF_VAR_staging_co_events_email: ${{ vars.STAGING_CO_EVENTS_EMAIL }}
+  TF_VAR_staging_co_presidency_email: ${{ vars.STAGING_CO_PRESIDENCY_EMAIL }}
+  TF_VAR_staging_app_url: ${{ vars.STAGING_APP_URL || 'https://laje-tcc.vercel.app' }}
 
 jobs:
   staging:
@@ -83,6 +91,31 @@ jobs:
             echo "action=deploy" >> "${GITHUB_OUTPUT}"
           fi
           echo "image_tag=sha-${GITHUB_SHA::12}" >> "${GITHUB_OUTPUT}"
+
+      - name: Validate Brevo staging configuration before Terraform apply
+        shell: bash
+        run: |
+          case "${TF_VAR_staging_mail_enabled}" in
+            true|false) ;;
+            *) echo "STAGING_MAIL_ENABLED must be true or false." >&2; exit 1 ;;
+          esac
+
+          if [[ "${TF_VAR_staging_mail_enabled}" == "true" ]]; then
+            for name in \
+              TF_VAR_staging_brevo_api_key_secret_arn \
+              TF_VAR_staging_mail_from \
+              TF_VAR_staging_co_events_email \
+              TF_VAR_staging_co_presidency_email; do
+              if [[ -z "${!name}" ]]; then
+                echo "Required Brevo staging setting is missing: ${name}." >&2
+                exit 1
+              fi
+            done
+            if [[ "${TF_VAR_staging_brevo_api_key_secret_arn}" != arn:aws:secretsmanager:${AWS_REGION}:* ]]; then
+              echo "Brevo secret ARN region does not match AWS_REGION." >&2
+              exit 1
+            fi
+          fi
 
       - name: Suspend billable staging runtime
         if: steps.mode.outputs.action == 'suspend'
