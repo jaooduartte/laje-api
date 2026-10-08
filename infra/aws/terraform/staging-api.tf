@@ -2,6 +2,165 @@ data "aws_secretsmanager_secret" "auth_jwt" {
   name = var.staging_auth_jwt_secret_name
 }
 
+
+resource "aws_sqs_queue" "bracket_preview_dlq" {
+  name                      = "${local.name_prefix}-bracket-preview-dlq"
+  message_retention_seconds = var.bracket_preview_dlq_retention_seconds
+
+  tags = {
+    Jira = "LAJE-126"
+  }
+}
+
+resource "aws_sqs_queue" "bracket_preview" {
+  name                       = "${local.name_prefix}-bracket-preview"
+  visibility_timeout_seconds = var.bracket_preview_visibility_timeout_seconds
+  message_retention_seconds  = var.bracket_preview_message_retention_seconds
+  receive_wait_time_seconds  = 20
+
+  redrive_policy = jsonencode({
+    deadLetterTargetArn = aws_sqs_queue.bracket_preview_dlq.arn
+    maxReceiveCount     = var.bracket_preview_max_receive_count
+  })
+
+  tags = {
+    Jira = "LAJE-126"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "bracket_preview_dlq" {
+  alarm_name          = "${local.name_prefix}-bracket-preview-dlq-not-empty"
+  alarm_description   = "LAJE-126: messages reached the bracket preview DLQ."
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  threshold           = 0
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  namespace           = "AWS/SQS"
+  period              = 60
+  statistic           = "Maximum"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    QueueName = aws_sqs_queue.bracket_preview_dlq.name
+  }
+
+  tags = {
+    Jira = "LAJE-126"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "bracket_preview_age" {
+  alarm_name          = "${local.name_prefix}-bracket-preview-oldest-message"
+  alarm_description   = "LAJE-126: preview queue contains a message older than five minutes."
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  threshold           = 300
+  metric_name         = "ApproximateAgeOfOldestMessage"
+  namespace           = "AWS/SQS"
+  period              = 60
+  statistic           = "Maximum"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    QueueName = aws_sqs_queue.bracket_preview.name
+  }
+
+  tags = {
+    Jira = "LAJE-126"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "staging_rds_low_free_storage" {
+  alarm_name          = "${local.name_prefix}-rds-low-free-storage"
+  alarm_description   = "LAJE-126: staging RDS free storage is below 5 GiB."
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = 2
+  threshold           = 5368709120
+  metric_name         = "FreeStorageSpace"
+  namespace           = "AWS/RDS"
+  period              = 300
+  statistic           = "Minimum"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    DBInstanceIdentifier = aws_db_instance.staging.identifier
+  }
+
+  tags = {
+    Jira = "LAJE-126"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "staging_rds_high_cpu" {
+  alarm_name          = "${local.name_prefix}-rds-high-cpu"
+  alarm_description   = "LAJE-126: staging RDS CPU stayed above 80 percent for 15 minutes."
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 3
+  threshold           = 80
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/RDS"
+  period              = 300
+  statistic           = "Average"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    DBInstanceIdentifier = aws_db_instance.staging.identifier
+  }
+
+  tags = {
+    Jira = "LAJE-126"
+  }
+}
+
+resource "aws_iam_role" "bracket_preview_scheduler" {
+  name = "${local.name_prefix}-bracket-preview-scheduler"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Service = "scheduler.amazonaws.com"
+      }
+      Action = "sts:AssumeRole"
+    }]
+  })
+
+  tags = {
+    Jira = "LAJE-126"
+  }
+}
+
+resource "aws_iam_role_policy" "bracket_preview_scheduler" {
+  name = "${local.name_prefix}-bracket-preview-scheduler"
+  role = aws_iam_role.bracket_preview_scheduler.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["sqs:SendMessage"]
+      Resource = aws_sqs_queue.bracket_preview.arn
+    }]
+  })
+}
+
+resource "aws_scheduler_schedule" "bracket_preview_maintenance" {
+  name                = "${local.name_prefix}-bracket-preview-maintenance"
+  schedule_expression = var.bracket_preview_maintenance_schedule
+  state               = var.staging_api_enabled ? "ENABLED" : "DISABLED"
+
+  flexible_time_window {
+    mode = "OFF"
+  }
+
+  target {
+    arn      = aws_sqs_queue.bracket_preview.arn
+    role_arn = aws_iam_role.bracket_preview_scheduler.arn
+    input    = jsonencode({ type = "MAINTENANCE" })
+  }
+}
+
 resource "aws_ecr_repository" "api" {
   name                 = "${local.name_prefix}-api"
   image_tag_mutability = "IMMUTABLE"
@@ -85,6 +244,46 @@ resource "aws_iam_role_policy_attachment" "ecs_execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+
+resource "aws_iam_role" "ecs_task" {
+  name = "${local.name_prefix}-ecs-task"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Service = "ecs-tasks.amazonaws.com"
+      }
+      Action = "sts:AssumeRole"
+    }]
+  })
+
+  tags = {
+    Jira = "LAJE-126"
+  }
+}
+
+resource "aws_iam_role_policy" "ecs_task_bracket_preview" {
+  name = "${local.name_prefix}-bracket-preview"
+  role = aws_iam_role.ecs_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "sqs:SendMessage",
+        "sqs:ReceiveMessage",
+        "sqs:DeleteMessage",
+        "sqs:ChangeMessageVisibility",
+        "sqs:GetQueueAttributes"
+      ]
+      Resource = aws_sqs_queue.bracket_preview.arn
+    }]
+  })
+}
+
 resource "aws_iam_role_policy" "ecs_execution_rds_secret" {
   name = "${local.name_prefix}-rds-secret"
   role = aws_iam_role.ecs_execution.id
@@ -95,10 +294,13 @@ resource "aws_iam_role_policy" "ecs_execution_rds_secret" {
       {
         Effect = "Allow"
         Action = ["secretsmanager:GetSecretValue"]
-        Resource = [
-          aws_db_instance.staging.master_user_secret[0].secret_arn,
-          data.aws_secretsmanager_secret.auth_jwt.arn
-        ]
+        Resource = concat(
+          [
+            aws_db_instance.staging.master_user_secret[0].secret_arn,
+            data.aws_secretsmanager_secret.auth_jwt.arn
+          ],
+          var.staging_mail_enabled ? [var.staging_brevo_api_key_secret_arn] : []
+        )
       }
     ]
   })
@@ -111,6 +313,7 @@ resource "aws_ecs_task_definition" "api" {
   cpu                      = "256"
   memory                   = "512"
   execution_role_arn       = aws_iam_role.ecs_execution.arn
+  task_role_arn            = aws_iam_role.ecs_task.arn
 
   runtime_platform {
     operating_system_family = "LINUX"
@@ -144,24 +347,43 @@ resource "aws_ecs_task_definition" "api" {
         { name = "AUTH_ENABLED", value = "true" },
         { name = "AUTH_JWT_EXPIRES_IN", value = "15m" },
         { name = "AUTH_REFRESH_EXPIRES_IN_DAYS", value = "30" },
-        { name = "AWS_ENABLED", value = "false" },
-        { name = "MAIL_ENABLED", value = "false" }
+        { name = "AWS_ENABLED", value = "true" },
+        { name = "AWS_REGION", value = var.aws_region },
+        { name = "BRACKET_PREVIEW_QUEUE_URL", value = aws_sqs_queue.bracket_preview.url },
+        { name = "BRACKET_PREVIEW_WORKER_ENABLED", value = "true" },
+        { name = "BRACKET_PREVIEW_POLL_WAIT_SECONDS", value = "20" },
+        { name = "BRACKET_PREVIEW_VISIBILITY_TIMEOUT_SECONDS", value = tostring(var.bracket_preview_visibility_timeout_seconds) },
+        { name = "BRACKET_PREVIEW_MAX_RECEIVE_COUNT", value = tostring(var.bracket_preview_max_receive_count) },
+        { name = "MAIL_ENABLED", value = tostring(var.staging_mail_enabled) },
+        { name = "MAIL_FROM", value = var.staging_mail_from },
+        { name = "MAIL_FROM_NAME", value = var.staging_mail_from_name },
+        { name = "CO_EVENTS_EMAIL", value = var.staging_co_events_email },
+        { name = "CO_PRESIDENCY_EMAIL", value = var.staging_co_presidency_email },
+        { name = "APP_URL", value = var.staging_app_url }
       ]
 
-      secrets = [
-        {
-          name      = "DATABASE_USER"
-          valueFrom = "${aws_db_instance.staging.master_user_secret[0].secret_arn}:username::"
-        },
-        {
-          name      = "DATABASE_PASSWORD"
-          valueFrom = "${aws_db_instance.staging.master_user_secret[0].secret_arn}:password::"
-        },
-        {
-          name      = "AUTH_JWT_SECRET"
-          valueFrom = data.aws_secretsmanager_secret.auth_jwt.arn
-        }
-      ]
+      secrets = concat(
+        [
+          {
+            name      = "DATABASE_USER"
+            valueFrom = "${aws_db_instance.staging.master_user_secret[0].secret_arn}:username::"
+          },
+          {
+            name      = "DATABASE_PASSWORD"
+            valueFrom = "${aws_db_instance.staging.master_user_secret[0].secret_arn}:password::"
+          },
+          {
+            name      = "AUTH_JWT_SECRET"
+            valueFrom = data.aws_secretsmanager_secret.auth_jwt.arn
+          }
+        ],
+        var.staging_mail_enabled ? [
+          {
+            name      = "BREVO_API_KEY"
+            valueFrom = var.staging_brevo_api_key_secret_arn
+          }
+        ] : []
+      )
 
       logConfiguration = {
         logDriver = "awslogs"
@@ -274,7 +496,8 @@ resource "aws_ecs_service" "api" {
   depends_on = [
     aws_lb_listener.api_http,
     aws_iam_role_policy_attachment.ecs_execution,
-    aws_iam_role_policy.ecs_execution_rds_secret
+    aws_iam_role_policy.ecs_execution_rds_secret,
+    aws_iam_role_policy.ecs_task_bracket_preview
   ]
 
   tags = {

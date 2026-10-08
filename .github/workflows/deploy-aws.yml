@@ -7,6 +7,7 @@ on:
     paths:
       - ".github/workflows/deploy-aws.yml"
       - "infra/aws/terraform/**"
+      - "infra/database/**"
       - "Dockerfile"
       - ".dockerignore"
       - "src/**"
@@ -38,6 +39,14 @@ env:
   TF_STATE_BUCKET: laje-terraform-state-549243453554-sa-east-1
   AWS_DEPLOY_ROLE_ARN: arn:aws:iam::549243453554:role/laje-github-actions-staging-deploy
   CORS_ORIGINS: https://laje-tcc.vercel.app
+  # Operational settings only. The Brevo credential itself remains in AWS Secrets Manager.
+  TF_VAR_staging_mail_enabled: ${{ vars.STAGING_MAIL_ENABLED || 'false' }}
+  TF_VAR_staging_brevo_api_key_secret_arn: ${{ vars.STAGING_BREVO_API_KEY_SECRET_ARN }}
+  TF_VAR_staging_mail_from: ${{ vars.STAGING_MAIL_FROM }}
+  TF_VAR_staging_mail_from_name: ${{ vars.STAGING_MAIL_FROM_NAME || 'C.O. - Liga das Atléticas de Joinville' }}
+  TF_VAR_staging_co_events_email: ${{ vars.STAGING_CO_EVENTS_EMAIL }}
+  TF_VAR_staging_co_presidency_email: ${{ vars.STAGING_CO_PRESIDENCY_EMAIL }}
+  TF_VAR_staging_app_url: ${{ vars.STAGING_APP_URL || 'https://laje-tcc.vercel.app' }}
 
 jobs:
   staging:
@@ -83,6 +92,31 @@ jobs:
           fi
           echo "image_tag=sha-${GITHUB_SHA::12}" >> "${GITHUB_OUTPUT}"
 
+      - name: Validate Brevo staging configuration before Terraform apply
+        shell: bash
+        run: |
+          case "${TF_VAR_staging_mail_enabled}" in
+            true|false) ;;
+            *) echo "STAGING_MAIL_ENABLED must be true or false." >&2; exit 1 ;;
+          esac
+
+          if [[ "${TF_VAR_staging_mail_enabled}" == "true" ]]; then
+            for name in \
+              TF_VAR_staging_brevo_api_key_secret_arn \
+              TF_VAR_staging_mail_from \
+              TF_VAR_staging_co_events_email \
+              TF_VAR_staging_co_presidency_email; do
+              if [[ -z "${!name}" ]]; then
+                echo "Required Brevo staging setting is missing: ${name}." >&2
+                exit 1
+              fi
+            done
+            if [[ "${TF_VAR_staging_brevo_api_key_secret_arn}" != arn:aws:secretsmanager:${AWS_REGION}:* ]]; then
+              echo "Brevo secret ARN region does not match AWS_REGION." >&2
+              exit 1
+            fi
+          fi
+
       - name: Suspend billable staging runtime
         if: steps.mode.outputs.action == 'suspend'
         working-directory: ${{ env.TF_DIR }}
@@ -125,6 +159,33 @@ jobs:
             docker build --platform linux/amd64 --tag "${ECR_REPOSITORY_URL}:${IMAGE_TAG}" .
             docker push "${ECR_REPOSITORY_URL}:${IMAGE_TAG}"
           fi
+
+      - name: Apply operational database migrations
+        if: steps.mode.outputs.action == 'deploy'
+        run: |
+          CLUSTER_NAME="$(terraform -chdir="${TF_DIR}" output -raw staging_api_ecs_cluster_name)"
+          TASK_DEFINITION="$(terraform -chdir="${TF_DIR}" output -raw staging_api_ecs_task_definition_arn)"
+          SECURITY_GROUP="$(terraform -chdir="${TF_DIR}" output -raw ecs_security_group_id)"
+          SUBNETS="$(terraform -chdir="${TF_DIR}" output -json public_subnet_ids | jq -r 'join(",")')"
+
+          TASK_ARN="$(aws ecs run-task             --cluster "${CLUSTER_NAME}"             --task-definition "${TASK_DEFINITION}"             --launch-type FARGATE             --network-configuration "awsvpcConfiguration={subnets=[${SUBNETS}],securityGroups=[${SECURITY_GROUP}],assignPublicIp=ENABLED}"             --overrides '{"containerOverrides":[{"name":"api","command":["node","dist/operations/apply-operational-migrations.js"]}]}'             --query 'tasks[0].taskArn'             --output text)"
+
+          if [[ -z "${TASK_ARN}" || "${TASK_ARN}" == "None" ]]; then
+            echo "Unable to start database migration task."
+            exit 1
+          fi
+
+          aws ecs wait tasks-stopped --cluster "${CLUSTER_NAME}" --tasks "${TASK_ARN}"
+
+          EXIT_CODE="$(aws ecs describe-tasks             --cluster "${CLUSTER_NAME}"             --tasks "${TASK_ARN}"             --query 'tasks[0].containers[?name==`api`].exitCode | [0]'             --output text)"
+
+          if [[ "${EXIT_CODE}" != "0" ]]; then
+            aws ecs describe-tasks --cluster "${CLUSTER_NAME}" --tasks "${TASK_ARN}"
+            echo "Operational database migrations failed with exit code ${EXIT_CODE}."
+            exit 1
+          fi
+
+          echo "Operational database migrations completed."
 
       - name: Start one Fargate staging task
         if: steps.mode.outputs.action == 'deploy'

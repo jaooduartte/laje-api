@@ -154,21 +154,44 @@ if (authEnabled) {
 }
 
 const awsRegion = optional("AWS_REGION");
+const bracketPreviewQueueUrl = optional("BRACKET_PREVIEW_QUEUE_URL");
+const bracketPreviewWorkerEnabled = booleanValue("BRACKET_PREVIEW_WORKER_ENABLED", false);
+const bracketPreviewPollWaitSeconds = optionalInteger(
+  "BRACKET_PREVIEW_POLL_WAIT_SECONDS",
+  20,
+  1,
+  20,
+);
+const bracketPreviewVisibilityTimeoutSeconds = optionalInteger(
+  "BRACKET_PREVIEW_VISIBILITY_TIMEOUT_SECONDS",
+  180,
+  30,
+  900,
+);
+const bracketPreviewMaxReceiveCount = optionalInteger(
+  "BRACKET_PREVIEW_MAX_RECEIVE_COUNT",
+  5,
+  1,
+  100,
+);
 if (awsEnabled && !awsRegion) {
   issues.push("AWS_REGION is required when AWS_ENABLED=true.");
 }
+if (bracketPreviewWorkerEnabled && !bracketPreviewQueueUrl) {
+  issues.push("BRACKET_PREVIEW_QUEUE_URL is required when BRACKET_PREVIEW_WORKER_ENABLED=true.");
+}
 
-const mailHost = optional("MAIL_HOST");
-const mailPort = optionalInteger("MAIL_PORT", 587, 1, 65535);
-const mailSecure = booleanValue("MAIL_SECURE", false);
-const mailUser = optional("MAIL_USER");
-const mailPassword = optional("MAIL_PASSWORD");
 const mailFrom = optional("MAIL_FROM");
+const mailFromName = optional("MAIL_FROM_NAME") ?? "C.O. - Liga das Atléticas de Joinville";
+const brevoApiKey = optional("BREVO_API_KEY");
+const coEventsEmail = optional("CO_EVENTS_EMAIL");
+const coPresidencyEmail = optional("CO_PRESIDENCY_EMAIL");
+const appUrl = optional("APP_URL") ?? "https://laje-tcc.vercel.app";
 if (mailEnabled) {
-  if (!mailHost) issues.push("MAIL_HOST is required when MAIL_ENABLED=true.");
-  if (!mailUser) issues.push("MAIL_USER is required when MAIL_ENABLED=true.");
-  if (!mailPassword) issues.push("MAIL_PASSWORD is required when MAIL_ENABLED=true.");
+  if (!brevoApiKey) issues.push("BREVO_API_KEY is required when MAIL_ENABLED=true.");
   if (!mailFrom) issues.push("MAIL_FROM is required when MAIL_ENABLED=true.");
+  if (!coEventsEmail) issues.push("CO_EVENTS_EMAIL is required when MAIL_ENABLED=true.");
+  if (!coPresidencyEmail) issues.push("CO_PRESIDENCY_EMAIL is required when MAIL_ENABLED=true.");
 }
 
 if (
@@ -194,14 +217,15 @@ const auth = createRedactedConfig(
 const mail = createRedactedConfig(
   {
     enabled: mailEnabled,
-    host: mailHost,
-    port: mailPort,
-    secure: mailSecure,
-    user: mailUser,
-    password: mailPassword,
+    provider: "brevo" as const,
+    brevoApiKey,
     from: mailFrom,
+    fromName: mailFromName,
+    coEventsEmail,
+    coPresidencyEmail,
+    appUrl,
   },
-  ["password"] as const,
+  ["brevoApiKey"] as const,
 );
 
 export const environment = createRedactedConfig(
@@ -219,6 +243,11 @@ export const environment = createRedactedConfig(
       enabled: awsEnabled,
       region: awsRegion,
       secretsPrefix: optional("AWS_SECRETS_PREFIX"),
+      bracketPreviewQueueUrl,
+      bracketPreviewWorkerEnabled,
+      bracketPreviewPollWaitSeconds,
+      bracketPreviewVisibilityTimeoutSeconds,
+      bracketPreviewMaxReceiveCount,
     }),
     mail,
   },

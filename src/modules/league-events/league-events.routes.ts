@@ -19,6 +19,7 @@ import {
   type AuthenticatedRequest,
 } from "../auth/auth.middleware.js";
 import type { AuthService } from "../auth/auth.service.js";
+import { sendReservationEmailSafely } from "../notifications/reservation-email.service.js";
 
 const EVENT_TYPES = ["HH", "OPEN_BAR", "CHAMPIONSHIP", "LAJE_EVENT"] as const;
 const RESERVATION_STATUSES = ["PENDING", "APPROVED", "REJECTED"] as const;
@@ -314,7 +315,7 @@ export function createLeagueEventsRouter(authService: AuthService): Router {
     try {
       const input = parseReservationCreate(request.body);
       const teamResult = await database.query(
-        "SELECT id FROM public.teams WHERE id = $1 AND is_active",
+        "SELECT id, name FROM public.teams WHERE id = $1 AND is_active",
         [input.teamId],
       );
       if (teamResult.rows.length === 0) {
@@ -339,7 +340,17 @@ export function createLeagueEventsRouter(authService: AuthService): Router {
           input.requesterEmail,
         ],
       );
-      response.status(201).json({ data: result.rows[0] });
+      const createdRequest = result.rows[0]!;
+      sendReservationEmailSafely({
+        type: "PENDING",
+        requesterEmail: input.requesterEmail,
+        requesterName: input.requesterName,
+        teamName: String(teamResult.rows[0]!.name),
+        eventName: input.eventName,
+        eventType: input.eventType,
+        eventDate: input.eventDate,
+      });
+      response.status(201).json({ data: createdRequest });
     } catch (error) {
       next(error);
     }
@@ -429,6 +440,24 @@ export function createLeagueEventsRouter(authService: AuthService): Router {
           );
           return { request: newRequest, leagueEvent: createdEvent };
         });
+
+        const reviewedRequest = reviewed.request;
+        if (reviewedRequest) {
+          const team =
+            reviewedRequest.team && typeof reviewedRequest.team === "object"
+              ? (reviewedRequest.team as Record<string, unknown>)
+              : null;
+          sendReservationEmailSafely({
+            type: decision,
+            requesterEmail: String(reviewedRequest.requesterEmail ?? ""),
+            requesterName: String(reviewedRequest.requesterName ?? ""),
+            teamName: String(team?.name ?? "Atlética"),
+            eventName: String(reviewedRequest.eventName ?? ""),
+            eventType: String(reviewedRequest.eventType ?? ""),
+            eventDate: String(reviewedRequest.eventDate ?? ""),
+            reviewNotes,
+          });
+        }
 
         response.status(200).json({ data: reviewed });
       } catch (error) {

@@ -198,6 +198,12 @@ jobs:
         run: |
           createdb --host localhost --username postgres laje_migration_source
           psql --host localhost --username postgres --dbname laje_migration_source --set ON_ERROR_STOP=1 --file infra/database/baseline/schema.sql
+          shopt -s nullglob
+          source_migrations=(infra/database/migrations/*.sql)
+          for migration in "${source_migrations[@]}"; do
+            echo "Applying ${migration} to synthetic migration source"
+            psql --host localhost --username postgres --dbname laje_migration_source --set ON_ERROR_STOP=1 --file "${migration}"
+          done
           psql --host localhost --username postgres --dbname laje_migration_source --set ON_ERROR_STOP=1 <<'SQL'
           INSERT INTO public.teams (id, name)
           VALUES ('00000000-0000-0000-0000-000000000001', 'Synthetic team');
@@ -244,6 +250,20 @@ jobs:
           export PATH="$RUNNER_TEMP/laje-pg17:$PATH"
           npm run migration:sync-data
           npm run migration:verify-parity
+
+          # Storage guardrails must fail before any destructive destination write.
+          if MIGRATION_MAX_SOURCE_PUBLIC_BYTES=1 npm run migration:sync-data; then
+            echo "Expected source storage budget guard to block synchronization."
+            exit 1
+          fi
+          test "$(docker run --rm --network host --env PGPASSWORD postgres:17 psql --host localhost --username postgres --dbname laje_baseline --tuples-only --no-align --command 'SELECT count(*) FROM public.league_event_reservation_requests')" = "39"
+
+          if MIGRATION_MAX_DESTINATION_DATABASE_BYTES=1 npm run migration:sync-data; then
+            echo "Expected destination storage budget guard to block synchronization."
+            exit 1
+          fi
+          test "$(docker run --rm --network host --env PGPASSWORD postgres:17 psql --host localhost --username postgres --dbname laje_baseline --tuples-only --no-align --command 'SELECT count(*) FROM public.league_event_reservation_requests')" = "39"
+
           if MIGRATION_DESTINATION_DATABASE_URL="$MIGRATION_SOURCE_DATABASE_URL" npm run migration:sync-data; then
             exit 1
           fi

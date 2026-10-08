@@ -4,7 +4,11 @@ coverage
 .git
 .github
 docs
-infra
+infra/*
+!infra/database/
+infra/database/*
+!infra/database/migrations/
+!infra/database/migrations/**
 scripts
 tests
 *.log

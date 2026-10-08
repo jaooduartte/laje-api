@@ -1,6 +1,10 @@
 import { app } from "./app.js";
 import { appConfig } from "./config/app.config.js";
 import { database } from "./database/index.js";
+import {
+  startBracketPreviewWorker,
+  stopBracketPreviewWorker,
+} from "./modules/bracket-preview/bracket-preview.runtime.js";
 
 async function startServer(): Promise<void> {
   await database.checkConnection();
@@ -9,6 +13,7 @@ async function startServer(): Promise<void> {
     console.log(
       `LAJE API listening on http://localhost:${appConfig.port}/api/v1 (${appConfig.environment})`,
     );
+    startBracketPreviewWorker();
   });
 
   let shuttingDown = false;
@@ -18,6 +23,7 @@ async function startServer(): Promise<void> {
     shuttingDown = true;
 
     console.log(`Received ${signal}. Closing HTTP server and PostgreSQL connections.`);
+    stopBracketPreviewWorker();
 
     await new Promise<void>((resolve, reject) => {
       server.close((error) => {

@@ -17,6 +17,7 @@ import {
   type AuthenticatedRequest,
 } from "../auth/auth.middleware.js";
 import type { AuthService } from "../auth/auth.service.js";
+import { createBracketPreviewRouter } from "../bracket-preview/bracket-preview.routes.js";
 
 const NAIPES = ["MASCULINO", "FEMININO", "MISTO"] as const;
 const DIVISIONS = ["DIVISAO_PRINCIPAL", "DIVISAO_ACESSO"] as const;
@@ -319,6 +320,8 @@ async function loadBracketView(championshipId: string, seasonYear: number) {
 export function createBracketRouter(authService: AuthService): Router {
   const router = Router({ mergeParams: true });
   const requireAuthentication = createRequireAuthentication(authService);
+
+  router.use("/preview-jobs", createBracketPreviewRouter(authService));
 
   router.get("/", async (request, response, next) => {
     try {

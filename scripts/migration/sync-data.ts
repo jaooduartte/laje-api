@@ -1,5 +1,6 @@
 import {
   assertDestinationWriteAllowed,
+  assertMigrationStorageBudget,
   getMigrationConnection,
   synchronizeData,
 } from "./shared.js";
@@ -15,4 +16,5 @@ if (mode === "final" && !process.env.MIGRATION_WRITES_PAUSED_AT?.trim()) {
 assertDestinationWriteAllowed("Data synchronization");
 const source = getMigrationConnection("source");
 const destination = getMigrationConnection("destination");
+await assertMigrationStorageBudget(source, destination);
 await synchronizeData(source, destination);

@@ -7,6 +7,8 @@ import { createAdminRuntimeRouter } from "../modules/admin-runtime/admin-runtime
 import { createAuthRouter } from "../modules/auth/auth.routes.js";
 import { AuthService } from "../modules/auth/auth.service.js";
 import { createChampionshipsRouter } from "../modules/championships/championships.routes.js";
+import { createCalendarSubscriptionRouter } from "../modules/calendar-subscription/calendar-subscription.routes.js";
+import { createGlobalBracketPreviewRouter } from "../modules/bracket-preview/bracket-preview.routes.js";
 import { createHealthRouter } from "../modules/health/health.routes.js";
 import { HealthService } from "../modules/health/health.service.js";
 import { createLeagueEventConflictsRouter } from "../modules/league-events/league-event-conflicts.routes.js";
@@ -36,6 +38,8 @@ apiRouter.get("/", (_request, response) => {
 });
 
 apiRouter.use("/health", createHealthRouter(healthService));
+apiRouter.use("/calendar-subscription-feed", createCalendarSubscriptionRouter());
+apiRouter.use("/bracket-preview-jobs", createGlobalBracketPreviewRouter(authService));
 apiRouter.use("/auth", createAuthRouter(authService));
 apiRouter.use("/admin-runtime", createAdminRuntimeRouter(authService));
 apiRouter.use("/matches", createMatchesRouter(authService));

@@ -78,3 +78,24 @@ output "staging_api_alb_dns_name" {
   value       = var.staging_api_enabled ? aws_lb.api[0].dns_name : null
   description = "Internal ALB DNS name used only through API Gateway VPC Link."
 }
+
+
+output "staging_api_ecs_task_definition_arn" {
+  value       = aws_ecs_task_definition.api.arn
+  description = "Current staging API task definition ARN."
+}
+
+output "staging_bracket_preview_queue_url" {
+  value       = aws_sqs_queue.bracket_preview.url
+  description = "SQS queue URL used by bracket preview jobs."
+}
+
+output "staging_bracket_preview_dlq_url" {
+  value       = aws_sqs_queue.bracket_preview_dlq.url
+  description = "DLQ URL for failed bracket preview jobs."
+}
+
+output "staging_bracket_preview_scheduler_name" {
+  value       = aws_scheduler_schedule.bracket_preview_maintenance.name
+  description = "EventBridge Scheduler name for preview recovery and cleanup."
+}
