@@ -32,15 +32,27 @@ test("requester notification preserves legacy LAJE branding and details", () => 
 });
 
 test("approval and rejection reuse the same status cards and subjects as Supabase", () => {
-  const approved = buildReservationRequesterHtml({ ...original, type: "APPROVED" }, "https://laje-tcc.vercel.app");
+  const approved = buildReservationRequesterHtml(
+    { ...original, type: "APPROVED" },
+    "https://laje-tcc.vercel.app",
+  );
   assert.match(approved, /Reserva aprovada!/);
   assert.match(approved, /Sua reserva foi aprovada e o evento já está publicado/);
-  assert.equal(buildReservationSubject({ ...original, type: "APPROVED" }), "Reserva aprovada: TESTE LAJE-126");
-  const rejected = buildReservationRequesterHtml({ ...original, type: "REJECTED", reviewNotes: "Data ocupada" }, "https://laje-tcc.vercel.app");
+  assert.equal(
+    buildReservationSubject({ ...original, type: "APPROVED" }),
+    "Reserva aprovada: TESTE LAJE-126",
+  );
+  const rejected = buildReservationRequesterHtml(
+    { ...original, type: "REJECTED", reviewNotes: "Data ocupada" },
+    "https://laje-tcc.vercel.app",
+  );
   assert.match(rejected, /Reserva não aprovada/);
   assert.match(rejected, /Motivo/);
   assert.match(rejected, /Data ocupada/);
-  assert.equal(buildReservationSubject({ ...original, type: "REJECTED" }), "Atualização sobre sua reserva: TESTE LAJE-126");
+  assert.equal(
+    buildReservationSubject({ ...original, type: "REJECTED" }),
+    "Atualização sobre sua reserva: TESTE LAJE-126",
+  );
 });
 
 test("admin notification preserves legacy actionable banner and management link", () => {
@@ -54,7 +66,13 @@ test("admin notification preserves legacy actionable banner and management link"
 });
 
 test("HTML-escapes input fields and review notes without modifying the visible layout", () => {
-  const malicious = { ...original, type: "REJECTED" as const, eventName: "<script>alert(1)</script>", requesterName: "<b>Fulano</b>", reviewNotes: "<img src=x onerror=alert(1)>" };
+  const malicious = {
+    ...original,
+    type: "REJECTED" as const,
+    eventName: "<script>alert(1)</script>",
+    requesterName: "<b>Fulano</b>",
+    reviewNotes: "<img src=x onerror=alert(1)>",
+  };
   const requester = buildReservationRequesterHtml(malicious, "https://laje-tcc.vercel.app");
   const admin = buildReservationAdminHtml(malicious, "https://laje-tcc.vercel.app");
   assert.match(requester, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
@@ -64,4 +82,3 @@ test("HTML-escapes input fields and review notes without modifying the visible l
   assert.doesNotMatch(requester, /<script>|<img src=x/);
   assert.doesNotMatch(admin, /<script>/);
 });
-

@@ -21,8 +21,18 @@ function escapeHtml(value: string): string {
 function formatDate(dateStr: string): string {
   const [year, month, day] = dateStr.split("-");
   const months = [
-    "janeiro", "fevereiro", "março", "abril", "maio", "junho",
-    "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
+    "janeiro",
+    "fevereiro",
+    "março",
+    "abril",
+    "maio",
+    "junho",
+    "julho",
+    "agosto",
+    "setembro",
+    "outubro",
+    "novembro",
+    "dezembro",
   ];
   return `${day} de ${months[Number(month) - 1]} de ${year}`;
 }
@@ -76,18 +86,25 @@ function buildStatusBlock(payload: ReservationEmailInput): string {
           <p style="margin:8px 0 0 0;font-size:14px;color:#991b1b;line-height:1.5;">
             Infelizmente não foi possível aprovar sua solicitação de reserva.
           </p>
-          ${payload.reviewNotes ? `
+          ${
+            payload.reviewNotes
+              ? `
           <div style="margin-top:12px;padding:12px 16px;background:#fee2e2;border-radius:8px;">
             <p style="margin:0 0 4px 0;font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#b91c1c;">Motivo</p>
             <p style="margin:0;font-size:14px;color:#7f1d1d;line-height:1.5;">${escapeHtml(payload.reviewNotes ?? "")}</p>
           </div>
-          ` : ""}
+          `
+              : ""
+          }
         </div>
       `;
   }
 }
 
-export function buildReservationRequesterHtml(payload: ReservationEmailInput, appUrl: string): string {
+export function buildReservationRequesterHtml(
+  payload: ReservationEmailInput,
+  appUrl: string,
+): string {
   const normalizedAppUrl = appUrl.replace(/\/+$/, "");
   const eventTypeLabel = LEAGUE_EVENT_TYPE_LABELS[payload.eventType] ?? payload.eventType;
   const formattedDate = formatDate(payload.eventDate);
