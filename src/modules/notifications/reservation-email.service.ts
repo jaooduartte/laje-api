@@ -1,3 +1,8 @@
+import {
+  buildReservationAdminHtml,
+  buildReservationRequesterHtml,
+  buildReservationSubject,
+} from "./reservation-email.template.js";
 import { mailConfig } from "../../config/mail.config.js";
 
 export type ReservationEmailType = "PENDING" | "APPROVED" | "REJECTED";
@@ -16,75 +21,6 @@ export interface ReservationEmailInput {
 interface BrevoRecipient {
   email: string;
   name?: string;
-}
-
-function formatDate(date: string): string {
-  const parsed = new Date(`${date}T12:00:00-03:00`);
-  if (!Number.isFinite(parsed.getTime())) return date;
-  return new Intl.DateTimeFormat("pt-BR", {
-    timeZone: "America/Sao_Paulo",
-    dateStyle: "long",
-  }).format(parsed);
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
-function subjectFor(input: ReservationEmailInput): string {
-  if (input.type === "PENDING") return `Solicitação recebida: ${input.eventName}`;
-  if (input.type === "APPROVED") return `Reserva aprovada: ${input.eventName}`;
-  return `Atualização sobre sua reserva: ${input.eventName}`;
-}
-
-function statusLabel(type: ReservationEmailType): string {
-  if (type === "PENDING") return "Solicitação recebida";
-  if (type === "APPROVED") return "Reserva aprovada";
-  return "Reserva não aprovada";
-}
-
-function buildRequesterHtml(input: ReservationEmailInput): string {
-  const notes = input.reviewNotes?.trim()
-    ? `<p><strong>Observações:</strong> ${escapeHtml(input.reviewNotes.trim())}</p>`
-    : "";
-
-  return `<!doctype html>
-<html lang="pt-BR">
-  <body style="font-family:Arial,sans-serif;color:#111827;line-height:1.5">
-    <h2>${escapeHtml(statusLabel(input.type))}</h2>
-    <p>Olá, ${escapeHtml(input.requesterName)}.</p>
-    <p>Esta é uma atualização sobre a solicitação de reserva registrada na agenda da LAJE.</p>
-    <ul>
-      <li><strong>Evento:</strong> ${escapeHtml(input.eventName)}</li>
-      <li><strong>Atlética:</strong> ${escapeHtml(input.teamName)}</li>
-      <li><strong>Tipo:</strong> ${escapeHtml(input.eventType)}</li>
-      <li><strong>Data:</strong> ${escapeHtml(formatDate(input.eventDate))}</li>
-    </ul>
-    ${notes}
-    <p>Consulte a agenda em <a href="${escapeHtml(mailConfig.appUrl)}">${escapeHtml(mailConfig.appUrl)}</a>.</p>
-  </body>
-</html>`;
-}
-
-function buildAdminHtml(input: ReservationEmailInput): string {
-  return `<!doctype html>
-<html lang="pt-BR">
-  <body style="font-family:Arial,sans-serif;color:#111827;line-height:1.5">
-    <h2>Nova solicitação de reserva</h2>
-    <ul>
-      <li><strong>Solicitante:</strong> ${escapeHtml(input.requesterName)} (${escapeHtml(input.requesterEmail)})</li>
-      <li><strong>Atlética:</strong> ${escapeHtml(input.teamName)}</li>
-      <li><strong>Evento:</strong> ${escapeHtml(input.eventName)}</li>
-      <li><strong>Tipo:</strong> ${escapeHtml(input.eventType)}</li>
-      <li><strong>Data:</strong> ${escapeHtml(formatDate(input.eventDate))}</li>
-    </ul>
-  </body>
-</html>`;
 }
 
 async function sendBrevoEmail(
@@ -126,8 +62,8 @@ export async function sendReservationEmail(input: ReservationEmailInput): Promis
 
   await sendBrevoEmail(
     [{ email: input.requesterEmail, name: input.requesterName }],
-    subjectFor(input),
-    buildRequesterHtml(input),
+    buildReservationSubject(input),
+    buildReservationRequesterHtml(input, mailConfig.appUrl),
   );
 
   if (input.type !== "PENDING") return;
@@ -143,7 +79,7 @@ export async function sendReservationEmail(input: ReservationEmailInput): Promis
       await sendBrevoEmail(
         [{ email }],
         `Nova solicitação de reserva: ${input.eventName} (${input.teamName})`,
-        buildAdminHtml(input),
+        buildReservationAdminHtml(input, mailConfig.appUrl),
       );
     } catch (error) {
       console.error(`reservation-admin-email-failed recipient=${email}`, error);
