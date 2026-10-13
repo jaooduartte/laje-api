@@ -24,6 +24,8 @@ Esse ensaio valida a mecânica de exportação, importação, rollback transacio
 
 O modo `rehearsal` não transforma divergências em sucesso. Ele apenas fornece o contexto operacional correto para uma origem que continua recebendo escrita.
 
+**Nota de transição (LAJE-139):** o procedimento final de produção, gates de dependências, comunicação, checklist GO/NO-GO e auditoria de custos estão em [cutover-production-laje139.md](cutover-production-laje139.md). O requisito de contagem pós-freeze é obrigatório no modo final; não usar amostras históricas como verdade de produção.
+
 ## Preparação
 
 1. Confirmar que LAJE-33, LAJE-37, LAJE-89, LAJE-126 e LAJE-136 foram concluídas ou que não exista dependência transitória capaz de impedir os fluxos finais da API, publicação, jobs ou realtime.
