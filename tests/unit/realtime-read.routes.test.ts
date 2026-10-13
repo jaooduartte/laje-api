@@ -4,7 +4,7 @@ import test from "node:test";
 import {
   buildRealtimeSnapshotQuery,
   isRealtimeSnapshotName,
-} from "../../src/modules/realtime-read/realtime-read.routes.js";
+} from "../../src/modules/realtime-read/realtime-read.queries.js";
 
 const championshipId = "b37e22a1-8181-43b2-98a1-29db7e864f0a";
 const sportId = "a67e69ea-6fb2-4245-a34a-02b36b4cda11";
