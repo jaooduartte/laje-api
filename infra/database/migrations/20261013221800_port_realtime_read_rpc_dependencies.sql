@@ -4726,7 +4726,7 @@ BEGIN
     _competition_id
   );
 END;
-$function$
+$function$;
 
 -- Supabase source RPC helper: get_interlaje_qualification_pool_ranking_legacy
 CREATE OR REPLACE FUNCTION public.get_interlaje_qualification_pool_ranking_legacy(_championship_id uuid, _competition_id uuid)
@@ -5082,7 +5082,7 @@ AS $function$
     ranked_pool.pool_rank
   FROM ranked_pool
   ORDER BY ranked_pool.pool_rank ASC, ranked_pool.team_name ASC;
-$function$
+$function$;
 
 -- Supabase source RPC helper: get_interlaje_volleyball_cross_group_ranking
 CREATE OR REPLACE FUNCTION public.get_interlaje_volleyball_cross_group_ranking(_championship_id uuid, _competition_id uuid)
@@ -5327,7 +5327,7 @@ AS $function$
     ranked_pool.pool_rank
   FROM ranked_pool
   ORDER BY ranked_pool.pool_rank ASC, ranked_pool.team_name ASC;
-$function$
+$function$;
 
 -- Source compatibility: pending tie-breaks calls a plural name that is absent
 -- from the current Supabase pg_proc catalog. Reuse its singular implementation.
