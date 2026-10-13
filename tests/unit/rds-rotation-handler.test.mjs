@@ -8,6 +8,7 @@ const config = {
   accountId: "549243453554",
   region: "sa-east-1",
   secretArn: "arn:aws:secretsmanager:sa-east-1:549243453554:secret:rds!db-test-ABC",
+  lockTable: "laje-staging-rds-rotation-lock",
   cluster: "laje-staging-api",
   service: "laje-staging-api",
   databaseHealthUrl: "https://example.invalid/database",
@@ -26,10 +27,12 @@ const secret = {
   LastChangedDate: new Date("2026-10-12T03:09:15Z"),
   VersionIdsToStages: { v2: ["AWSCURRENT"] },
 };
-function mocks({ suspended = false, fresh = false, failedHealth = false } = {}) {
+function mocks({ suspended = false, fresh = false, failedHealth = false, locked = false } = {}) {
   let restarted = false;
   const calls = [];
   const deps = {
+    async acquireLock() { calls.push("lock"); return !locked; },
+    async releaseLock() { calls.push("unlock"); },
     async describeSecret() {
       calls.push("secret");
       return secret;
@@ -110,4 +113,20 @@ test("deduplicates fresh task and fails visibly if post-deploy health fails", as
   assert.equal(x.calls.includes("force"), false);
   const y = mocks({ failedHealth: true });
   await assert.rejects(handleRotation(event, y.deps, config), /bad health/);
+});
+
+test("serializes concurrent handler invocations without reserving account concurrency", async () => {
+  const busy = mocks({ locked: true });
+  await assert.rejects(handleRotation(event, busy.deps, config), /already in progress/);
+  assert.equal(busy.calls.includes("force"), false);
+  assert.equal(busy.calls.includes("unlock"), false);
+  const single = mocks();
+  await handleRotation(event, single.deps, config);
+  assert.equal(single.calls.filter((x) => x === "lock").length, 1);
+  assert.equal(single.calls.filter((x) => x === "unlock").length, 1);
+});
+test("releases the distributed lock even when post-deployment health checks fail", async () => {
+  const broken = mocks({ failedHealth: true });
+  await assert.rejects(handleRotation(event, broken.deps, config), /bad health/);
+  assert.equal(broken.calls.filter((x) => x === "unlock").length, 1);
 });

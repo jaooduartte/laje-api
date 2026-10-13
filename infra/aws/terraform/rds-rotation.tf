@@ -39,6 +39,28 @@ resource "aws_iam_role" "rds_rotation" {
   }
 }
 
+
+resource "aws_dynamodb_table" "rds_rotation_lock" {
+  count        = var.staging_api_enabled ? 1 : 0
+  name         = "${local.name_prefix}-rds-rotation-lock"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "LockId"
+
+  attribute {
+    name = "LockId"
+    type = "S"
+  }
+
+  ttl {
+    attribute_name = "ExpiresAt"
+    enabled        = true
+  }
+
+  tags = {
+    Jira = "LAJE-143"
+  }
+}
+
 resource "aws_iam_role_policy" "rds_rotation" {
   count = var.staging_api_enabled ? 1 : 0
   name  = "${local.name_prefix}-rds-rotation"
@@ -47,6 +69,11 @@ resource "aws_iam_role_policy" "rds_rotation" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["dynamodb:PutItem", "dynamodb:DeleteItem"]
+        Resource = aws_dynamodb_table.rds_rotation_lock[0].arn
+      },
       {
         Effect   = "Allow"
         Action   = ["secretsmanager:DescribeSecret"]
@@ -88,13 +115,13 @@ resource "aws_lambda_function" "rds_rotation" {
   architectures                  = ["arm64"]
   memory_size                    = 128
   timeout                        = 600
-  reserved_concurrent_executions = 1
 
   environment {
     variables = {
       EXPECTED_AWS_ACCOUNT = data.aws_caller_identity.rotation.account_id
       EXPECTED_AWS_REGION  = var.aws_region
       RDS_SECRET_ARN       = aws_db_instance.staging.master_user_secret[0].secret_arn
+      ROTATION_LOCK_TABLE  = aws_dynamodb_table.rds_rotation_lock[0].name
       ECS_CLUSTER_NAME     = aws_ecs_cluster.api.name
       ECS_SERVICE_NAME     = aws_ecs_service.api[0].name
       DATABASE_HEALTH_URL  = "${aws_apigatewayv2_api.api[0].api_endpoint}/api/v1/health/database"
