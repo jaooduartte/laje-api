@@ -40,8 +40,7 @@ function audit(): void {
     throw new Error("AWS account mismatch: expected the LAJE staging account.");
   }
 
-  const queueUrl =
-    "https://sqs." + REGION + ".amazonaws.com/" + ACCOUNT_ID + "/" + QUEUE_NAME;
+  const queueUrl = "https://sqs." + REGION + ".amazonaws.com/" + ACCOUNT_ID + "/" + QUEUE_NAME;
   const initial = awsJson<QueueAttributeResponse>([
     "sqs",
     "get-queue-attributes",

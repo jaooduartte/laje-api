@@ -1,6 +1,4 @@
-export type QueueMessage =
-  | { type: "PROCESS_PREVIEW"; jobId: string }
-  | { type: "MAINTENANCE" };
+export type QueueMessage = { type: "PROCESS_PREVIEW"; jobId: string } | { type: "MAINTENANCE" };
 
 // This is shared by the running worker and the non-destructive DLQ audit tool.
 export function parseBracketPreviewQueueMessage(body: string): QueueMessage {

@@ -2,10 +2,7 @@ import { awsConfig } from "../../config/aws.config.js";
 import { database } from "../../database/index.js";
 import { AwsSqsClient } from "../../integrations/aws/sqs.client.js";
 import { BracketPreviewService } from "./bracket-preview.service.js";
-import {
-  parseBracketPreviewQueueMessage,
-  type QueueMessage,
-} from "./bracket-preview-message.js";
+import { parseBracketPreviewQueueMessage, type QueueMessage } from "./bracket-preview-message.js";
 
 class BracketPreviewQueue {
   private readonly client: AwsSqsClient | null;
