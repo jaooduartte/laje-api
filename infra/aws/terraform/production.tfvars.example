@@ -11,4 +11,4 @@ backup_retention_days     = 7
 deletion_protection       = true
 skip_final_snapshot       = false
 final_snapshot_identifier = "laje-production-final"
-jira_issue_key            = "LAJE-88"
+jira_issue_key            = "LAJE-139"
