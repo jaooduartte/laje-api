@@ -87,7 +87,7 @@ export function buildRealtimeSnapshotQuery(
   name: RealtimeSnapshotName,
   scope: {
     championshipId: string;
-    seasonYear?: number | undefined;
+    seasonYear?: number | null | undefined;
     bracketEditionId?: string | undefined;
     sportId?: string | undefined;
     naipe?: string | undefined;
@@ -130,7 +130,10 @@ export function createRealtimeReadRouter(authService: AuthService): Router {
         const seasonYear =
           name === "pending-tie-breaks"
             ? undefined
-            : requireInteger(request.query.seasonYear, "seasonYear", { min: 2000, max: 2100 });
+            : request.query.seasonYear == null &&
+                (name === "corrected-group-standings" || name === "resolved-tie-break-orders")
+              ? null
+              : requireInteger(request.query.seasonYear, "seasonYear", { min: 2000, max: 2100 });
         const bracketEditionId =
           name === "pending-tie-breaks"
             ? optionalUuid(request.query.bracketEditionId, "bracketEditionId")
