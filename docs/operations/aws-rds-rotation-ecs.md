@@ -12,9 +12,10 @@ Este módulo previne a recorrência **no staging AWS**, sem ler a senha e sem af
 2. A regra EventBridge aceita apenas a conta, região e ARN **exato** do segredo master gerenciado pelo RDS de staging.
 3. A função Lambda Node.js 22 verifica novamente a origem, o ARN e se o `versionId` do evento possui `AWSCURRENT` via `DescribeSecret`. **Não acessa `GetSecretValue`**.
 4. Se o serviço estiver suspenso (`desiredCount=0`), a função sai sem reiniciar tasks. Se a task já iniciou depois da atualização da senha, não reimplanta. Se um deployment estiver em andamento, aguarda estabilização em vez de iniciar outro.
-5. Se a task estiver defasada, chama `UpdateService(forceNewDeployment=true)` **apenas** para `laje-staging-api`; aguarda o ECS estabilizar e verifica que todas as tasks foram iniciadas após a atualização do segredo.
-6. Testa tanto `/api/v1/health/database` quanto `/api/v1/public/settings` no endereço do API Gateway. Falhas propagam erro à Lambda e acionam o alarme CloudWatch `laje-staging-rds-rotation-errors`.
-7. `reserved_concurrent_executions=1` e checagem de versão/task mitigam eventos duplicados. O ECS passa a utilizar mínimo de 100% e máximo de 200% de tasks durante deploy: uma segunda task temporária evita interromper a task saudável. O circuit breaker e rollback limitam implantações defeituosas.
+5. A tabela DynamoDB `laje-staging-rds-rotation-lock` usa uma gravação condicional com lease/TTL para serializar execuções concorrentes, sem reservar concorrência da Lambda (a conta AWS tem limite de 10). Uma invocação bloqueada falha e pode ser repetida, sem disparar deployment duplicado.
+6. Se a task estiver defasada, chama `UpdateService(forceNewDeployment=true)` **apenas** para `laje-staging-api`; aguarda o ECS estabilizar e verifica que todas as tasks foram iniciadas após a atualização do segredo.
+7. Testa tanto `/api/v1/health/database` quanto `/api/v1/public/settings` no endereço do API Gateway. Falhas propagam erro à Lambda e acionam o alarme CloudWatch `laje-staging-rds-rotation-errors`.
+8. A trava distribuída e a checagem de versão/task mitigam eventos duplicados. O ECS passa a utilizar mínimo de 100% e máximo de 200% de tasks durante deploy: uma segunda task temporária evita interromper a task saudável. O circuit breaker e rollback limitam implantações defeituosas.
 
 Toda a solução está declarada em Terraform: `infra/aws/terraform/rds-rotation.tf`, handler em `infra/aws/lambda/rds-rotation-handler.mjs`, testes em `tests/unit/rds-rotation-handler.test.mjs`. A Lambda usa o AWS SDK v3 fornecido pelo runtime gerenciado; atualizar a versão do Node e avaliar empacotamento com SDK fixado ao atualizar o ambiente.
 
