@@ -11,7 +11,11 @@ import {
 import { database } from "../../database/index.js";
 import { createRequireAuthentication } from "../auth/auth.middleware.js";
 import type { AuthService } from "../auth/auth.service.js";
-import { SNAPSHOTS, buildRealtimeSnapshotQuery, type RealtimeSnapshotName } from "./realtime-read.queries.js";
+import {
+  SNAPSHOTS,
+  buildRealtimeSnapshotQuery,
+  type RealtimeSnapshotName,
+} from "./realtime-read.queries.js";
 
 const MATCH_NAIPES = ["MASCULINO", "FEMININO", "MISTO"] as const;
 const TEAM_DIVISIONS = ["DIVISAO_PRINCIPAL", "DIVISAO_ACESSO"] as const;
