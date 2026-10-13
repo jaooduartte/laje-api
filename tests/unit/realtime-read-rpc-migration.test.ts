@@ -27,12 +27,21 @@ test("LAJE-89 migration installs ten API snapshots and their transitive PostgreS
   const statements = splitSqlStatements(source);
   const functions = statements.filter((sql) => sql.includes("CREATE OR REPLACE FUNCTION public."));
 
-  assert.equal(functions.length, 23);
+  assert.equal(functions.length, 27);
   for (const name of rootSnapshots) {
     assert.ok(
       functions.some((sql) => sql.includes(`CREATE OR REPLACE FUNCTION public.${name}(`)),
       `Missing RDS read function: ${name}`,
     );
+  }
+  const helperFunctions = [
+    "get_championship_bracket_competition_qualification_pool_ranking",
+    "get_interlaje_volleyball_cross_group_ranking",
+    "get_interlaje_qualification_pool_ranking_legacy",
+    "get_championship_bracket_competition_qualification_pool_rankings",
+  ];
+  for (const name of helperFunctions) {
+    assert.ok(functions.some((sql) => sql.includes(`FUNCTION public.${name}(`)));
   }
   assert.match(statements[0] ?? "", /SET check_function_bodies = off/i);
   assert.match(statements.at(-1) ?? "", /SET check_function_bodies = on/i);
@@ -49,4 +58,16 @@ test("LAJE-89 migration retains read-only SQL definitions and does not alter leg
     assert.match(definition, /\b(CREATE OR REPLACE FUNCTION) public\.[a-z_]+\(/);
     assert.doesNotMatch(definition, /\b(?:INSERT INTO|DELETE FROM|TRUNCATE TABLE|DROP TABLE)\b/i);
   }
+});
+
+test("LAJE-89 uses a source-equivalent singular qualification pool function as the plural alias", async () => {
+  const sql = await readFile(migrationPath, "utf8");
+  assert.match(
+    sql,
+    /FUNCTION public\.get_championship_bracket_competition_qualification_pool_rankings\(/,
+  );
+  assert.match(
+    sql,
+    /SELECT \* FROM public\.get_championship_bracket_competition_qualification_pool_ranking\(/,
+  );
 });
