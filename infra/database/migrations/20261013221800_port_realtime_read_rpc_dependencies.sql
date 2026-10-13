@@ -3,7 +3,7 @@
 -- Additive migration; never modify previously applied migrations.
 -- Exact source function definitions retained, including security definer and timeouts.
 -- All invoked SQL functions must exist after the transactional migration finishes.
-SET LOCAL check_function_bodies = off;
+SET check_function_bodies = off;
 
 -- Supabase source RPC: build_championship_bracket_tie_break_context_key
 CREATE OR REPLACE FUNCTION public.build_championship_bracket_tie_break_context_key(_context_type championship_bracket_tie_break_context_type, _competition_id uuid, _group_id uuid DEFAULT NULL::uuid, _qualification_rank integer DEFAULT NULL::integer, _tied_team_signature text DEFAULT NULL::text)
@@ -4683,4 +4683,4 @@ AS $function$
   ORDER BY disqualifications_table.sport_id, disqualifications_table.naipe, disqualifications_table.division, disqualifications_table.created_at;
 $function$;
 
-SET LOCAL check_function_bodies = on;
+SET check_function_bodies = on;

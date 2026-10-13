@@ -34,8 +34,8 @@ test("LAJE-89 migration installs ten API snapshots and their transitive PostgreS
       `Missing RDS read function: ${name}`,
     );
   }
-  assert.match(statements[0] ?? "", /SET LOCAL check_function_bodies = off/i);
-  assert.match(statements.at(-1) ?? "", /SET LOCAL check_function_bodies = on/i);
+  assert.match(statements[0] ?? "", /SET check_function_bodies = off/i);
+  assert.match(statements.at(-1) ?? "", /SET check_function_bodies = on/i);
 });
 
 test("LAJE-89 migration retains read-only SQL definitions and does not alter legacy migrations", async () => {
