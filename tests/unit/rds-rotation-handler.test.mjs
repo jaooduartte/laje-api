@@ -31,8 +31,13 @@ function mocks({ suspended = false, fresh = false, failedHealth = false, locked 
   let restarted = false;
   const calls = [];
   const deps = {
-    async acquireLock() { calls.push("lock"); return !locked; },
-    async releaseLock() { calls.push("unlock"); },
+    async acquireLock() {
+      calls.push("lock");
+      return !locked;
+    },
+    async releaseLock() {
+      calls.push("unlock");
+    },
     async describeSecret() {
       calls.push("secret");
       return secret;

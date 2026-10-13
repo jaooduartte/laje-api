@@ -106,15 +106,15 @@ resource "aws_iam_role_policy" "rds_rotation" {
 resource "aws_lambda_function" "rds_rotation" {
   count = var.staging_api_enabled ? 1 : 0
 
-  function_name                  = "${local.name_prefix}-rds-rotation"
-  filename                       = data.archive_file.rds_rotation[0].output_path
-  source_code_hash               = data.archive_file.rds_rotation[0].output_base64sha256
-  role                           = aws_iam_role.rds_rotation[0].arn
-  handler                        = "rds-rotation-handler.handler"
-  runtime                        = "nodejs22.x"
-  architectures                  = ["arm64"]
-  memory_size                    = 128
-  timeout                        = 600
+  function_name    = "${local.name_prefix}-rds-rotation"
+  filename         = data.archive_file.rds_rotation[0].output_path
+  source_code_hash = data.archive_file.rds_rotation[0].output_base64sha256
+  role             = aws_iam_role.rds_rotation[0].arn
+  handler          = "rds-rotation-handler.handler"
+  runtime          = "nodejs22.x"
+  architectures    = ["arm64"]
+  memory_size      = 128
+  timeout          = 600
 
   environment {
     variables = {

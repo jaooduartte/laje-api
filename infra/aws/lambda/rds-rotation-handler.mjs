@@ -126,12 +126,15 @@ async function createAwsDependencies() {
     },
     { SecretsManagerClient, DescribeSecretCommand },
     { DynamoDBClient, PutItemCommand, DeleteItemCommand },
-  ] = await Promise.all([import("@aws-sdk/client-ecs"), import("@aws-sdk/client-secrets-manager"), import("@aws-sdk/client-dynamodb")]);
+  ] = await Promise.all([
+    import("@aws-sdk/client-ecs"),
+    import("@aws-sdk/client-secrets-manager"),
+    import("@aws-sdk/client-dynamodb"),
+  ]);
   const ecs = new ECSClient({});
   const secrets = new SecretsManagerClient({});
   const dynamodb = new DynamoDBClient({});
   return {
-
     async acquireLock(table, service, holder) {
       const epoch = Math.floor(Date.now() / 1000);
       try {
