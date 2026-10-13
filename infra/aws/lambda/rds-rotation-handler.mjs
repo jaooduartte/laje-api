@@ -103,11 +103,17 @@ export async function handleRotation(event, deps, config) {
 
 async function createAwsDependencies() {
   // The managed Node.js 22 Lambda runtime includes AWS SDK v3.
-  const [{ ECSClient, DescribeServicesCommand, ListTasksCommand, DescribeTasksCommand, UpdateServiceCommand, waitUntilServicesStable },
-    { SecretsManagerClient, DescribeSecretCommand }] = await Promise.all([
-    import("@aws-sdk/client-ecs"),
-    import("@aws-sdk/client-secrets-manager"),
-  ]);
+  const [
+    {
+      ECSClient,
+      DescribeServicesCommand,
+      ListTasksCommand,
+      DescribeTasksCommand,
+      UpdateServiceCommand,
+      waitUntilServicesStable,
+    },
+    { SecretsManagerClient, DescribeSecretCommand },
+  ] = await Promise.all([import("@aws-sdk/client-ecs"), import("@aws-sdk/client-secrets-manager")]);
   const ecs = new ECSClient({});
   const secrets = new SecretsManagerClient({});
   return {
@@ -115,12 +121,16 @@ async function createAwsDependencies() {
       return secrets.send(new DescribeSecretCommand({ SecretId }));
     },
     async describeService(cluster, serviceName) {
-      const result = await ecs.send(new DescribeServicesCommand({ cluster, services: [serviceName] }));
+      const result = await ecs.send(
+        new DescribeServicesCommand({ cluster, services: [serviceName] }),
+      );
       if (result.failures?.length) throw new Error("ECS DescribeServices returned a failure.");
       return result.services?.[0];
     },
     async listTasks(cluster, serviceName) {
-      const result = await ecs.send(new ListTasksCommand({ cluster, serviceName, desiredStatus: "RUNNING" }));
+      const result = await ecs.send(
+        new ListTasksCommand({ cluster, serviceName, desiredStatus: "RUNNING" }),
+      );
       return result.taskArns ?? [];
     },
     async describeTasks(cluster, tasks) {
@@ -160,6 +170,12 @@ export async function handler(event) {
     throw new Error("RDS rotation handler configuration is incomplete.");
   }
   const result = await handleRotation(event, await createAwsDependencies(), config);
-  console.info(JSON.stringify({ event: "rds-rotation-handler", outcome: result.outcome, reason: result.reason }));
+  console.info(
+    JSON.stringify({
+      event: "rds-rotation-handler",
+      outcome: result.outcome,
+      reason: result.reason,
+    }),
+  );
   return result;
 }

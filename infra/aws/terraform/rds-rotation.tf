@@ -63,13 +63,13 @@ resource "aws_iam_role_policy" "rds_rotation" {
         Resource = aws_ecs_cluster.api.arn
       },
       {
-        Effect = "Allow"
-        Action = ["ecs:DescribeTasks"]
+        Effect   = "Allow"
+        Action   = ["ecs:DescribeTasks"]
         Resource = "arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.rotation.account_id}:task/${aws_ecs_cluster.api.name}/*"
       },
       {
-        Effect = "Allow"
-        Action = ["logs:CreateLogStream", "logs:PutLogEvents"]
+        Effect   = "Allow"
+        Action   = ["logs:CreateLogStream", "logs:PutLogEvents"]
         Resource = "${aws_cloudwatch_log_group.rds_rotation[0].arn}:*"
       }
     ]
@@ -79,15 +79,15 @@ resource "aws_iam_role_policy" "rds_rotation" {
 resource "aws_lambda_function" "rds_rotation" {
   count = var.staging_api_enabled ? 1 : 0
 
-  function_name = "${local.name_prefix}-rds-rotation"
-  filename      = data.archive_file.rds_rotation[0].output_path
-  source_code_hash = data.archive_file.rds_rotation[0].output_base64sha256
-  role          = aws_iam_role.rds_rotation[0].arn
-  handler       = "rds-rotation-handler.handler"
-  runtime       = "nodejs22.x"
-  architectures = ["arm64"]
-  memory_size   = 128
-  timeout       = 600
+  function_name                  = "${local.name_prefix}-rds-rotation"
+  filename                       = data.archive_file.rds_rotation[0].output_path
+  source_code_hash               = data.archive_file.rds_rotation[0].output_base64sha256
+  role                           = aws_iam_role.rds_rotation[0].arn
+  handler                        = "rds-rotation-handler.handler"
+  runtime                        = "nodejs22.x"
+  architectures                  = ["arm64"]
+  memory_size                    = 128
+  timeout                        = 600
   reserved_concurrent_executions = 1
 
   environment {
@@ -114,8 +114,8 @@ resource "aws_lambda_function" "rds_rotation" {
 
 # Secrets Manager emits this event natively (without requiring CloudTrail).
 resource "aws_cloudwatch_event_rule" "rds_rotation" {
-  count = var.staging_api_enabled ? 1 : 0
-  name  = "${local.name_prefix}-rds-rotation"
+  count       = var.staging_api_enabled ? 1 : 0
+  name        = "${local.name_prefix}-rds-rotation"
   description = "LAJE-143: updated AWSCURRENT version of the exact staging RDS master secret."
 
   event_pattern = jsonencode({
