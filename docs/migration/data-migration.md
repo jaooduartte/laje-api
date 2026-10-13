@@ -55,7 +55,7 @@ O ensaio automatizado no CI usa PostgreSQL 17 e 39 solicitações sintéticas. E
 
 ## Reserva de eventos e dados pessoais
 
-A tabela `league_event_reservation_requests` é transferida dentro do mesmo pipe protegido. O verificador produz somente métricas agregadas: contagem, checksum de IDs, checksum dos campos, distribuição de status e quantidade de FKs inválidas. Na janela de corte, executar com `MIGRATION_EXPECTED_RESERVATION_REQUEST_COUNT=39`; a execução aceita a migração somente quando os 39 registros esperados, seus IDs, campos, relações de equipe e evento aprovado estiverem conciliados sem violação de FK.
+A tabela `league_event_reservation_requests` é transferida dentro do mesmo pipe protegido. O verificador produz somente métricas agregadas: contagem, checksum de IDs, checksum dos campos, distribuição de status e quantidade de FKs inválidas. Na janela de corte, **após comprovar o write freeze**, capturar novamente a contagem de reservas diretamente no Supabase e fornecê-la por `MIGRATION_EXPECTED_RESERVATION_REQUEST_COUNT`. O valor **não** deve ser fixado em 39, 41 ou outra contagem histórica: ele precisa corresponder à origem congelada. Em `MIGRATION_SYNC_MODE=final`, os scripts exigem também `MIGRATION_WRITES_PAUSED_AT` com timestamp ISO 8601 válido e timezone. O verificador aceita a migração somente quando a contagem capturada, os IDs, campos, status e relações são integralmente conciliados sem violação de FK.
 
 ## Limites
 

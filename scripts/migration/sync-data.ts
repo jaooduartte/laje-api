@@ -1,3 +1,4 @@
+import { assertFinalCutoverCheckpoint } from "./parity-mode.js";
 import {
   assertDestinationWriteAllowed,
   assertMigrationStorageBudget,
@@ -9,8 +10,11 @@ const mode = process.env.MIGRATION_SYNC_MODE;
 if (mode !== "initial" && mode !== "final") {
   throw new Error("MIGRATION_SYNC_MODE must be initial or final.");
 }
-if (mode === "final" && !process.env.MIGRATION_WRITES_PAUSED_AT?.trim()) {
-  throw new Error("Final synchronization requires MIGRATION_WRITES_PAUSED_AT.");
+if (mode === "final") {
+  assertFinalCutoverCheckpoint({
+    writesPausedAt: process.env.MIGRATION_WRITES_PAUSED_AT,
+    expectedReservationRequestCount: process.env.MIGRATION_EXPECTED_RESERVATION_REQUEST_COUNT,
+  });
 }
 
 assertDestinationWriteAllowed("Data synchronization");
