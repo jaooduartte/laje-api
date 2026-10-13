@@ -4,14 +4,14 @@
 
 ## Evidência auditada
 
-| Dependência | Estado auditado | Condição para prosseguir |
-| --- | --- | --- |
-| LAJE-33 — CI/CD e release AWS de produção | Pendente no Jira | Workflow de deploy automático e isolado de produção, com rollback de release |
-| LAJE-89 — realtime sem Supabase | Pendente no Jira | Placar ao vivo, atualizações públicas e presença equivalente testados no frontend AWS |
-| LAJE-126 — jobs, SQS, cron e e-mails | Concluído | Smoke prod e observabilidade depois do corte |
-| LAJE-136 — API AWS staging | Concluído | Configuração de produção e secrets independentes |
-| LAJE-141 — runtime AWS-only | Concluído | Auditoria de toda dependência residual em frontend e produção |
-| LAJE-143 — troca de senha RDS e ECS | Concluído no staging | Infra isolada de produção e alarmes adequados |
+| Dependência                               | Estado auditado      | Condição para prosseguir                                                              |
+| ----------------------------------------- | -------------------- | ------------------------------------------------------------------------------------- |
+| LAJE-33 — CI/CD e release AWS de produção | Pendente no Jira     | Workflow de deploy automático e isolado de produção, com rollback de release          |
+| LAJE-89 — realtime sem Supabase           | Pendente no Jira     | Placar ao vivo, atualizações públicas e presença equivalente testados no frontend AWS |
+| LAJE-126 — jobs, SQS, cron e e-mails      | Concluído            | Smoke prod e observabilidade depois do corte                                          |
+| LAJE-136 — API AWS staging                | Concluído            | Configuração de produção e secrets independentes                                      |
+| LAJE-141 — runtime AWS-only               | Concluído            | Auditoria de toda dependência residual em frontend e produção                         |
+| LAJE-143 — troca de senha RDS e ECS       | Concluído no staging | Infra isolada de produção e alarmes adequados                                         |
 
 A origem Supabase foi conferida em modo **somente leitura** em 13/10/2026: `cugqidtapnqvonbdbbdf` está `ACTIVE_HEALTHY`, com 41 solicitações de reserva na hora da consulta e ~37 MB nas relações do schema `public`. **Esses números são históricos, não servem como parâmetros fixos do corte.** Em 05/10, o rehearsal validou exportação/importação/rollback transacional, mas registrou drift com a origem ativa. Não comprova paridade final.
 

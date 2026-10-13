@@ -27,7 +27,12 @@ test("final parity requires final sync mode and a write-freeze timestamp", () =>
   );
 
   assert.throws(
-    () => assertParityModePreconditions("final", { syncMode: "final", writesPausedAt: "", expectedReservationRequestCount: "41" }),
+    () =>
+      assertParityModePreconditions("final", {
+        syncMode: "final",
+        writesPausedAt: "",
+        expectedReservationRequestCount: "41",
+      }),
     /MIGRATION_WRITES_PAUSED_AT/,
   );
 
@@ -63,7 +68,8 @@ test("final cutover rejects missing counts and invalid write-freeze timestamps",
   );
   for (const value of ["", "  ", "forty-one", "-1", "1.5", "9007199254740992"]) {
     assert.throws(
-      () => assertFinalCutoverCheckpoint({ ...base, expectedReservationRequestCount: value }, today),
+      () =>
+        assertFinalCutoverCheckpoint({ ...base, expectedReservationRequestCount: value }, today),
       /MIGRATION_EXPECTED_RESERVATION_REQUEST_COUNT/,
     );
   }
