@@ -2,8 +2,8 @@ export type MigrationParityMode = "strict" | "rehearsal" | "final";
 
 export interface FinalParityPreconditions {
   syncMode?: string;
-  writesPausedAt?: string;
-  expectedReservationRequestCount?: string;
+  writesPausedAt?: string | undefined;
+  expectedReservationRequestCount?: string | undefined;
 }
 
 export function getMigrationParityMode(
