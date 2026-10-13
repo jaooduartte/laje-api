@@ -12,14 +12,25 @@ const editionId = "aaaf5483-5602-4a89-b5dc-1eeb6b462519";
 
 test("LAJE-89 exposes exactly the whitelisted read-only queries", () => {
   const allowed = [
-    "pending-award-draws", "pending-tie-breaks",
-    "interlaje-competition-standings", "interlaje-overall-standings",
-    "awards-rankings", "corrected-group-standings",
-    "resolved-tie-break-orders", "yellow-card-discipline",
-    "interlaje-position-points", "competition-disqualifications",
+    "pending-award-draws",
+    "pending-tie-breaks",
+    "interlaje-competition-standings",
+    "interlaje-overall-standings",
+    "awards-rankings",
+    "corrected-group-standings",
+    "resolved-tie-break-orders",
+    "yellow-card-discipline",
+    "interlaje-position-points",
+    "competition-disqualifications",
   ];
   for (const name of allowed) assert.equal(isRealtimeSnapshotName(name), true);
-  for (const invalid of ["", "__proto__", "update_password", "pg_catalog.pg_shadow", "admin-users"]) {
+  for (const invalid of [
+    "",
+    "__proto__",
+    "update_password",
+    "pg_catalog.pg_shadow",
+    "admin-users",
+  ]) {
     assert.equal(isRealtimeSnapshotName(invalid), false);
   }
 });
@@ -56,7 +67,8 @@ test("LAJE-89 competition scope casts enum values and aggregates rows as JSONB n
     naipe: "MASCULINO",
     division: null,
   });
-  assert.equal(result.sql,
+  assert.equal(
+    result.sql,
     "SELECT COALESCE(jsonb_agg(to_jsonb(item)), '[]'::jsonb) AS data FROM public.get_interlaje_regulation_competition_standings($1::uuid, $2::integer, $3::uuid, $4::public.match_naipe, $5::public.team_division) AS item",
   );
   assert.deepEqual(result.parameters, [championshipId, 2026, sportId, "MASCULINO", null]);

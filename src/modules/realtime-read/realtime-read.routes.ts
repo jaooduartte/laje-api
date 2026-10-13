@@ -1,7 +1,13 @@
 import { Router } from "express";
 
 import { ApiError } from "../../common/errors/api-error.js";
-import { optionalEnum, optionalUuid, requireEnum, requireInteger, requireUuid } from "../../common/validation/common.schema.js";
+import {
+  optionalEnum,
+  optionalUuid,
+  requireEnum,
+  requireInteger,
+  requireUuid,
+} from "../../common/validation/common.schema.js";
 import { database } from "../../database/index.js";
 import { createRequireAuthentication } from "../auth/auth.middleware.js";
 import type { AuthService } from "../auth/auth.service.js";
@@ -106,12 +112,18 @@ export function buildRealtimeSnapshotQuery(
   }
 
   const casts = spec.signature.split(",");
-  const placeholders = casts.map((cast, index) => `$${index + 1}::${cast === "match_naipe" || cast === "team_division" ? `public.${cast}` : cast}`).join(", ");
+  const placeholders = casts
+    .map(
+      (cast, index) =>
+        `$${index + 1}::${cast === "match_naipe" || cast === "team_division" ? `public.${cast}` : cast}`,
+    )
+    .join(", ");
   const expression = `public.${spec.name}(${placeholders})`;
   return {
-    sql: spec.type === "json"
-      ? `SELECT ${expression} AS data`
-      : `SELECT COALESCE(jsonb_agg(to_jsonb(item)), '[]'::jsonb) AS data FROM ${expression} AS item`,
+    sql:
+      spec.type === "json"
+        ? `SELECT ${expression} AS data`
+        : `SELECT COALESCE(jsonb_agg(to_jsonb(item)), '[]'::jsonb) AS data FROM ${expression} AS item`,
     parameters,
   };
 }
