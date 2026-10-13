@@ -1,0 +1,45 @@
+name: Format LAJE-143 hotfix (temporary)
+
+on:
+  push:
+    branches:
+      - LAJE-143-fix-deploy
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: LAJE-143-fix-deploy
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Format files
+        run: npx prettier --write infra/aws/lambda/rds-rotation-handler.mjs tests/unit/rds-rotation-handler.test.mjs docs/operations/aws-rds-rotation-ecs.md
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.16.4"
+      - name: Format and validate Terraform
+        run: |
+          terraform fmt infra/aws/terraform/rds-rotation.tf
+          terraform -chdir=infra/aws/terraform init -backend=false -input=false -lockfile=readonly
+          terraform -chdir=infra/aws/terraform validate
+      - name: Commit formatting
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add infra/aws/lambda/rds-rotation-handler.mjs infra/aws/terraform/rds-rotation.tf tests/unit/rds-rotation-handler.test.mjs docs/operations/aws-rds-rotation-ecs.md
+          if ! git diff --cached --quiet; then
+            git commit -m "style(LAJE-143): format Lambda lock changes"
+            git push origin HEAD:LAJE-143-fix-deploy
+          fi
