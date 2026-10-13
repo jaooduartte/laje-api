@@ -85,9 +85,12 @@ resource "aws_iam_role_policy" "rds_rotation" {
         Resource = aws_ecs_service.api[0].id
       },
       {
-        Effect   = "Allow"
-        Action   = ["ecs:ListTasks"]
-        Resource = aws_ecs_cluster.api.arn
+        Effect = "Allow"
+        Action = ["ecs:ListTasks"]
+        Resource = [
+          aws_ecs_cluster.api.arn,
+          "arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.rotation.account_id}:container-instance/${aws_ecs_cluster.api.name}/*"
+        ]
       },
       {
         Effect   = "Allow"
@@ -115,6 +118,12 @@ resource "aws_lambda_function" "rds_rotation" {
   architectures    = ["arm64"]
   memory_size      = 128
   timeout          = 600
+
+  # Match the pre-created log group and the role's scoped PutLogEvents policy.
+  logging_config {
+    log_format = "Text"
+    log_group  = aws_cloudwatch_log_group.rds_rotation[0].name
+  }
 
   environment {
     variables = {
