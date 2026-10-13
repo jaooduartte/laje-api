@@ -14,6 +14,7 @@ const MIGRATIONS = [
   "20261007160800_port_exact_preview_functions_s_z.sql",
   "20261007160900_port_exact_preview_triggers.sql",
   "20261007161000_port_exact_preview_api_functions.sql",
+  "20261013221800_port_realtime_read_rpc_dependencies.sql",
 ] as const;
 
 const MIGRATION_SCHEMA = "laje_api_internal";
