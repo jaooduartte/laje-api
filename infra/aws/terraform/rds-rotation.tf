@@ -85,8 +85,8 @@ resource "aws_iam_role_policy" "rds_rotation" {
         Resource = aws_ecs_service.api[0].id
       },
       {
-        Effect   = "Allow"
-        Action   = ["ecs:ListTasks"]
+        Effect = "Allow"
+        Action = ["ecs:ListTasks"]
         Resource = [
           aws_ecs_cluster.api.arn,
           "arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.rotation.account_id}:container-instance/${aws_ecs_cluster.api.name}/*"
