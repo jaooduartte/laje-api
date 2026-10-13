@@ -477,9 +477,16 @@ resource "aws_ecs_service" "api" {
   desired_count   = var.staging_api_desired_count
   launch_type     = "FARGATE"
 
-  deployment_minimum_healthy_percent = 0
-  deployment_maximum_percent         = 100
+  # Keep one healthy task while a replacement loads the rotated RDS secret.
+  # Briefly permits two staging tasks during a controlled rolling deployment.
+  deployment_minimum_healthy_percent = 100
+  deployment_maximum_percent         = 200
   health_check_grace_period_seconds  = 60
+
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
 
   network_configuration {
     subnets          = aws_subnet.public[*].id
