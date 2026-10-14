@@ -14,9 +14,12 @@ const { app } = await import("../../src/app.js");
 
 test("LAJE-38: API smoke validates three business flow boundaries without database access", async (t) => {
   const server = app.listen(0, "127.0.0.1");
-  t.after(() => new Promise<void>((resolve, reject) => {
-    server.close((error) => error ? reject(error) : resolve());
-  }));
+  t.after(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      }),
+  );
   await once(server, "listening");
   const address = server.address();
   assert.ok(address && typeof address === "object");

@@ -20,11 +20,11 @@ O comando `test:coverage` usa cobertura nativa de Node.js 22, filtrando `src/**/
 
 ## Evidência dos três fluxos prioritários
 
-| Fluxo | Evidência local | O que ainda requer validação integrada |
-| --- | --- | --- |
-| Autenticação administrativa | `tests/unit/auth.service.test.ts` (login, sessão e token); `tests/e2e/priority-flows.test.ts` (validação HTTP) | Login e consulta de permissões com frontend e banco em staging. |
-| Operação ao vivo de jogos | `tests/e2e/priority-flows.test.ts` (proteção HTTP contra mutações sem autenticação); `tests/unit/standings.service.test.ts` (regras de classificação) | Iniciar, atualizar placar e finalizar partida, incluindo efeitos derivados. |
-| Consulta pública a campeonatos, classificação e calendário | `tests/e2e/priority-flows.test.ts` (validação HTTP pública); `tests/unit/standings.service.test.ts`; `tests/unit/calendar-ics.test.ts` | Consulta completa dos três recursos públicos com dados de staging. |
+**Autenticação administrativa:** `tests/unit/auth.service.test.ts` cobre login, sessão e token. O teste `tests/e2e/priority-flows.test.ts` verifica validação HTTP. Ainda é necessário testar login e permissões com frontend e banco em staging.
+
+**Operação ao vivo de jogos:** `tests/e2e/priority-flows.test.ts` verifica proteção HTTP contra mutações sem autenticação. `tests/unit/standings.service.test.ts` cobre regras de classificação. Ainda é preciso validar iniciar, atualizar placar e finalizar partida, incluindo efeitos derivados.
+
+**Consulta pública de campeonatos, classificação e calendário:** `tests/e2e/priority-flows.test.ts` verifica validação HTTP; `tests/unit/standings.service.test.ts` e `tests/unit/calendar-ics.test.ts` cobrem regras pertinentes. Ainda falta validar os três recursos públicos com dados de staging.
 
 `npm run test:smoke` roda os testes indicados, com entradas sintéticas e sem conexão de escrita à produção. **Teste de contrato ou validação isolada não equivale à evidência de fluxo completo ponta a ponta.** A integração final deve ser exercitada em staging e comprovada em registros da prova de autoria.
 
