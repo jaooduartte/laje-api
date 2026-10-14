@@ -14,9 +14,9 @@ npm run test:smoke
 npm run test:coverage
 ```
 
-O comando `test:coverage` usa c8 v10.1.3 com `--all` para incluir todo o código de produção de `src/**/*.ts` (inclusive arquivos nunca importados pelos testes) e exigir **75% das linhas reais**. Arquivos vazios não contêm linhas executáveis. O pacote de instrumentação está fixado na versão do comando, mas é resolvido pelo npm em execução. O CI grava `coverage/backend/coverage-summary.json`, `coverage/backend/lcov.info`, `coverage/backend/index.html` e o log `coverage/backend/node-test-coverage.txt`, publicando o artefato `laje-api-backend-coverage` mesmo em caso de falha.
+O comando `test:coverage` requer Node.js **26.8.2** para usar a opção nativa `--test-coverage-include-all`, indisponível no Node 22 da aplicação. O pipeline mantém Node 22 para os testes, o lint, o typecheck e o build, e usa Node 26.8.2 **somente na aferição**. Esta opção inclui todos os fontes `src/**/*.ts` não carregados, reportando-os como 0%; exige 75% das linhas. O CI publica `coverage/backend/node-test-coverage.txt`, mesmo em caso de falha.
 
-**Auditoria do denominador**: a ferramenta anterior (cobertura nativa do Node) reportava 96,75% porque limitava o denominador a módulos carregados. A partir desta configuração, arquivos de `src` não importados entram com cobertura zero. A aprovação exige relatório com o denominador inteiro, e não apenas o percentual da ferramenta anterior.
+**Auditoria do denominador**: a ferramenta antiga no Node 22 reportava 96,75% porque limitava o denominador a módulos carregados. Com a opção nativa da versão 26.8.2, arquivos de `src` não importados entram com cobertura zero. Usar este número para comprovação; não é válido reutilizar o relatório da versão 22. A aprovação exige relatório com o denominador inteiro, e não apenas o percentual da ferramenta anterior.
 
 ## Evidência dos três fluxos prioritários
 
