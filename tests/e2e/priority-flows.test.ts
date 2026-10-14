@@ -39,8 +39,8 @@ test("LAJE-38: checks API flow boundaries", async (t) => {
     `${url}/matches/b37e22a1-8181-43b2-98a1-29db7e864f0a/start`,
     { method: "POST" },
   );
-  assert.equal(liveControl.status, 503);
-  assert.equal((await liveControl.json()).error.code, "AUTH_DISABLED");
+  assert.equal(liveControl.status, 401);
+  assert.equal((await liveControl.json()).error.code, "ACCESS_TOKEN_REQUIRED");
 
   // Flow 3: public championship and match filters reject invalid input.
   const championships = await fetch(`${url}/championships?code=INVALID`);
