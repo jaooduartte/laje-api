@@ -2,7 +2,7 @@
 
 API dedicada da Liga das Atléticas de Joinville (LAJE), responsável por centralizar regras de negócio, autenticação, autorização, persistência e contratos HTTP entre o frontend e a infraestrutura PostgreSQL.
 
-> A migração é incremental. Enquanto o cutover não for concluído, a produção utilizada pela LAJE continua no ambiente atual baseado em Supabase. O repositório `laje-api` representa o backend da arquitetura alvo e não deve provocar alterações na produção legada fora das tarefas de migração correspondentes.
+> **Decisão de arquitetura (14/10/2026):** o projeto Vercel `laje` continua usando Supabase permanentemente. A entrega do Portfólio/TCC é um frontend separado, `laje-tcc`, conectado à `laje-api` AWS e Amazon RDS. O backend do TCC não substitui nem modifica a produção operacional `laje`.
 
 ## Arquitetura alvo
 
@@ -31,9 +31,9 @@ A Vercel permanece somente como hospedagem do frontend por uma exceção especí
 <!-- prettier-ignore -->
 | Estado | Frontend | Backend principal | Banco principal | Finalidade |
 | --- | --- | --- | --- | --- |
-| Produção atual durante a migração | Vercel, repositório `laje` | Supabase | PostgreSQL do Supabase | Preservar a operação real até o cutover |
-| Integration / staging | Mesmo repositório `laje`, ambiente dedicado | `laje-api` em AWS | Amazon RDS PostgreSQL 17 | Validar API, migrations, contratos, CORS, TLS, deploy e migração |
-| Produção alvo | Vercel, repositório `laje` | `laje-api` em AWS | Amazon RDS PostgreSQL 17 | Estado final após cutover |
+| Produção operacional permanente | Vercel, projeto `laje` | Supabase | PostgreSQL do Supabase | Manter a operação legada sem cutover para AWS |
+| TCC integration / staging | Vercel, projeto `laje-tcc` (mesmo repositório Git) | `laje-api` em AWS | Amazon RDS PostgreSQL 17 | Validar API, migrations, contratos, CORS, TLS, CI/CD e dados |
+| Release final do TCC | Vercel, projeto `laje-tcc` | `laje-api` em AWS | Amazon RDS PostgreSQL 17 | Publicar o Portfólio sem migrar o projeto `laje` |
 
 No frontend, `VITE_API_URL` seleciona a API correspondente ao ambiente. No backend, desenvolvimento/CI podem usar `DATABASE_URL`; no ECS staging, host, banco, usuário e senha são injetados separadamente em runtime para que o usuário/senha permaneçam no Secrets Manager e a própria aplicação componha a URL PostgreSQL com escaping seguro. A troca de ambiente ocorre por configuração, sem alteração de código e sem versionar credenciais.
 
@@ -256,7 +256,7 @@ Tarefas principais relacionadas no Jira:
 - manter o RDS privado;
 - usar AWS Secrets Manager/IAM para secrets e permissões no ambiente AWS;
 - não alterar retroativamente o baseline consolidado: mudanças futuras de schema devem ser novas migrations em `infra/database/migrations/`;
-- não executar cutover ou alterar a produção Supabase sem a tarefa de migração correspondente, plano de validação e rollback;
+- não executar cutover nem alterar a produção Supabase do projeto `laje`: seu uso é permanente e independente do ambiente TCC; migração de dados para RDS deve seguir plano de validação, consistência e rollback próprios;
 - não reintroduzir acesso direto do frontend ao banco no estado final;
 - não publicar exemplos OpenAPI contendo tokens, credenciais ou dados pessoais reais.
 
