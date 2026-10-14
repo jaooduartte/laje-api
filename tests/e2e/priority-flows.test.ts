@@ -35,10 +35,9 @@ test("LAJE-38: checks API flow boundaries", async (t) => {
   assert.equal((await login.json()).error.code, "VALIDATION_ERROR");
 
   // Flow 2: live score changes cannot bypass disabled administrative auth.
-  const liveControl = await fetch(
-    `${url}/matches/b37e22a1-8181-43b2-98a1-29db7e864f0a/start`,
-    { method: "POST" },
-  );
+  const liveControl = await fetch(`${url}/matches/b37e22a1-8181-43b2-98a1-29db7e864f0a/start`, {
+    method: "POST",
+  });
   assert.equal(liveControl.status, 401);
   assert.equal((await liveControl.json()).error.code, "ACCESS_TOKEN_REQUIRED");
 
