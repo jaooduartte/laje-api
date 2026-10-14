@@ -100,8 +100,8 @@ jobs:
       - name: Show Prettier suggestions after a quality failure
         if: failure()
         run: |
-          npx prettier tests/flows/priority-flows.test.ts --write
-          git diff -- tests/flows/priority-flows.test.ts
+          npx prettier tests/flows/priority-flows.test.ts tests/unit/http-business-flows.test.ts --write
+          git diff -- tests/flows/priority-flows.test.ts tests/unit/http-business-flows.test.ts
 
       - name: Run tests
         run: npm test

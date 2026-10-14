@@ -117,7 +117,7 @@ test("LAJE-38 HTTP controller coverage uses only synthetic database adapters", a
   app.use(errorHandler);
   const server = app.listen(0, "127.0.0.1");
   t.after(() => new Promise<void>((resolve, reject) => {
-    server.close((error) => error ? reject(error) : resolve();
+    server.close((error) => (error ? reject(error) : resolve()));
   }));
   await once(server, "listening");
   const address = server.address();
