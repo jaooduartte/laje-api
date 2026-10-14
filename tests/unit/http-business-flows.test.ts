@@ -266,22 +266,38 @@ test("LAJE-38 HTTP controller coverage uses only synthetic database adapters", a
     body: JSON.stringify({ year: 2026 }),
   });
   assert.equal(holidays.status, 200);
-  assert.ok(executedSql.some((statement) => statement.includes("INSERT INTO public.league_calendar_holidays")));
-  assert.equal((await call("/public-runtime/league-calendar-holidays/ensure-year", {
-    method: "POST",
-    body: JSON.stringify({ year: 1700 }),
-  })).status, 422);
+  assert.ok(
+    executedSql.some((statement) =>
+      statement.includes("INSERT INTO public.league_calendar_holidays"),
+    ),
+  );
+  assert.equal(
+    (
+      await call("/public-runtime/league-calendar-holidays/ensure-year", {
+        method: "POST",
+        body: JSON.stringify({ year: 1700 }),
+      })
+    ).status,
+    422,
+  );
 
   const section = await call("/public/link-sections", {
     method: "POST",
     body: JSON.stringify({ name: "Links sintéticos", sortOrder: 1 }),
   });
   assert.equal(section.status, 201);
-  assert.ok(executedSql.some((statement) => statement.includes("INSERT INTO public.public_link_sections")));
-  assert.equal((await call("/public/link-sections", {
-    method: "POST",
-    body: JSON.stringify({ name: "", sortOrder: 0 }),
-  })).status, 422);
+  assert.ok(
+    executedSql.some((statement) => statement.includes("INSERT INTO public.public_link_sections")),
+  );
+  assert.equal(
+    (
+      await call("/public/link-sections", {
+        method: "POST",
+        body: JSON.stringify({ name: "", sortOrder: 0 }),
+      })
+    ).status,
+    422,
+  );
 
   const settings = await call("/public/settings", {
     method: "PUT",
@@ -291,17 +307,26 @@ test("LAJE-38 HTTP controller coverage uses only synthetic database adapters", a
     }),
   });
   assert.equal(settings.status, 200);
-  assert.ok(executedSql.some((statement) => statement.includes("INSERT INTO public.public_page_access_settings")));
-  assert.equal((await call("/public/link-items", {
-    method: "POST",
-    body: JSON.stringify({
-      sectionId: ID,
-      displayName: "URL inválida",
-      url: "javascript:alert(1)",
-      sortOrder: 1,
-      filterMode: "GLOBAL",
-    }),
-  })).status, 422);
+  assert.ok(
+    executedSql.some((statement) =>
+      statement.includes("INSERT INTO public.public_page_access_settings"),
+    ),
+  );
+  assert.equal(
+    (
+      await call("/public/link-items", {
+        method: "POST",
+        body: JSON.stringify({
+          sectionId: ID,
+          displayName: "URL inválida",
+          url: "javascript:alert(1)",
+          sortOrder: 1,
+          filterMode: "GLOBAL",
+        }),
+      })
+    ).status,
+    422,
+  );
 
   const leagueEvent = await call("/league-events", {
     method: "POST",
@@ -312,7 +337,9 @@ test("LAJE-38 HTTP controller coverage uses only synthetic database adapters", a
     }),
   });
   assert.equal(leagueEvent.status, 201);
-  assert.ok(executedSql.some((statement) => statement.includes("INSERT INTO public.league_events")));
+  assert.ok(
+    executedSql.some((statement) => statement.includes("INSERT INTO public.league_events")),
+  );
 
   const reservation = await call("/league-events/reservation-requests", {
     method: "POST",
@@ -326,18 +353,27 @@ test("LAJE-38 HTTP controller coverage uses only synthetic database adapters", a
     }),
   });
   assert.equal(reservation.status, 201);
-  assert.ok(executedSql.some((statement) => statement.includes("INSERT INTO public.league_event_reservation_requests")));
-  assert.equal((await call("/league-events/reservation-requests", {
-    method: "POST",
-    body: JSON.stringify({
-      teamId: ID,
-      eventName: "Evento sintético",
-      eventType: "HH",
-      eventDate: "2026-11-01",
-      requesterName: "Pessoa de teste",
-      requesterEmail: "invalid-email",
-    }),
-  })).status, 422);
+  assert.ok(
+    executedSql.some((statement) =>
+      statement.includes("INSERT INTO public.league_event_reservation_requests"),
+    ),
+  );
+  assert.equal(
+    (
+      await call("/league-events/reservation-requests", {
+        method: "POST",
+        body: JSON.stringify({
+          teamId: ID,
+          eventName: "Evento sintético",
+          eventType: "HH",
+          eventDate: "2026-11-01",
+          requesterName: "Pessoa de teste",
+          requesterEmail: "invalid-email",
+        }),
+      })
+    ).status,
+    422,
+  );
 
   const standings = await call("/championships/" + ID + "/standings?seasonYear=2026");
   assert.equal(standings.status, 200);
