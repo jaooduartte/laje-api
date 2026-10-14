@@ -1,19 +1,6 @@
 name: Deploy AWS
 
 on:
-  push:
-    branches:
-      - LAJE-136
-    paths:
-      - ".github/workflows/deploy-aws.yml"
-      - "infra/aws/terraform/**"
-      - "infra/database/**"
-      - "Dockerfile"
-      - ".dockerignore"
-      - "src/**"
-      - "package.json"
-      - "package-lock.json"
-      - "tsconfig*.json"
   workflow_dispatch:
     inputs:
       action:
@@ -50,7 +37,8 @@ env:
 
 jobs:
   staging:
-    name: Staging AWS
+    name: Staging AWS (manual)
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
