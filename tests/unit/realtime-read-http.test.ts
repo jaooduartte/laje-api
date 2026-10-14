@@ -13,22 +13,26 @@ process.env.AUTH_ENABLED = "false";
 process.env.AWS_ENABLED = "false";
 process.env.MAIL_ENABLED = "false";
 
-const [{ database }, { errorHandler }, { createRealtimeReadRouter }, { SNAPSHOTS }] = await Promise.all([
-  import("../../src/database/index.js"),
-  import("../../src/common/middlewares/error-handler.middleware.js"),
-  import("../../src/modules/realtime-read/realtime-read.routes.js"),
-  import("../../src/modules/realtime-read/realtime-read.queries.js"),
-]);
+const [{ database }, { errorHandler }, { createRealtimeReadRouter }, { SNAPSHOTS }] =
+  await Promise.all([
+    import("../../src/database/index.js"),
+    import("../../src/common/middlewares/error-handler.middleware.js"),
+    import("../../src/modules/realtime-read/realtime-read.routes.js"),
+    import("../../src/modules/realtime-read/realtime-read.queries.js"),
+  ]);
 
 const ID = "b37e22a1-8181-43b2-98a1-29db7e864f0a";
 const auth = {
   authenticateAccessToken: async () => ({
-    userId: ID, sessionId: ID, user: {
-      id: ID, email: "synthetic@example.invalid", role: "admin",
-      profile: null, canAccessAdminPanel: true,
-      permissions: ["matches", "bracket_setup"].map(
-        (scope) => ({ scope, level: "EDIT" }),
-      ),
+    userId: ID,
+    sessionId: ID,
+    user: {
+      id: ID,
+      email: "synthetic@example.invalid",
+      role: "admin",
+      profile: null,
+      canAccessAdminPanel: true,
+      permissions: ["matches", "bracket_setup"].map((scope) => ({ scope, level: "EDIT" })),
     },
   }),
 } as unknown as AuthService;
@@ -44,9 +48,12 @@ test("LAJE-38 validates allowlisted realtime snapshots and authorization", async
   app.use("/", createRealtimeReadRouter(auth));
   app.use(errorHandler);
   const server = app.listen(0, "127.0.0.1");
-  t.after(() => new Promise<void>((resolve, reject) => {
-    server.close((error) => (error ? reject(error) : resolve()));
-  }));
+  t.after(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      }),
+  );
   await once(server, "listening");
   const address = server.address();
   assert.ok(address && typeof address === "object");
@@ -54,13 +61,14 @@ test("LAJE-38 validates allowlisted realtime snapshots and authorization", async
 
   for (const name of Object.keys(SNAPSHOTS)) {
     const isAdmin = name === "pending-award-draws" || name === "pending-tie-breaks";
-    const extra = name === "interlaje-competition-standings" ? `&sportId=${ID}&naipe=MASCULINO` : "";
+    const extra =
+      name === "interlaje-competition-standings" ? `&sportId=${ID}&naipe=MASCULINO` : "";
     const path = `/${ID}/${name}?seasonYear=2026${extra}`;
     const response = await fetch(url + path, {
       headers: isAdmin ? { authorization: "Bearer synthetic" } : {},
     });
     assert.equal(response.status, 200, name);
-    assert.deepEqual((await response.json() as { data: unknown[] }).data, []);
+    assert.deepEqual(((await response.json()) as { data: unknown[] }).data, []);
     assert.equal(response.headers.get("cache-control"), "private, no-store");
     if (isAdmin) {
       const denied = await fetch(url + path);
