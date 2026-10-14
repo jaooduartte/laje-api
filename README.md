@@ -227,6 +227,7 @@ A migração deve ser tratada como uma sequência rastreável, não como um dump
 - [Acesso PostgreSQL](docs/database-access.md): contratos da camada de persistência e requisitos de conexão;
 - [Healthchecks](docs/healthchecks.md): semântica dos endpoints operacionais;
 - [Staging AWS](docs/staging-aws.md): topologia, operação e evidências E2E da LAJE-136;
+- [CI/CD e deploy](docs/deployment.md): pipelines separados, staging manual, variáveis, segurança e critérios para produção;
 - [Workloads operacionais AWS](docs/operational-workloads.md): SQS/DLQ, EventBridge, e-mail, calendário e observabilidade da LAJE-126;
 - [Arquitetura operacional](docs/architecture.md): estado-alvo Vercel + AWS + RDS;
 - [ADR da arquitetura](docs/adr/0001-arquitetura-operacional-final.md): decisão formal e trade-offs.
@@ -246,6 +247,7 @@ Tarefas principais relacionadas no Jira:
 - `LAJE-131`: containerização para execução/deploy AWS;
 - `LAJE-136`: publicação e validação E2E do staging AWS;
 - `LAJE-33`: CI/CD final entre frontend Vercel e backend AWS;
+- `LAJE-142`: habilitação futura do deploy automático após merge em `main`, adiada para o momento do cutover;
 - `LAJE-37`: documentação do deploy final.
 
 ## Regras de segurança e evolução
