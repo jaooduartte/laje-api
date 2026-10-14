@@ -19,7 +19,7 @@ test("LAJE-38 auth repository maps identity, permissions, sessions and audit wri
     expires_at: "2027-01-01T00:00:00Z", revoked_at: null,
   };
   const query = async (sql: string, args?: readonly unknown[]) => {
-    executed.push({ sql, args });
+    executed.push({ sql, ...(args === undefined ? {} : { args }) });
     if (sql.includes("SELECT") && sql.includes("FROM public.admin_user_profiles AS aup")) {
       if (sql.includes("JOIN public.admin_profiles AS ap")) {
         return { rows: [{
