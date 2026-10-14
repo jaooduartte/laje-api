@@ -14,9 +14,9 @@ npm run test:smoke
 npm run test:coverage
 ```
 
-O comando `test:coverage` usa cobertura nativa de Node.js 22, filtrando `src/**/*.ts` e exigindo um mínimo de **75% das linhas instrumentadas pelos testes unitários**. O CI grava `coverage/backend/node-test-coverage.txt` e publica o artefato `laje-api-backend-coverage` mesmo em caso de falha.
+O comando `test:coverage` usa c8 v10.1.3 com `--all` para incluir todo o código de produção de `src/**/*.ts` (inclusive arquivos nunca importados pelos testes) e exigir **75% das linhas reais**. Arquivos vazios não contêm linhas executáveis. O pacote de instrumentação está fixado na versão do comando, mas é resolvido pelo npm em execução. O CI grava `coverage/backend/coverage-summary.json`, `coverage/backend/lcov.info`, `coverage/backend/index.html` e o log `coverage/backend/node-test-coverage.txt`, publicando o artefato `laje-api-backend-coverage` mesmo em caso de falha.
 
-**Limitação importante**: o coletor nativo do Node contabiliza módulos carregados nos testes. Módulos ainda não importados podem não entrar no denominador. Por isso, **75% no relatório nativo não prova, isoladamente, 75% de todo o backend**. É necessário auditar o escopo de arquivos antes da prova de autoria, complementar testes unitários para módulos ainda não instrumentados e confrontar os percentuais com a definição exigida pelo avaliador. Não anunciar cobertura acadêmica atendida até documentar esse resultado verificável.
+**Auditoria do denominador**: a ferramenta anterior (cobertura nativa do Node) reportava 96,75% porque limitava o denominador a módulos carregados. A partir desta configuração, arquivos de `src` não importados entram com cobertura zero. A aprovação exige relatório com o denominador inteiro, e não apenas o percentual da ferramenta anterior.
 
 ## Evidência dos três fluxos prioritários
 
