@@ -44,7 +44,7 @@ test("LAJE-38 admin audit and conflict endpoints use parameterized read-only que
   const sql: string[] = [];
   t.mock.method(database, "query", async (statement: string) => {
     sql.push(statement);
-    if (statement.includes("FROM public.admin_action_logs")) {
+    if (statement.includes("FROM public.admin_action_logs\n         WHERE")) {
       return { rows: [{ id: ID, totalCount: 1, actionType: "LOGIN" }], count: 1 };
     }
     return { rows: [], count: 0 };
