@@ -229,6 +229,16 @@ jobs:
           test "$(psql --host localhost --username postgres --dbname laje_baseline --tuples-only --no-align --command "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relname IN ('admin_auth_accounts', 'admin_auth_sessions');")" = "2"
           test "$(psql --host localhost --username postgres --dbname laje_baseline --tuples-only --no-align --command "SELECT count(*) FROM pg_constraint WHERE conname IN ('admin_auth_accounts_user_id_fkey', 'admin_auth_sessions_user_id_fkey');")" = "2"
 
+      - name: Create isolated database for three priority business flows
+        if: needs.quality.outputs.database_baseline == 'true'
+        run: createdb --host localhost --username postgres --template laje_baseline laje_priority_flows
+
+      - name: Validate three business flows against isolated PostgreSQL
+        if: needs.quality.outputs.database_baseline == 'true'
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/laje_priority_flows?sslmode=disable
+        run: npm run test:flows
+
       - name: Prepare synthetic migration source
         if: needs.quality.outputs.database_baseline == 'true'
         run: |

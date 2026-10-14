@@ -24,7 +24,8 @@
     "migration:import-data": "tsx scripts/migration/import-data.ts",
     "migration:sync-data": "tsx scripts/migration/sync-data.ts",
     "migration:verify-parity": "tsx scripts/migration/verify-parity.ts",
-    "test:smoke": "node --import tsx --test tests/e2e/priority-flows.test.ts tests/unit/auth.service.test.ts tests/unit/standings.service.test.ts tests/unit/calendar-ics.test.ts"
+    "test:smoke": "node --import tsx --test tests/e2e/priority-flows.test.ts tests/unit/auth.service.test.ts tests/unit/standings.service.test.ts tests/unit/calendar-ics.test.ts",
+    "test:flows": "node --import tsx --test tests/flows/*.test.ts"
   },
   "repository": {
     "type": "git",
