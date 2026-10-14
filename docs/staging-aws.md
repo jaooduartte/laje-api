@@ -80,7 +80,7 @@ O workflow `Deploy AWS` oferece:
 
 O deploy usa GitHub Actions OIDC; não existem access keys AWS persistidas no GitHub.
 
-Durante a fase atual, o deploy pode ser acionado manualmente para evitar religar recursos billable sem necessidade. A automação definitiva após merge na `main` pertence à LAJE-142 e não deve ser antecipada dentro da LAJE-136.
+Durante a fase atual (LAJE-33), o workflow é **exclusivamente manual e limitado à branch `main`** para evitar religar recursos billable sem necessidade. O antigo gatilho de `push` em `LAJE-136` foi removido. A automação definitiva após merge na `main` pertence à LAJE-142 e não deve ser antecipada durante a validação. Consulte [o runbook de CI/CD](deployment.md).
 
 ## Observabilidade
 
