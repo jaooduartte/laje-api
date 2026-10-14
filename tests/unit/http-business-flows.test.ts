@@ -117,9 +117,9 @@ test("LAJE-38 HTTP controller coverage uses only synthetic database adapters", a
       /UPDATE public.matches SET/.test(statement) ||
       /UPDATE public.matches\s+SET/.test(statement)
     ) {
-      if (/status = 'LIVE'/.test(statement)) status = "LIVE";
-      if (/status = 'FINISHED'/.test(statement)) status = "FINISHED";
-      if (/status = 'SCHEDULED'/.test(statement)) status = "SCHEDULED";
+      if (/SET status = 'LIVE'/.test(statement)) status = "LIVE";
+      else if (/SET status = 'FINISHED'/.test(statement)) status = "FINISHED";
+      else if (/SET status = 'SCHEDULED'/.test(statement)) status = "SCHEDULED";
       rows = [{ id: ID }];
     } else if (
       /FROM public.matches m/.test(statement) &&
