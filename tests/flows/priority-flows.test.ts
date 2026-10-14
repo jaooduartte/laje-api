@@ -48,7 +48,10 @@ async function seedFixture(): Promise<void> {
     "INSERT INTO public.sports (id, name, code, default_match_duration_minutes) VALUES ($1, 'Futsal LAJE-38', 'FUTSAL', 60)",
     [IDS.sport],
   );
-  for (const [id, name] of [[IDS.home, "Synthetic Home"], [IDS.away, "Synthetic Away"]]) {
+  for (const [id, name] of [
+    [IDS.home, "Synthetic Home"],
+    [IDS.away, "Synthetic Away"],
+  ]) {
     await database.query("INSERT INTO public.teams (id, name) VALUES ($1, $2)", [id, name]);
   }
   await database.query(
@@ -93,7 +96,10 @@ test("LAJE-38 completes login, live operations, standings and calendar on isolat
   assert.ok(address && typeof address === "object");
   const apiBase = `http://127.0.0.1:${address.port}/api/v1`;
 
-  async function call(path: string, init: RequestInit = {}): Promise<{ status: number; payload: ApiPayload }> {
+  async function call(
+    path: string,
+    init: RequestInit = {},
+  ): Promise<{ status: number; payload: ApiPayload }> {
     const response = await fetch(`${apiBase}${path}`, {
       ...init,
       headers: { "content-type": "application/json", ...init.headers },
@@ -129,7 +135,10 @@ test("LAJE-38 completes login, live operations, standings and calendar on isolat
   const anonymousWrite = await call(`/matches/${IDS.match}/start`, { method: "POST" });
   assert.equal(anonymousWrite.status, 401);
 
-  const started = await call(`/matches/${IDS.match}/start`, { method: "POST", headers: authorized });
+  const started = await call(`/matches/${IDS.match}/start`, {
+    method: "POST",
+    headers: authorized,
+  });
   assert.equal(started.status, 200);
   assert.ok(started.payload.data && !Array.isArray(started.payload.data));
   assert.equal(started.payload.data.status, "LIVE");
