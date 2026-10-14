@@ -12,7 +12,7 @@ process.env.MAIL_ENABLED = "false";
 
 const { app } = await import("../../src/app.js");
 
-test("LAJE-38: API smoke validates three business flow boundaries without database access", async (t) => {
+test("LAJE-38: checks API flow boundaries", async (t) => {
   const server = app.listen(0, "127.0.0.1");
   t.after(
     () =>
