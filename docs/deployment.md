@@ -4,9 +4,9 @@
 
 A aplicação é dividida entre dois repositórios independentes: `jaooduartte/laje` (frontend React/Vite na Vercel) e `jaooduartte/laje-api` (API Node.js/Express na AWS). O banco de dados do estado-alvo é Amazon RDS PostgreSQL 17.
 
-Enquanto a LAJE-139 não concluir o cutover, a produção operacional permanece no Supabase. O projeto Vercel `laje-tcc` consome a API AWS de staging; o projeto `laje` continua no backend legado.
+O projeto Vercel `laje` permanecerá **permanentemente** na infraestrutura Supabase como produção operacional independente. A entrega do TCC é exclusivamente o projeto Vercel `laje-tcc`, que consome a `laje-api` AWS/RDS, atualmente validada em staging. O release final da LAJE-139 vale somente para o ambiente do TCC, **sem migração nem redirecionamento do `laje`**.
 
-Esta entrega consolida os contratos de CI/CD e a operação segura de staging. **Não habilita deploy produtivo automático, não provisiona RDS de produção e não troca o tráfego atual.** O deploy automático após merge em `main` foi deliberadamente reservado à LAJE-142.
+A LAJE-33 entrega CI automatizado dos dois repositórios e deployment AWS de staging controlado via GitHub Actions, OIDC e Terraform. **Não habilita deploy automático em todo merge, não provisiona RDS produtivo e não interfere na produção `laje`.** A ativação de CD automático ao merge foi adiada para a LAJE-142, por economia, como trabalho posterior e independente da conclusão da LAJE-33.
 
 ## CI por pull request
 
@@ -49,17 +49,17 @@ O pipeline não deve executar migrações de dados produtivos automaticamente. M
 
 ## Gates do futuro release produtivo
 
-Antes de configurar o deployment de produção e trocar o frontend, exigir:
+Antes de publicar o ambiente final do TCC `laje-tcc` com backend AWS de produção, exigir (sem alterar o projeto `laje`):
 
 1. LAJE-89 (realtime) e LAJE-126 (workloads) concluídas e testadas, além das dependências descritas em LAJE-139.
 2. CI/quality gate aprovado nos dois repositórios, revisão por pares e SHA/versionamento rastreável.
 3. Terraform `plan` de produção revisado, estimativa de custo aprovada, credenciais e infraestrutura segregadas, backup/snapshot e rollback preparado.
 4. Write freeze efetivo na origem, sincronização/paridade finais da LAJE-139 e migrations validadas.
 5. Deploy da API produtiva com imagem imutável ECR, aprovação manual de promoção, ECS saudável, health PostgreSQL, CORS e smoke E2E.
-6. Atualização controlada das variáveis do frontend Vercel e novo build, validação funcional e observabilidade; somente então promover tráfego.
+6. Atualização controlada apenas das configurações do projeto Vercel `laje-tcc`, novo build, validação funcional e observabilidade; somente então publicar a instalação final do TCC. Não modificar `laje`.
 7. Plano de reversão compatível com a existência de escritas no banco novo, incluindo decisão explícita sobre reversão de dados. Reverter apenas a versão da aplicação não reverte dados.
 
-Não considerar a LAJE-33 concluída antes de existirem evidências de deploy funcional no estado-alvo e documentação de publicação atualizada.
+A LAJE-33 pode ser concluída quando os checks de CI dos dois repositórios, deployments Vercel dos ambientes separados, workflow manual AWS e validação HTTPS/CORS/PostgreSQL/smoke em staging estiverem comprovados. A LAJE-142 (gatilho automático por merge) e a LAJE-139 (release AWS/RDS final do TCC) têm aceites independentes posteriores.
 
 ## Referências
 
