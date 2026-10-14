@@ -4,7 +4,21 @@
 
 Validar o caminho `frontend Vercel -> HTTPS -> laje-api AWS -> RDS PostgreSQL` sem alterar a produção atual no Supabase.
 
-## Estado validado em 07/10/2026
+## Auditoria atualizada em 14/10/2026 — LAJE-33
+
+O projeto de entrega do TCC é **`laje-tcc`**, configurado na Vercel com `VITE_BACKEND_PROVIDER=aws`. O projeto operacional **`laje` permanece permanentemente no Supabase**; ambos recebem código do mesmo repositório Git, mas mantêm configurações e destinos independentes.
+
+- Endpoint HTTPS AWS vigente: **`https://rkckaptyaf.execute-api.sa-east-1.amazonaws.com`** (`VITE_API_URL=https://rkckaptyaf.execute-api.sa-east-1.amazonaws.com/api/v1`).
+- Esse endpoint possui rota `$default` integrada ao ALB interno por `HTTP_PROXY` / VPC Link; CORS permite apenas `https://laje-tcc.vercel.app`.
+- O bundle JS entregue por `https://laje-tcc.vercel.app` foi inspecionado: aponta para `rkckaptyaf`, define provider `aws` e **não contém `supabase.co`**.
+- ECS `laje-staging-api` utiliza task definition `:31`; 1/1 task `RUNNING` e `HEALTHY`, target group healthy no `/api/v1/health` e rollout concluído.
+- RDS `laje-staging-postgres` privado, PostgreSQL 17.9, `available`.
+- Deploy AWS por GitHub Actions executado manualmente com sucesso em 13/10/2026: [Deploy AWS](https://github.com/jaooduartte/laje-api/actions/runs/38485878433), com health checks, PostgreSQL, CORS e smoke E2E aprovados.
+- CI pós-merge da LAJE-33: [backend](https://github.com/jaooduartte/laje-api/actions/runs/38511279496) e [frontend](https://github.com/jaooduartte/laje/actions/runs/38511307016) aprovados; Vercel publicou o commit `4bec5356` nos dois projetos com estado READY.
+- Foi encontrado outro API Gateway `96bmsmgbt0` com mesmo nome e tags `ManagedBy=Terraform`/`Jira=LAJE-136`, porém **sem rotas nem integrações nem domínio customizado**. É um candidato a recurso órfão, mas **não foi removido**: confirmar primeiro o state Terraform e o histórico de substituição, evitando drift/destroy de recurso gerenciado. Ele não é o endpoint usado pelo frontend.
+- O endpoint `zezxz6j7o1` descrito na evidência de 07/10 é **histórico e não deve ser utilizado na configuração atual**.
+
+## Evidência histórica de 07/10/2026
 
 A infraestrutura de staging está publicada e funcional em `sa-east-1`.
 
@@ -117,7 +131,7 @@ A retenção configurada é de 7 dias. O container também possui healthcheck pr
 
 ## Não é produção
 
-Esta infraestrutura não executa o cutover produtivo. O ambiente legado baseado em Supabase continua separado até a LAJE-139.
+Esta infraestrutura de staging não representa o release final do TCC (LAJE-139). O projeto operacional `laje` e seu Supabase permanecem **separados de forma permanente**, sem cutover desse projeto para AWS.
 
 O frontend `laje-tcc` existe para validar a arquitetura alvo. A hospedagem do frontend em Vercel permanece a exceção específica autorizada externamente para o projeto; backend, banco, infraestrutura e operação de staging permanecem na AWS.
 
