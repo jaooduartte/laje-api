@@ -92,7 +92,8 @@ export function createAdminRuntimeRouter(authService: AuthService): Router {
 
       if (actionType) {
         parameters.push(actionType);
-        conditions.push(`action_type = ${parameters.length}::public.admin_action_type`);
+        const placeholder = "$" + parameters.length;
+        conditions.push(`action_type = ${placeholder}::public.admin_action_type`);
       }
 
       if (search) {
