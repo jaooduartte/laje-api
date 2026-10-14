@@ -67,7 +67,7 @@ jobs:
             postgres_integration=true
           fi
 
-          if grep -Eq '^(infra/database/|scripts/migration/|package(-lock)?\.json$|\.github/workflows/ci\.yml$)' "$RUNNER_TEMP/changed-files.txt"; then
+          if grep -Eq '^(src/|tests/flows/|infra/database/|scripts/migration/|package(-lock)?\.json$|\.github/workflows/ci\.yml$)' "$RUNNER_TEMP/changed-files.txt"; then
             database_baseline=true
           fi
 
@@ -100,8 +100,46 @@ jobs:
       - name: Run tests
         run: npm test
 
+      - name: Smoke tests for three business flows
+        run: npm run test:smoke
+
       - name: Build
         run: npm run build
+
+  coverage:
+    name: Full Backend Unit Coverage (75%)
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js 26.8.2 for full-source coverage
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26.8.2
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Measure backend unit coverage (75% line threshold)
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p coverage/backend
+          npm run test:coverage 2>&1 | tee coverage/backend/node-test-coverage.txt
+
+      - name: Upload backend coverage evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: laje-api-backend-coverage
+          path: coverage/backend/
+          if-no-files-found: warn
+          retention-days: 30
 
   postgres:
     name: PostgreSQL Validation
@@ -192,6 +230,16 @@ jobs:
         run: |
           test "$(psql --host localhost --username postgres --dbname laje_baseline --tuples-only --no-align --command "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relname IN ('admin_auth_accounts', 'admin_auth_sessions');")" = "2"
           test "$(psql --host localhost --username postgres --dbname laje_baseline --tuples-only --no-align --command "SELECT count(*) FROM pg_constraint WHERE conname IN ('admin_auth_accounts_user_id_fkey', 'admin_auth_sessions_user_id_fkey');")" = "2"
+
+      - name: Create isolated database for three priority business flows
+        if: needs.quality.outputs.database_baseline == 'true'
+        run: createdb --host localhost --username postgres --template laje_baseline laje_priority_flows
+
+      - name: Validate three business flows against isolated PostgreSQL
+        if: needs.quality.outputs.database_baseline == 'true'
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/laje_priority_flows?sslmode=disable
+        run: npm run test:flows
 
       - name: Prepare synthetic migration source
         if: needs.quality.outputs.database_baseline == 'true'

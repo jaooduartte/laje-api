@@ -18,12 +18,14 @@
     "test:unit": "node --import tsx --test tests/unit/*.test.ts tests/unit/*.test.mjs",
     "test:e2e": "node --import tsx --test tests/e2e/*.test.ts",
     "test:integration": "node --import tsx --test tests/integration/*.test.ts",
-    "test:coverage": "node --import tsx --test --experimental-test-coverage tests/unit/*.test.ts tests/unit/*.test.mjs tests/e2e/*.test.ts",
+    "test:coverage": "node --import tsx --test --experimental-test-coverage --test-coverage-include='src/**/*.ts' --test-coverage-include-all --test-coverage-lines=75 tests/unit/*.test.ts tests/unit/*.test.mjs",
     "migration:export-schema": "tsx scripts/migration/export-schema.ts",
     "migration:export-data": "tsx scripts/migration/export-data.ts",
     "migration:import-data": "tsx scripts/migration/import-data.ts",
     "migration:sync-data": "tsx scripts/migration/sync-data.ts",
-    "migration:verify-parity": "tsx scripts/migration/verify-parity.ts"
+    "migration:verify-parity": "tsx scripts/migration/verify-parity.ts",
+    "test:smoke": "node --import tsx --test tests/e2e/priority-flows.test.ts tests/unit/auth.service.test.ts tests/unit/standings.service.test.ts tests/unit/calendar-ics.test.ts",
+    "test:flows": "node --import tsx --test tests/flows/*.test.ts"
   },
   "repository": {
     "type": "git",
