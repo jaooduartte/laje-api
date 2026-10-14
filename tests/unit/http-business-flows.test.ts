@@ -377,6 +377,104 @@ test("LAJE-38 HTTP controller coverage uses only synthetic database adapters", a
 
   const standings = await call("/championships/" + ID + "/standings?seasonYear=2026");
   assert.equal(standings.status, 200);
+
+  // Campeonato: CRUD autorizado, configurações sazonais e impedimento de avanço inválido.
+  const createdChampionship = await call("/championships", {
+    method: "POST",
+    body: JSON.stringify({
+      code: "SOCIETY",
+      name: "Copa Society Sintética",
+      currentSeasonYear: 2026,
+      status: "PLANNING",
+      usesDivisions: true,
+    }),
+  });
+  assert.equal(createdChampionship.status, 201);
+  assert.ok(
+    executedSql.some((statement) => statement.includes("INSERT INTO public.championships")),
+  );
+  assert.equal(
+    (await call("/championships", {
+      method: "POST",
+      body: JSON.stringify({ code: "NOT_ALLOWED", name: "" }),
+    })).status,
+    422,
+  );
+
+  const changedChampionship = await call("/championships/" + ID, {
+    method: "PATCH",
+    body: JSON.stringify({
+      name: "Interlaje 2026",
+      status: "FINISHED",
+      currentSeasonYear: 2026,
+      usesDivisions: true,
+      defaultLocation: "Ginásio",
+    }),
+  });
+  assert.equal(changedChampionship.status, 200);
+  assert.ok(
+    executedSql.some((statement) => statement.includes("UPDATE public.championships SET")),
+  );
+  assert.equal(
+    (await call("/championships/" + ID, {
+      method: "PATCH",
+      body: JSON.stringify({}),
+    })).status,
+    422,
+  );
+  const readSeason = await call("/championships/" + ID + "/seasons/2026");
+  assert.equal(readSeason.status, 200);
+
+  const upsertSeason = await call("/championships/" + ID + "/seasons/2026", {
+    method: "PUT",
+    body: JSON.stringify({
+      divisionFormat: "SEPARATED",
+      divisionSettlementMode: "PROMOTION_RELEGATION",
+      principalSlotsCount: 12,
+      principalRelegationCount: 2,
+      accessPromotionCount: 2,
+      yellowCardResetPhase: "FINAL",
+    }),
+  });
+  assert.equal(upsertSeason.status, 200);
+  assert.ok(
+    executedSql.some((statement) =>
+      statement.includes("INSERT INTO public.championship_season_settings"),
+    ),
+  );
+
+  const forbiddenAdvance = await call("/championships/" + ID + "/seasons/advance", {
+    method: "POST",
+  });
+  assert.equal(forbiddenAdvance.status, 409);
+  assert.equal(
+    (forbiddenAdvance.body.error as Record<string, unknown>).code,
+    "CHAMPIONSHIP_STATE_CONFLICT",
+  );
+  const resetSeason = await call("/championships/" + ID + "/seasons/2026/reset", {
+    method: "POST",
+  });
+  assert.equal(resetSeason.status, 204);
+  assert.ok(
+    executedSql.some((statement) => statement.includes("DELETE FROM public.matches")),
+  );
+
+  // Retornar ao agendamento desfaz a operação ao vivo e refaz a classificação.
+  const returnedMatch = await call("/matches/" + ID + "/return-to-scheduled", {
+    method: "POST",
+  });
+  assert.equal(returnedMatch.status, 200);
+  assert.equal((returnedMatch.body.data as Record<string, unknown>).status, "SCHEDULED");
+  assert.equal(
+    (await call("/matches/" + ID + "/return-to-scheduled", {
+      method: "POST",
+    })).status,
+    409,
+  );
+  assert.ok(
+    executedSql.some((statement) => statement.includes("DELETE FROM public.match_sets")),
+  );
+
   assert.ok(executedSql.some((statement) => statement.includes("public.matches")));
   assert.ok(executedSql.some((statement) => statement.includes("public.championships")));
 });
