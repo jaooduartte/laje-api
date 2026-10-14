@@ -100,6 +100,25 @@ jobs:
       - name: Run tests
         run: npm test
 
+      - name: Smoke tests for three business flows
+        run: npm run test:smoke
+
+      - name: Measure backend unit coverage (75% line threshold)
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p coverage/backend
+          npm run test:coverage 2>&1 | tee coverage/backend/node-test-coverage.txt
+
+      - name: Upload backend coverage evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: laje-api-backend-coverage
+          path: coverage/backend/
+          if-no-files-found: warn
+          retention-days: 30
+
       - name: Build
         run: npm run build
 
