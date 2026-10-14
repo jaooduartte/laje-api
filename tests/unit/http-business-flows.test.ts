@@ -394,10 +394,12 @@ test("LAJE-38 HTTP controller coverage uses only synthetic database adapters", a
     executedSql.some((statement) => statement.includes("INSERT INTO public.championships")),
   );
   assert.equal(
-    (await call("/championships", {
-      method: "POST",
-      body: JSON.stringify({ code: "NOT_ALLOWED", name: "" }),
-    })).status,
+    (
+      await call("/championships", {
+        method: "POST",
+        body: JSON.stringify({ code: "NOT_ALLOWED", name: "" }),
+      })
+    ).status,
     422,
   );
 
@@ -412,14 +414,14 @@ test("LAJE-38 HTTP controller coverage uses only synthetic database adapters", a
     }),
   });
   assert.equal(changedChampionship.status, 200);
-  assert.ok(
-    executedSql.some((statement) => statement.includes("UPDATE public.championships SET")),
-  );
+  assert.ok(executedSql.some((statement) => statement.includes("UPDATE public.championships SET")));
   assert.equal(
-    (await call("/championships/" + ID, {
-      method: "PATCH",
-      body: JSON.stringify({}),
-    })).status,
+    (
+      await call("/championships/" + ID, {
+        method: "PATCH",
+        body: JSON.stringify({}),
+      })
+    ).status,
     422,
   );
   const readSeason = await call("/championships/" + ID + "/seasons/2026");
@@ -455,9 +457,7 @@ test("LAJE-38 HTTP controller coverage uses only synthetic database adapters", a
     method: "POST",
   });
   assert.equal(resetSeason.status, 204);
-  assert.ok(
-    executedSql.some((statement) => statement.includes("DELETE FROM public.matches")),
-  );
+  assert.ok(executedSql.some((statement) => statement.includes("DELETE FROM public.matches")));
 
   // Retornar ao agendamento desfaz a operação ao vivo e refaz a classificação.
   const returnedMatch = await call("/matches/" + ID + "/return-to-scheduled", {
@@ -466,14 +466,14 @@ test("LAJE-38 HTTP controller coverage uses only synthetic database adapters", a
   assert.equal(returnedMatch.status, 200);
   assert.equal((returnedMatch.body.data as Record<string, unknown>).status, "SCHEDULED");
   assert.equal(
-    (await call("/matches/" + ID + "/return-to-scheduled", {
-      method: "POST",
-    })).status,
+    (
+      await call("/matches/" + ID + "/return-to-scheduled", {
+        method: "POST",
+      })
+    ).status,
     409,
   );
-  assert.ok(
-    executedSql.some((statement) => statement.includes("DELETE FROM public.match_sets")),
-  );
+  assert.ok(executedSql.some((statement) => statement.includes("DELETE FROM public.match_sets")));
 
   assert.ok(executedSql.some((statement) => statement.includes("public.matches")));
   assert.ok(executedSql.some((statement) => statement.includes("public.championships")));
