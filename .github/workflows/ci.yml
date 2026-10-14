@@ -67,7 +67,7 @@ jobs:
             postgres_integration=true
           fi
 
-          if grep -Eq '^(infra/database/|scripts/migration/|package(-lock)?\.json$|\.github/workflows/ci\.yml$)' "$RUNNER_TEMP/changed-files.txt"; then
+          if grep -Eq '^(src/|tests/flows/|infra/database/|scripts/migration/|package(-lock)?\.json$|\.github/workflows/ci\.yml$)' "$RUNNER_TEMP/changed-files.txt"; then
             database_baseline=true
           fi
 
@@ -96,12 +96,6 @@ jobs:
 
       - name: Check formatting
         run: npm run format:check
-
-      - name: Show Prettier suggestions after a quality failure
-        if: failure()
-        run: |
-          npx prettier tests/unit/auth.repository.test.ts tests/unit/http-business-flows.test.ts tests/unit/realtime-read-http.test.ts --write
-          git diff -- tests/unit/auth.repository.test.ts tests/unit/http-business-flows.test.ts tests/unit/realtime-read-http.test.ts
 
       - name: Run tests
         run: npm test
