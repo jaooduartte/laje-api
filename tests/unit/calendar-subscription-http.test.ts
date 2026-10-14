@@ -33,25 +33,48 @@ test("LAJE-38 covers subscription scopes, cache revalidation and access restrict
     }
     if (statement.includes("FROM public.matches m")) {
       return {
-        rows: [{
-          id: ID, championshipId: ID, seasonYear: 2026, sportId: ID,
-          naipe: "MASCULINO", division: null, location: "Ginásio", courtName: "Quadra 1",
-          startTime: "2027-01-01T12:00:00.000Z", endTime: "2027-01-01T13:00:00.000Z",
-          createdAt: "2026-10-01T00:00:00.000Z", updatedAt: "2026-10-01T00:00:00.000Z",
-          championshipName: "Interlaje", sportName: "Futsal", homeTeamName: "Casa",
-          awayTeamName: "Visitante", durationMinutes: 60,
-        }],
+        rows: [
+          {
+            id: ID,
+            championshipId: ID,
+            seasonYear: 2026,
+            sportId: ID,
+            naipe: "MASCULINO",
+            division: null,
+            location: "Ginásio",
+            courtName: "Quadra 1",
+            startTime: "2027-01-01T12:00:00.000Z",
+            endTime: "2027-01-01T13:00:00.000Z",
+            createdAt: "2026-10-01T00:00:00.000Z",
+            updatedAt: "2026-10-01T00:00:00.000Z",
+            championshipName: "Interlaje",
+            sportName: "Futsal",
+            homeTeamName: "Casa",
+            awayTeamName: "Visitante",
+            durationMinutes: 60,
+          },
+        ],
         count: 1,
       };
     }
     if (statement.includes("FROM public.championship_individual_sessions s")) {
       return {
-        rows: [{
-          id: ID, seasonYear: 2026, naipe: "FEMININO", division: null,
-          scheduledDate: "2027-01-02", startTime: "12:00:00", endTime: "13:30:00",
-          locationName: "Ginásio", courtName: "Piscina", sportName: "Natação",
-          createdAt: "2026-10-01T00:00:00.000Z", updatedAt: "2026-10-01T00:00:00.000Z",
-        }],
+        rows: [
+          {
+            id: ID,
+            seasonYear: 2026,
+            naipe: "FEMININO",
+            division: null,
+            scheduledDate: "2027-01-02",
+            startTime: "12:00:00",
+            endTime: "13:30:00",
+            locationName: "Ginásio",
+            courtName: "Piscina",
+            sportName: "Natação",
+            createdAt: "2026-10-01T00:00:00.000Z",
+            updatedAt: "2026-10-01T00:00:00.000Z",
+          },
+        ],
         count: 1,
       };
     }
@@ -62,9 +85,12 @@ test("LAJE-38 covers subscription scopes, cache revalidation and access restrict
   app.use("/", createCalendarSubscriptionRouter());
   app.use(errorHandler);
   const server = app.listen(0, "127.0.0.1");
-  t.after(() => new Promise<void>((resolve, reject) => {
-    server.close((error) => (error ? reject(error) : resolve()));
-  }));
+  t.after(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      }),
+  );
   await once(server, "listening");
   const address = server.address();
   assert.ok(address && typeof address === "object");
@@ -101,5 +127,7 @@ test("LAJE-38 covers subscription scopes, cache revalidation and access restrict
   blocked = true;
   assert.equal((await fetch(url + root + `&scope=MATCH&match_id=${ID}`)).status, 404);
   assert.ok(statements.some((sql) => sql.includes("FROM public.matches m")));
-  assert.ok(statements.some((sql) => sql.includes("FROM public.championship_individual_sessions s")));
+  assert.ok(
+    statements.some((sql) => sql.includes("FROM public.championship_individual_sessions s")),
+  );
 });
