@@ -40,3 +40,11 @@ Com os checks obrigatórios, High/Critical ou regressão do CI bloqueiam merge. 
 CodeQL identifica padrões de risco, não substitui pentest, validação de autenticação/permissões nem revisão manual. Achados devem receber issue no Jira com severidade, arquivo/regra, impacto e mitigação; correções são tratadas em PRs próprias. Não desligar o gate, adicionar exceção silenciosa, alterar thresholds ou omitir dependências para obter um check verde. Dados e credenciais de produção não são lidos nem modificados por estes workflows.
 
 **Observação arquitetural:** o frontend operacional `laje` permanece Vercel/Supabase; a instância de TCC `laje-tcc` usa a API AWS/RDS conforme o plano. Este trabalho modifica apenas o CI e a documentação, sem mudanças no banco ou deploy.
+
+## Resultado do primeiro ciclo — 14/10/2026
+
+- O `npm audit` do backend retornou **0 vulnerabilidades**; o quality gate principal (incluindo cobertura e testes) passou depois da formatação.
+- O CodeQL detectou alertas High de **limitação ausente de requisições** (regra `js/missing-rate-limiting`): cinco em `src/modules/auth/auth.routes.ts` e um em `src/modules/brackets/brackets.routes.ts`. A remediação, dimensionada para ECS e testes de abuso, está registrada na [LAJE-146](https://joaoduartte.atlassian.net/browse/LAJE-146). O gate permanece reprovado enquanto houver achados graves.
+- Dois achados `js/bad-tag-filter` pertenciam a testes sintéticos, não ao runtime. O escopo de CodeQL foi delimitado a `src/` e `scripts/` através de `.github/codeql/codeql-config.yml`, excluindo testes e fixtures; as vulnerabilidades de produção permanecem no escopo.
+- `Dependency Review` falhou porque **Dependency graph está desabilitado no repositório**. Ativação e branch protection requerem acesso admin e estão documentadas na [LAJE-147](https://joaoduartte.atlassian.net/browse/LAJE-147). Não desabilitar o job para mascarar a falha.
+- A PR #44 continua em rascunho e **não pode ser considerada aprovada** até resolver esses impedimentos.
