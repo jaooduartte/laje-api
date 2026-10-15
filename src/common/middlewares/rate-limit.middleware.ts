@@ -21,8 +21,13 @@ export function createSensitiveRouteRateLimit(options: SensitiveRateLimitOptions
   const executor = options.executor ?? database;
   const enabled = options.enabled ?? environment.auth.enabled;
   const { scope, maxRequests, windowSeconds } = options;
-  if (!/^[a-z][a-z0-9-]{1,63}$/.test(scope) || !Number.isSafeInteger(maxRequests) ||
-      maxRequests < 1 || !Number.isSafeInteger(windowSeconds) || windowSeconds < 1) {
+  if (
+    !/^[a-z][a-z0-9-]{1,63}$/.test(scope) ||
+    !Number.isSafeInteger(maxRequests) ||
+    maxRequests < 1 ||
+    !Number.isSafeInteger(windowSeconds) ||
+    windowSeconds < 1
+  ) {
     throw new Error("Invalid rate limit configuration.");
   }
 
@@ -35,7 +40,11 @@ export function createSensitiveRouteRateLimit(options: SensitiveRateLimitOptions
       // Never use an untrusted X-Forwarded-For header directly.
       // Express req.ip observes configured trusted proxy hops only.
       const clientIp = request.ip ?? request.socket.remoteAddress ?? "unknown";
-      const keyHash = createHash("sha256").update(scope).update("\0").update(clientIp).digest("hex");
+      const keyHash = createHash("sha256")
+        .update(scope)
+        .update("\0")
+        .update(clientIp)
+        .digest("hex");
       const result = await executor.query<{ hits: number; window_bucket: number }>(
         `INSERT INTO public.api_rate_limit_windows AS bucket
            (key_hash, window_bucket, hits)
