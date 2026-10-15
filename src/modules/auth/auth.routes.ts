@@ -44,11 +44,32 @@ export function createAuthRouter(authService: AuthService): Router {
     ),
     controller.refreshSession,
   );
-  router.delete("/sessions/current", requireAuthentication, controller.deleteSession);
-  router.get("/me", requireAuthentication, controller.getMe);
+  router.delete(
+    "/sessions/current",
+    rateLimit(
+      createPostgresRateLimitOptions({
+        scope: "session-revoke",
+        maxRequests: 20,
+        windowSeconds: 60,
+      }),
+    ),
+    requireAuthentication,
+    controller.deleteSession,
+  );
+  router.get(
+    "/me",
+    rateLimit(
+      createPostgresRateLimitOptions({
+        scope: "account-profile",
+        maxRequests: 60,
+        windowSeconds: 60,
+      }),
+    ),
+    requireAuthentication,
+    controller.getMe,
+  );
   router.patch(
     "/password",
-    requireAuthentication,
     rateLimit(
       createPostgresRateLimitOptions({
         scope: "password-change",
@@ -56,6 +77,7 @@ export function createAuthRouter(authService: AuthService): Router {
         windowSeconds: 300,
       }),
     ),
+    requireAuthentication,
     controller.changePassword,
   );
 

@@ -8,10 +8,12 @@ A proteção usa `express-rate-limit` v8 com store PostgreSQL próprio (sujeito 
 | POST /api/v1/auth/password-setup                               |      4 |   60 s |
 | POST /api/v1/auth/sessions                                     |      8 |   60 s |
 | POST /api/v1/auth/sessions/refresh                             |     20 |   60 s |
+| GET /api/v1/auth/me                                       |     60 |   60 s |
+| DELETE /api/v1/auth/sessions/current                       |     20 |   60 s |
 | PATCH /api/v1/auth/password                                    |      5 |  300 s |
 | POST /api/v1/championships/:id/seasons/:year/brackets/generate |      3 |   60 s |
 
-Rejeições retornam HTTP **429**, JSON `RATE_LIMIT_EXCEEDED`, `Retry-After`, `RateLimit-Limit` e `RateLimit-Remaining`. No caso de indisponibilidade do banco, o endpoint sensível falha fechado (500) e não tenta ignorar a proteção. O limite é aplicado via `rateLimit` diretamente nas rotas, com `skip` apenas quando `AUTH_ENABLED=false`. A proteção é acionada quando `AUTH_ENABLED=true`; quando o módulo administrativo está desativado, não acrescenta consultas ao banco.
+Rejeições retornam HTTP **429**, JSON `RATE_LIMIT_EXCEEDED`, `Retry-After`, `RateLimit-Limit` e `RateLimit-Remaining`. No caso de indisponibilidade do banco, o endpoint sensível falha fechado (500) e não tenta ignorar a proteção. O limite é aplicado via `rateLimit` diretamente nas rotas, **antes** da autenticação para também proteger o custo dessa verificação, com `skip` apenas quando `AUTH_ENABLED=false`. A proteção é acionada quando `AUTH_ENABLED=true`; quando o módulo administrativo está desativado, não acrescenta consultas ao banco.
 
 ### Cabeçalhos e ALB
 
