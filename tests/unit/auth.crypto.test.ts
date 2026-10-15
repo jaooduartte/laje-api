@@ -68,7 +68,7 @@ test("refresh token browser cookies use AES-256-GCM authenticated encryption", (
   assert.equal(decryptRefreshCookieToken(encrypted, SECRET), token);
   assert.equal(decryptRefreshCookieToken(encrypted, "another-secret"), null);
   const parts = encrypted.split(".");
-  parts[3] = parts[3]?.slice(0, -1) + (parts[3]?.at(-1) === "A" ? "B" : "A");
+  parts[3] = (parts[3]?.charAt(0) === "A" ? "B" : "A") + parts[3]?.slice(1);
   assert.equal(decryptRefreshCookieToken(parts.join("."), SECRET), null);
 });
 
