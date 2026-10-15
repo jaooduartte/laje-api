@@ -36,11 +36,10 @@ To avoid a NAT Gateway, the staging Fargate task runs in the public subnets with
 
 The billable ALB, API Gateway VPC Link/runtime and ECS service are controlled by `staging_api_enabled`. Keep it `false` when staging is not being actively validated. ECR, the ECS cluster, task definition, execution role and short-retention log group may remain because they do not create continuous compute/load-balancer charges.
 
-Still intentionally outside this module/task:
+Outside the original staging-runtime scope:
 
-- SQS/EventBridge replacements for asynchronous/cron workloads (LAJE-126);
-- realtime replacement (LAJE-89);
-- production database/runtime and final cutover (LAJE-139).
+- production API runtime and final TCC cutover (LAJE-139);
+- any new production SQS/EventBridge/realtime resources not explicitly represented in this Terraform state. LAJE-126 and LAJE-89 have been concluded in Jira; production parity still requires runtime validation.
 
 ## Security model
 
@@ -86,7 +85,7 @@ terraform apply
 
 ## Production usage
 
-Production uses the same reviewed resources with a distinct VPC, Terraform state, database identity and Secrets Manager credential. It must not reuse the staging backend key or `terraform.tfvars`.
+The production **database foundation** can use a distinct VPC, Terraform state, database identity and Secrets Manager credential. It must not reuse the staging backend key or `terraform.tfvars`. **The API runtime in `staging-api.tf` is staging-specific**: applying the existing `staging_api_enabled` variable in a production state is not a valid production API deployment. LAJE-139 must introduce/review a separately named and independently secured production runtime, CI/CD and secrets before any public TCC release. The operational Vercel `laje` and Supabase must never be redirected.
 
 ```bash
 terraform init -reconfigure \

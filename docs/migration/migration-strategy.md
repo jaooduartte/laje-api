@@ -2,9 +2,9 @@
 
 ## Objetivo
 
-Registrar a estratégia de transição entre a arquitetura atual baseada em Supabase e o estado final com frontend na Vercel, `laje-api` na AWS e Amazon RDS for PostgreSQL 17.
+Registrar a estratégia de entrega independente do Portfólio/TCC `laje-tcc`, com frontend Vercel, `laje-api` AWS e Amazon RDS PostgreSQL 17. O projeto operacional `laje` permanece permanentemente na Vercel com backend Supabase.
 
-A migração é incremental e deve preservar a produção atual até que cada domínio esteja validado em integration/staging e exista uma etapa explícita de cutover e rollback.
+A migração é incremental e deve preservar o `laje` operacional permanentemente. O único release/cutover previsto nesta estratégia é o do frontend `laje-tcc`, com API e banco AWS próprios, após checkpoint consistente, testes e rollback específico.
 
 ## Princípios
 
@@ -12,7 +12,7 @@ A migração é incremental e deve preservar a produção atual até que cada do
 1. A produção atual permanece estável durante a migração.
 2. Nenhum domínio é migrado apenas por cópia de SQL sem classificar regras, autenticação, jobs e integrações.
 3. O frontend não acessa diretamente o RDS no estado final.
-4. A mesma base de frontend `laje` seleciona o backend por `VITE_API_URL`.
+4. A mesma base de código frontend é publicada em dois projetos Vercel distintos: `laje` declara `VITE_BACKEND_PROVIDER=supabase`; `laje-tcc` declara `VITE_BACKEND_PROVIDER=aws` e `VITE_API_URL`.
 5. A `laje-api` seleciona o PostgreSQL por `DATABASE_URL`, sem alteração de código por ambiente.
 6. Staging e produção usam bancos e credenciais separados.
 7. Credenciais e tokens não são versionados; em AWS, secrets ficam em mecanismos apropriados como AWS Secrets Manager.
@@ -48,20 +48,19 @@ Amazon RDS PostgreSQL 17 de staging
 
 Esse ambiente é usado para validar contratos HTTP, migrations, importações de ensaio, CORS, TLS, healthchecks, observabilidade e deploy sem afetar a produção atual.
 
-### 3. Produção alvo
+### 3. Release final do TCC (`laje-tcc`)
 
 ```text
-Frontend LAJE na Vercel
-VITE_API_URL=https://<api-producao>
+Vercel / laje-tcc (VITE_BACKEND_PROVIDER=aws)
         |
         v
-ALB -> ECS/Fargate -> laje-api
+API Gateway HTTPS -> ALB interno -> ECS/Fargate -> laje-api (produção)
         |
         v
-Amazon RDS PostgreSQL 17 de produção
+Amazon RDS PostgreSQL 17 (produção TCC)
 ```
 
-A Vercel permanece no frontend por exceção específica aprovada para este projeto. Backend, banco, regras de negócio e serviços operacionais passam para a AWS. Após o cutover, Supabase deixa de exercer o papel de backend e banco principal da solução final.
+A Vercel permanece no frontend por exceção específica aprovada para o projeto. A API e os dados de `laje-tcc` são próprios da AWS. A cópia da origem Supabase corresponde a um checkpoint, não a dual-write ou sincronização contínua. **O projeto Vercel `laje` não participa do cutover e continua usando Supabase.**
 
 ## Fontes da migração
 
@@ -131,7 +130,7 @@ A solução deve preservar o fluxo controlado pela `laje-api`, sem reintroduzir 
 
 ### Fase 6 — Migração de dados e cutover
 
-`LAJE-88` concentra o processo de migração dos dados produtivos e deve incluir:
+`LAJE-88` preparou tooling, baseline, ensaios e verificações; a execução **final** é exclusiva da `LAJE-139`, sob checkpoint autorizado da origem e isolamento do destino `laje-tcc`. O fluxo de preparação incluiu:
 
 <!-- prettier-ignore -->
 1. snapshot/backup da origem;
@@ -209,4 +208,4 @@ Após sua consolidação:
 
 A estratégia deriva das tarefas e artefatos versionados no Jira/GitHub. Mudanças de direção devem ser registradas em tarefa, ADR ou documentação equivalente antes de alterar o estado-alvo.
 
-A produção final somente deve ser considerada migrada quando os fluxos obrigatórios estiverem operando pela nova arquitetura, a persistência principal estiver no PostgreSQL gerenciado e as dependências transitórias do Supabase estiverem removidas ou formalmente justificadas.
+O release final do `laje-tcc` somente deve ser considerado publicado quando seus fluxos obrigatórios estiverem operando pela API AWS, a persistência principal estiver no PostgreSQL RDS de produção e o frontend TCC não depender do Supabase como backend principal. O `laje` operacional não deve ser alterado.

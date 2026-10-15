@@ -1,4 +1,4 @@
-import { assertFinalCutoverCheckpoint } from "./parity-mode.js";
+import { assertFinalCutoverCheckpoint, assertFinalCutoverTarget } from "./parity-mode.js";
 import {
   assertDestinationWriteAllowed,
   assertMigrationStorageBudget,
@@ -15,6 +15,7 @@ if (mode === "final") {
     writesPausedAt: process.env.MIGRATION_WRITES_PAUSED_AT,
     expectedReservationRequestCount: process.env.MIGRATION_EXPECTED_RESERVATION_REQUEST_COUNT,
   });
+  assertFinalCutoverTarget();
 }
 
 assertDestinationWriteAllowed("Data synchronization");
