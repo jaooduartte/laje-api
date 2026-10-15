@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   assertFinalCutoverCheckpoint,
+  assertFinalCutoverTarget,
   assertParityModePreconditions,
   getMigrationParityMode,
   parityFailureMessage,
@@ -41,6 +42,7 @@ test("final parity requires final sync mode and a write-freeze timestamp", () =>
       syncMode: "final",
       writesPausedAt: "2026-10-05T19:00:00Z",
       expectedReservationRequestCount: "41",
+      targetFrontend: "laje-tcc",
     }),
   );
 });
@@ -97,4 +99,22 @@ test("final parity refuses an unrecorded reservation count", () => {
       }),
     /MIGRATION_EXPECTED_RESERVATION_REQUEST_COUNT/,
   );
+});
+
+test("final migration explicitly targets laje-tcc, never the operational laje", () => {
+  assert.doesNotThrow(() => assertFinalCutoverTarget("laje-tcc"));
+  for (const target of ["", "laje", "production", "laje-tcc-preview", "LAJE-TCC"]) {
+    assert.throws(() => assertFinalCutoverTarget(target), /MIGRATION_TARGET_FRONTEND=laje-tcc/);
+  }
+  assert.throws(
+    () =>
+      assertParityModePreconditions("final", {
+        syncMode: "final",
+        writesPausedAt: "2026-10-05T19:00:00Z",
+        expectedReservationRequestCount: "41",
+        targetFrontend: "laje",
+      }),
+    /MIGRATION_TARGET_FRONTEND=laje-tcc/,
+  );
+  assert.doesNotThrow(() => assertParityModePreconditions("rehearsal"));
 });
