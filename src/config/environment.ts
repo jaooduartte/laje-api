@@ -134,6 +134,7 @@ const databaseShutdownTimeoutSeconds = optionalInteger(
   30,
 );
 const corsOrigins = csvOrigins("CORS_ORIGINS");
+const trustProxyHops = optionalInteger("TRUST_PROXY_HOPS", 0, 0, 1);
 
 const authEnabled = booleanValue("AUTH_ENABLED", false);
 const awsEnabled = booleanValue("AWS_ENABLED", false);
@@ -238,6 +239,7 @@ export const environment = createRedactedConfig(
     databaseConnectTimeoutSeconds,
     databaseShutdownTimeoutSeconds,
     corsOrigins,
+    trustProxyHops,
     auth,
     aws: Object.freeze({
       enabled: awsEnabled,
