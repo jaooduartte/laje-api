@@ -2,6 +2,8 @@ import { ApiError } from "../../common/errors/api-error.js";
 import {
   createAccessToken,
   createRefreshToken,
+  encryptRefreshCookieToken,
+  decryptRefreshCookieToken,
   hashPassword,
   hashRefreshToken,
   parseDurationSeconds,
@@ -136,6 +138,18 @@ export class AuthService {
 
   async revokeSession(principal: AuthPrincipal): Promise<void> {
     await this.repository.revokeSession(principal.sessionId, principal.userId);
+  }
+
+  encryptRefreshTokenForCookie(token: string): string {
+    return encryptRefreshCookieToken(token, this.jwtSecret());
+  }
+
+  decryptRefreshTokenFromCookie(cookie: string): string {
+    const token = decryptRefreshCookieToken(cookie, this.jwtSecret());
+    if (!token) {
+      throw new ApiError(401, "INVALID_REFRESH_TOKEN", "Refresh session is invalid or expired.");
+    }
+    return token;
   }
 
   getRefreshCookieConfig(): { maxAgeMs: number; secure: boolean } {
