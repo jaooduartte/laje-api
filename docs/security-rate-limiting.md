@@ -8,8 +8,8 @@ A proteção usa `express-rate-limit` v8 com store PostgreSQL próprio (sujeito 
 | POST /api/v1/auth/password-setup                               |      4 |   60 s |
 | POST /api/v1/auth/sessions                                     |      8 |   60 s |
 | POST /api/v1/auth/sessions/refresh                             |     20 |   60 s |
-| GET /api/v1/auth/me                                       |     60 |   60 s |
-| DELETE /api/v1/auth/sessions/current                       |     20 |   60 s |
+| GET /api/v1/auth/me                                            |     60 |   60 s |
+| DELETE /api/v1/auth/sessions/current                           |     20 |   60 s |
 | PATCH /api/v1/auth/password                                    |      5 |  300 s |
 | POST /api/v1/championships/:id/seasons/:year/brackets/generate |      3 |   60 s |
 
