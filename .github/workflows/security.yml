@@ -1,0 +1,103 @@
+name: Security & Static Analysis
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: '17 9 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  codeql:
+    name: CodeQL SAST (High/Critical gate)
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Initialize CodeQL (JavaScript/TypeScript)
+        uses: github/codeql-action/init@v4
+        with:
+          languages: javascript-typescript
+          build-mode: none
+          queries: security-extended
+
+      - name: Analyze and publish findings to GitHub Code Scanning
+        id: analyze
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:javascript-typescript
+          upload: always
+
+      - name: Fail on high or critical CodeQL findings
+        env:
+          SARIF_DIR: ${{ steps.analyze.outputs.sarif-output }}
+        run: node scripts/ci/codeql-severity-gate.mjs "$SARIF_DIR"
+
+      - name: Preserve CodeQL SARIF evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: laje-codeql-sarif
+          path: ${{ steps.analyze.outputs.sarif-output }}
+          if-no-files-found: warn
+          retention-days: 30
+
+  dependency-review:
+    name: Dependency Review (new High/Critical)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Block vulnerable dependency changes
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          fail-on-scopes: runtime, development, unknown
+          license-check: false
+
+  dependency-audit:
+    name: Dependency Audit (High/Critical gate)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install exact locked dependencies without install scripts
+        run: npm ci --ignore-scripts
+      - name: Audit all production and development dependencies
+        run: npm audit --audit-level=high --json > dependency-audit.json
+      - name: Publish dependency vulnerability counts
+        if: always()
+        run: node scripts/ci/dependency-audit-summary.mjs dependency-audit.json
+      - name: Preserve npm audit JSON evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: laje-npm-audit
+          path: dependency-audit.json
+          if-no-files-found: warn
+          retention-days: 30
