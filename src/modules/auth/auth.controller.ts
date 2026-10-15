@@ -104,11 +104,11 @@ export class AuthController {
       REFRESH_COOKIE_NAME,
       this.authService.encryptRefreshTokenForCookie(token),
       {
-      httpOnly: true,
-      secure: config.secure,
-      sameSite: config.secure ? "none" : "lax",
-      path: "/api/v1/auth",
-      maxAge: config.maxAgeMs,
+        httpOnly: true,
+        secure: config.secure,
+        sameSite: config.secure ? "none" : "lax",
+        path: "/api/v1/auth",
+        maxAge: config.maxAgeMs,
       },
     );
   }
