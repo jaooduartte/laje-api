@@ -4,4 +4,5 @@ export const appConfig = Object.freeze({
   environment: environment.nodeEnv,
   port: environment.port,
   corsOrigins: environment.corsOrigins,
+  trustProxyHops: environment.trustProxyHops,
 });

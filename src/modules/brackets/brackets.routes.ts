@@ -1,6 +1,9 @@
 import { Router } from "express";
 
 import { ApiError } from "../../common/errors/api-error.js";
+import { rateLimit } from "express-rate-limit";
+
+import { createPostgresRateLimitOptions } from "../../common/middlewares/rate-limit.middleware.js";
 import {
   optionalBoolean,
   optionalEnum,
@@ -348,6 +351,13 @@ export function createBracketRouter(authService: AuthService): Router {
 
   router.post(
     "/generate",
+    rateLimit(
+      createPostgresRateLimitOptions({
+        scope: "bracket-generate",
+        maxRequests: 3,
+        windowSeconds: 60,
+      }),
+    ),
     requireAuthentication,
     requirePermission("bracket_setup", "EDIT"),
     async (request, response, next) => {
