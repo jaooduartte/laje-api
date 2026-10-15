@@ -19,11 +19,11 @@ test("LAJE-146 shares quota through atomic PostgreSQL commands and returns 429",
   const seen: Array<{ sql: string; params: readonly unknown[] }> = [];
   let count = 0;
   const executor = {
-    query: async (sql: string, params: readonly unknown[] = []) => {
+    query: async <Row extends Record<string, unknown> = Record<string, unknown>>(sql: string, params: readonly unknown[] = []) => {
       seen.push({ sql, params });
       count++;
       return {
-        rows: [{ hits: count, window_bucket: Math.floor(Date.now() / 60_000) }],
+        rows: [{ hits: count, window_bucket: Math.floor(Date.now() / 60_000) }] as unknown as Row[],
         count: 1,
       };
     },
