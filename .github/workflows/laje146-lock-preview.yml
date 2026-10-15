@@ -1,0 +1,38 @@
+name: LAJE-146 Express Rate Limit Lockfile Candidate
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/laje146-lock-preview.yml"
+permissions:
+  contents: read
+jobs:
+  preview:
+    name: Generate pinned express-rate-limit dependency
+    if: github.head_ref == 'LAJE-146' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - name: Generate pinned dependency candidate without writing to remote
+        run: |
+          npm install --package-lock-only --ignore-scripts --save-exact express-rate-limit@latest
+          npm ci --ignore-scripts
+          npm audit --audit-level=high
+      - name: Emit candidate manifest and lockfile chunks for review
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync } from "node:fs";
+          for (const [label, path] of [["PACKAGE", "package.json"], ["LOCKFILE", "package-lock.json"]]) {
+            const data = readFileSync(path).toString("base64");
+            console.log(`LAJE146_${label}_BEGIN length=${data.length}`);
+            for (let i = 0; i < data.length; i += 2048)
+              console.log(`LAJE146_${label}_PART_${i / 2048}=${data.slice(i, i + 2048)}`);
+            console.log(`LAJE146_${label}_END`);
+          }
+          NODE
