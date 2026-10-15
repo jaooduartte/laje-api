@@ -4,6 +4,7 @@ export interface FinalParityPreconditions {
   syncMode?: string;
   writesPausedAt?: string | undefined;
   expectedReservationRequestCount?: string | undefined;
+  targetFrontend?: string | undefined;
 }
 
 export function getMigrationParityMode(
@@ -35,6 +36,7 @@ export function assertParityModePreconditions(
       preconditions.expectedReservationRequestCount ??
       process.env.MIGRATION_EXPECTED_RESERVATION_REQUEST_COUNT,
   });
+  assertFinalCutoverTarget(preconditions.targetFrontend);
 }
 
 export function parityFailureMessage(mode: MigrationParityMode): string {
@@ -69,6 +71,19 @@ export function assertFinalCutoverCheckpoint(
   if (!count || !/^\d+$/.test(count) || !Number.isSafeInteger(Number(count))) {
     throw new Error(
       "Final cutover requires MIGRATION_EXPECTED_RESERVATION_REQUEST_COUNT as a non-negative integer captured after the write freeze.",
+    );
+  }
+}
+
+/**
+ * Explicit scope gate for the final TCC snapshot. This operator-provided value
+ * does not verify the connected Vercel project; the runbook requires that
+ * independent verification before allowing migration writes.
+ */
+export function assertFinalCutoverTarget(target = process.env.MIGRATION_TARGET_FRONTEND): void {
+  if (target?.trim() !== "laje-tcc") {
+    throw new Error(
+      "Final cutover requires MIGRATION_TARGET_FRONTEND=laje-tcc; the operational laje must remain on Supabase.",
     );
   }
 }
