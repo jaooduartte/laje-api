@@ -29,6 +29,7 @@ As diretrizes do Portfólio Web Apps exigem pipeline CI/CD, análise estática, 
 Os workflows de CI e segurança continuam reprovando verificações quando encontram erros de tipagem, lint, formatação, cobertura insuficiente ou vulnerabilidades High/Critical. **Sem checks exigidos por branch protection, esses erros não impedem tecnicamente o merge**. A equipe deve conferir os resultados e não aprovar merges com checks reprovados.
 
 Como melhoria futura opcional, um administrador poderá exigir PR, `Quality Gate`, `CodeQL SAST (High/Critical gate)`, `Dependency Review (new High/Critical)` e `Dependency Audit (High/Critical gate)`; no backend, também `Full Backend Unit Coverage (75%)`. Não aplicar alteração de ruleset sem autorização.
+
 ## Limites e tratamento de achados
 
 CodeQL identifica padrões de risco, não substitui pentest, validação de autenticação/permissões nem revisão manual. Achados devem receber issue no Jira com severidade, arquivo/regra, impacto e mitigação; correções são tratadas em PRs próprias. Não desligar o gate, adicionar exceção silenciosa, alterar thresholds ou omitir dependências para obter um check verde. Dados e credenciais de produção não são lidos nem modificados por estes workflows.
