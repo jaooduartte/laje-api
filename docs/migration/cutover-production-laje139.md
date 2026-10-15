@@ -4,6 +4,7 @@
 
 ## Ambientes e limites de escopo
 
+<!-- prettier-ignore -->
 | Ambiente | Frontend Vercel | Backend e dados | Decisão |
 | --- | --- | --- | --- |
 | Operacional permanente | `laje` | Supabase | **Nunca** alterar env, credenciais, rotas, tráfego ou dados nesta tarefa, salvo pausa excepcional de escrita expressamente autorizada para produzir um checkpoint consistente. |
