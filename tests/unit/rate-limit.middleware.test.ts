@@ -35,13 +35,15 @@ test("LAJE-146 shares quota through atomic PostgreSQL commands and returns 429",
   const app = express();
   app.post(
     "/protected",
-    rateLimit(createPostgresRateLimitOptions({
-      scope: "auth-login",
-      maxRequests: 2,
-      windowSeconds: 60,
-      executor,
-      enabled: true,
-    })),
+    rateLimit(
+      createPostgresRateLimitOptions({
+        scope: "auth-login",
+        maxRequests: 2,
+        windowSeconds: 60,
+        executor,
+        enabled: true,
+      }),
+    ),
     (_req, res) => {
       res.status(204).end();
     },
@@ -80,17 +82,19 @@ test("LAJE-146 is disabled only when the administrative module is disabled", asy
   const app = express();
   app.post(
     "/disabled",
-    rateLimit(createPostgresRateLimitOptions({
-      scope: "auth-disabled",
-      maxRequests: 1,
-      windowSeconds: 60,
-      enabled: false,
-      executor: {
-        query: async () => {
-          throw new Error("must never call DB");
+    rateLimit(
+      createPostgresRateLimitOptions({
+        scope: "auth-disabled",
+        maxRequests: 1,
+        windowSeconds: 60,
+        enabled: false,
+        executor: {
+          query: async () => {
+            throw new Error("must never call DB");
+          },
         },
-      },
-    })),
+      }),
+    ),
     (_req, res) => {
       res.status(204).end();
     },
@@ -115,17 +119,19 @@ test("LAJE-146 fails closed if the shared store is unavailable", async (t) => {
   const app = express();
   app.post(
     "/protected",
-    rateLimit(createPostgresRateLimitOptions({
-      scope: "auth-test-fail",
-      maxRequests: 2,
-      windowSeconds: 60,
-      enabled: true,
-      executor: {
-        query: async () => {
-          throw new Error("PostgreSQL unavailable");
+    rateLimit(
+      createPostgresRateLimitOptions({
+        scope: "auth-test-fail",
+        maxRequests: 2,
+        windowSeconds: 60,
+        enabled: true,
+        executor: {
+          query: async () => {
+            throw new Error("PostgreSQL unavailable");
+          },
         },
-      },
-    })),
+      }),
+    ),
     (_req, res) => {
       res.status(204).end();
     },

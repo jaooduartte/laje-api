@@ -14,22 +14,34 @@ export function createAuthRouter(authService: AuthService): Router {
 
   router.post(
     "/login-state",
-    rateLimit(createPostgresRateLimitOptions({ scope: "login-state", maxRequests: 30, windowSeconds: 60 })),
+    rateLimit(
+      createPostgresRateLimitOptions({ scope: "login-state", maxRequests: 30, windowSeconds: 60 }),
+    ),
     controller.resolveLoginState,
   );
   router.post(
     "/password-setup",
-    rateLimit(createPostgresRateLimitOptions({ scope: "password-setup", maxRequests: 4, windowSeconds: 60 })),
+    rateLimit(
+      createPostgresRateLimitOptions({
+        scope: "password-setup",
+        maxRequests: 4,
+        windowSeconds: 60,
+      }),
+    ),
     controller.setupPassword,
   );
   router.post(
     "/sessions",
-    rateLimit(createPostgresRateLimitOptions({ scope: "sessions", maxRequests: 8, windowSeconds: 60 })),
+    rateLimit(
+      createPostgresRateLimitOptions({ scope: "sessions", maxRequests: 8, windowSeconds: 60 }),
+    ),
     controller.createSession,
   );
   router.post(
     "/sessions/refresh",
-    rateLimit(createPostgresRateLimitOptions({ scope: "refresh", maxRequests: 20, windowSeconds: 60 })),
+    rateLimit(
+      createPostgresRateLimitOptions({ scope: "refresh", maxRequests: 20, windowSeconds: 60 }),
+    ),
     controller.refreshSession,
   );
   router.delete("/sessions/current", requireAuthentication, controller.deleteSession);
@@ -37,7 +49,13 @@ export function createAuthRouter(authService: AuthService): Router {
   router.patch(
     "/password",
     requireAuthentication,
-    rateLimit(createPostgresRateLimitOptions({ scope: "password-change", maxRequests: 5, windowSeconds: 300 })),
+    rateLimit(
+      createPostgresRateLimitOptions({
+        scope: "password-change",
+        maxRequests: 5,
+        windowSeconds: 300,
+      }),
+    ),
     controller.changePassword,
   );
 

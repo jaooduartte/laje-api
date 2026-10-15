@@ -353,7 +353,13 @@ export function createBracketRouter(authService: AuthService): Router {
     "/generate",
     requireAuthentication,
     requirePermission("bracket_setup", "EDIT"),
-    rateLimit(createPostgresRateLimitOptions({ scope: "bracket-generate", maxRequests: 3, windowSeconds: 60 })),
+    rateLimit(
+      createPostgresRateLimitOptions({
+        scope: "bracket-generate",
+        maxRequests: 3,
+        windowSeconds: 60,
+      }),
+    ),
     async (request, response, next) => {
       try {
         const inheritedParams = request.params as Record<string, unknown>;
