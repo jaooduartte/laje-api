@@ -37,6 +37,7 @@ jobs:
           languages: javascript-typescript
           build-mode: none
           queries: security-extended
+          config-file: ./.github/codeql/codeql-config.yml
 
       - name: Analyze and publish findings to GitHub Code Scanning
         id: analyze
