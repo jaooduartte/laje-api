@@ -1,7 +1,9 @@
 import { Router } from "express";
 
 import { ApiError } from "../../common/errors/api-error.js";
-import { createSensitiveRouteRateLimit } from "../../common/middlewares/rate-limit.middleware.js";
+import { rateLimit } from "express-rate-limit";
+
+import { createPostgresRateLimitOptions } from "../../common/middlewares/rate-limit.middleware.js";
 import {
   optionalBoolean,
   optionalEnum,
@@ -351,7 +353,7 @@ export function createBracketRouter(authService: AuthService): Router {
     "/generate",
     requireAuthentication,
     requirePermission("bracket_setup", "EDIT"),
-    createSensitiveRouteRateLimit({ scope: "bracket-generate", maxRequests: 3, windowSeconds: 60 }),
+    rateLimit(createPostgresRateLimitOptions({ scope: "bracket-generate", maxRequests: 3, windowSeconds: 60 })),
     async (request, response, next) => {
       try {
         const inheritedParams = request.params as Record<string, unknown>;

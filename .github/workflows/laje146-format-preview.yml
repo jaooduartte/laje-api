@@ -24,5 +24,5 @@ jobs:
       - run: npm ci
       - name: Emit suggested Prettier patch (no writes to GitHub)
         run: |
-          npx prettier docs/security-rate-limiting.md src/common/middlewares/rate-limit.middleware.ts src/modules/auth/auth.routes.ts --write
-          git diff -- docs/security-rate-limiting.md src/common/middlewares/rate-limit.middleware.ts src/modules/auth/auth.routes.ts
+          npx prettier docs/security-rate-limiting.md src/common/middlewares/rate-limit.middleware.ts src/modules/auth/auth.routes.ts src/modules/brackets/brackets.routes.ts tests/unit/rate-limit.middleware.test.ts --write
+          git diff -- docs/security-rate-limiting.md src/common/middlewares/rate-limit.middleware.ts src/modules/auth/auth.routes.ts src/modules/brackets/brackets.routes.ts tests/unit/rate-limit.middleware.test.ts

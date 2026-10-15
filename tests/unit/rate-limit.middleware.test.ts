@@ -10,8 +10,9 @@ process.env.DATABASE_URL = "postgresql://laje:laje@localhost:5432/laje";
 process.env.CORS_ORIGINS = "http://localhost:8080";
 process.env.AUTH_ENABLED = "false";
 
-const [{ createSensitiveRouteRateLimit }, { errorHandler }] = await Promise.all([
+const [{ createPostgresRateLimitOptions }, { rateLimit }, { errorHandler }] = await Promise.all([
   import("../../src/common/middlewares/rate-limit.middleware.js"),
+  import("express-rate-limit"),
   import("../../src/common/middlewares/error-handler.middleware.js"),
 ]);
 
@@ -34,13 +35,13 @@ test("LAJE-146 shares quota through atomic PostgreSQL commands and returns 429",
   const app = express();
   app.post(
     "/protected",
-    createSensitiveRouteRateLimit({
+    rateLimit(createPostgresRateLimitOptions({
       scope: "auth-login",
       maxRequests: 2,
       windowSeconds: 60,
       executor,
       enabled: true,
-    }),
+    })),
     (_req, res) => {
       res.status(204).end();
     },
@@ -79,7 +80,7 @@ test("LAJE-146 is disabled only when the administrative module is disabled", asy
   const app = express();
   app.post(
     "/disabled",
-    createSensitiveRouteRateLimit({
+    rateLimit(createPostgresRateLimitOptions({
       scope: "auth-disabled",
       maxRequests: 1,
       windowSeconds: 60,
@@ -89,7 +90,7 @@ test("LAJE-146 is disabled only when the administrative module is disabled", asy
           throw new Error("must never call DB");
         },
       },
-    }),
+    })),
     (_req, res) => {
       res.status(204).end();
     },
@@ -114,7 +115,7 @@ test("LAJE-146 fails closed if the shared store is unavailable", async (t) => {
   const app = express();
   app.post(
     "/protected",
-    createSensitiveRouteRateLimit({
+    rateLimit(createPostgresRateLimitOptions({
       scope: "auth-test-fail",
       maxRequests: 2,
       windowSeconds: 60,
@@ -124,7 +125,7 @@ test("LAJE-146 fails closed if the shared store is unavailable", async (t) => {
           throw new Error("PostgreSQL unavailable");
         },
       },
-    }),
+    })),
     (_req, res) => {
       res.status(204).end();
     },
@@ -148,7 +149,7 @@ test("LAJE-146 fails closed if the shared store is unavailable", async (t) => {
 test("LAJE-146 rejects invalid limiter configuration", () => {
   assert.throws(
     () =>
-      createSensitiveRouteRateLimit({
+      createPostgresRateLimitOptions({
         scope: "invalid scope",
         maxRequests: 1,
         windowSeconds: 60,
