@@ -4,6 +4,8 @@ import test from "node:test";
 import {
   createAccessToken,
   createRefreshToken,
+  encryptRefreshCookieToken,
+  decryptRefreshCookieToken,
   hashPassword,
   hashRefreshToken,
   parseDurationSeconds,
@@ -54,4 +56,26 @@ test("JWT duration parser enforces short-lived access tokens", () => {
   assert.equal(parseDurationSeconds("1h"), 3600);
   assert.throws(() => parseDurationSeconds("30d"));
   assert.throws(() => parseDurationSeconds("abc"));
+});
+
+test("refresh token browser cookies use AES-256-GCM authenticated encryption", () => {
+  const token = createRefreshToken().token;
+  const encrypted = encryptRefreshCookieToken(token, SECRET);
+  const encryptedAgain = encryptRefreshCookieToken(token, SECRET);
+  assert.match(encrypted, /^v1\./);
+  assert.notEqual(encrypted, encryptedAgain, "Each cookie must use a fresh nonce");
+  assert.equal(encrypted.includes(token), false, "Raw token must not appear in the cookie");
+  assert.equal(decryptRefreshCookieToken(encrypted, SECRET), token);
+  assert.equal(decryptRefreshCookieToken(encrypted, "another-secret"), null);
+  const parts = encrypted.split(".");
+  parts[3] = parts[3]?.slice(0, -1) + (parts[3]?.at(-1) === "A" ? "B" : "A");
+  assert.equal(decryptRefreshCookieToken(parts.join("."), SECRET), null);
+});
+
+test("existing opaque refresh cookies remain accepted during migration", () => {
+  const legacyToken = createRefreshToken().token;
+  assert.equal(decryptRefreshCookieToken(legacyToken, SECRET), legacyToken);
+  assert.equal(decryptRefreshCookieToken("bad-token", SECRET), null);
+  assert.equal(decryptRefreshCookieToken("v1.bad.bad.bad", SECRET), null);
+  assert.equal(decryptRefreshCookieToken("", SECRET), null);
 });

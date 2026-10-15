@@ -50,7 +50,10 @@ export class AuthController {
 
   readonly refreshSession: RequestHandler = async (request, response, next) => {
     try {
-      const refreshToken = readCookie(request.header("cookie"), REFRESH_COOKIE_NAME);
+      const storedToken = readCookie(request.header("cookie"), REFRESH_COOKIE_NAME);
+      const refreshToken = storedToken
+        ? this.authService.decryptRefreshTokenFromCookie(storedToken)
+        : "";
       const result = await this.authService.refreshSession(refreshToken);
       this.writeRefreshCookie(response, result.refreshToken);
       response.status(200).json({ data: result.payload });
@@ -97,13 +100,17 @@ export class AuthController {
 
   private writeRefreshCookie(response: Response, token: string): void {
     const config = this.authService.getRefreshCookieConfig();
-    response.cookie(REFRESH_COOKIE_NAME, token, {
+    response.cookie(
+      REFRESH_COOKIE_NAME,
+      this.authService.encryptRefreshTokenForCookie(token),
+      {
       httpOnly: true,
       secure: config.secure,
       sameSite: config.secure ? "none" : "lax",
       path: "/api/v1/auth",
       maxAge: config.maxAgeMs,
-    });
+      },
+    );
   }
 
   private clearRefreshCookie(response: Response): void {

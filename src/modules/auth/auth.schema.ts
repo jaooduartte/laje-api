@@ -53,11 +53,16 @@ export function parsePasswordChangeBody(value: unknown): {
 }
 
 export function readBearerToken(authorizationHeader: string | undefined): string {
-  const match = /^Bearer\s+(.+)$/i.exec(authorizationHeader ?? "");
-  if (!match?.[1]) {
+  const header = authorizationHeader ?? "";
+  // Linear-time parsing prevents polynomial regex backtracking on malicious headers.
+  if (header.slice(0, 6).toLowerCase() !== "bearer" || header[6]?.trim() !== "") {
     throw new ApiError(401, "ACCESS_TOKEN_REQUIRED", "Bearer access token is required.");
   }
-  return match[1].trim();
+  const token = header.slice(7).trim();
+  if (!token) {
+    throw new ApiError(401, "ACCESS_TOKEN_REQUIRED", "Bearer access token is required.");
+  }
+  return token;
 }
 
 export function readCookie(cookieHeader: string | undefined, name: string): string {

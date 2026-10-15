@@ -1,4 +1,12 @@
-import { createHmac, createHash, randomBytes, scrypt, timingSafeEqual } from "node:crypto";
+import {
+  createCipheriv,
+  createDecipheriv,
+  createHmac,
+  createHash,
+  randomBytes,
+  scrypt,
+  timingSafeEqual,
+} from "node:crypto";
 
 const SCRYPT_KEY_LENGTH = 64;
 const SCRYPT_N = 16_384;
@@ -162,4 +170,48 @@ export function createRefreshToken(): { token: string; hash: string } {
 
 export function hashRefreshToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
+}
+
+/**
+ * Encrypt opaque refresh tokens before writing them to a browser cookie.
+ * Domain-separated key derivation means cookie encryption does not reuse the
+ * JWT signing key directly. The database continues storing only token hashes.
+ */
+function refreshCookieKey(secret: string): Buffer {
+  return createHmac("sha256", secret).update("laje-refresh-cookie-encryption-v1").digest();
+}
+
+export function encryptRefreshCookieToken(token: string, secret: string): string {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", refreshCookieKey(secret), iv);
+  const encrypted = Buffer.concat([cipher.update(token, "utf8"), cipher.final()]);
+  return [
+    "v1",
+    iv.toString("base64url"),
+    cipher.getAuthTag().toString("base64url"),
+    encrypted.toString("base64url"),
+  ].join(".");
+}
+
+/** Returns null for tampered/unsupported cookies. Pre-migration cookies are accepted. */
+export function decryptRefreshCookieToken(cookie: string, secret: string): string | null {
+  if (!cookie) return null;
+  if (!cookie.startsWith("v1.")) {
+    // Backward compatibility only for the 32-byte random tokens previously issued.
+    return cookie.length === 43 && /^[A-Za-z0-9_-]+$/.test(cookie) ? cookie : null;
+  }
+  const segments = cookie.split(".");
+  if (segments.length !== 4 || segments[0] !== "v1") return null;
+  try {
+    const iv = Buffer.from(segments[1] ?? "", "base64url");
+    const authTag = Buffer.from(segments[2] ?? "", "base64url");
+    const payload = Buffer.from(segments[3] ?? "", "base64url");
+    if (iv.length !== 12 || authTag.length !== 16 || payload.length === 0) return null;
+    const decipher = createDecipheriv("aes-256-gcm", refreshCookieKey(secret), iv);
+    decipher.setAuthTag(authTag);
+    const token = Buffer.concat([decipher.update(payload), decipher.final()]).toString("utf8");
+    return token.length === 43 && /^[A-Za-z0-9_-]+$/.test(token) ? token : null;
+  } catch {
+    return null;
+  }
 }
