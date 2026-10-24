@@ -319,6 +319,38 @@ test("LAJE-38 completes login, live operations, standings and calendar on isolat
   assert.equal(locationGroups.status, 200);
   assert.deepEqual(rows(locationGroups.payload), []);
 
+  // The AWS frontend reads both location-sport and knockout court preferences
+  // from the isolated PostgreSQL API instead of connecting to Supabase.
+  const locationSource = await call("/bracket-operations/location-sport-source", {
+    method: "POST",
+    headers: authorized,
+    body: JSON.stringify({ editionId }),
+  });
+  assert.equal(locationSource.status, 200);
+  assert.ok(locationSource.payload.data && !Array.isArray(locationSource.payload.data));
+  assert.deepEqual(locationSource.payload.data.days, []);
+  assert.deepEqual(locationSource.payload.data.priorities, []);
+  assert.deepEqual(locationSource.payload.data.bracketMatches, [
+    {
+      match_id: IDS.match,
+      matches: {
+        scheduled_date: "2026-10-30",
+        sport_id: IDS.sport,
+      },
+    },
+  ]);
+
+  const knockoutCourtSource = await call("/bracket-operations/knockout-court-source", {
+    method: "POST",
+    headers: authorized,
+    body: JSON.stringify({ editionId }),
+  });
+  assert.equal(knockoutCourtSource.status, 200);
+  assert.ok(knockoutCourtSource.payload.data && !Array.isArray(knockoutCourtSource.payload.data));
+  assert.deepEqual(knockoutCourtSource.payload.data.days, []);
+  assert.ok(Array.isArray(knockoutCourtSource.payload.data.competitions));
+  assert.ok(Array.isArray(knockoutCourtSource.payload.data.finalProgram));
+
   const prohibitedReschedule = await call("/bracket-operations/editable-schedule-slots", {
     method: "POST",
     headers: authorized,
