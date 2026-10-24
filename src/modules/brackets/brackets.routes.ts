@@ -347,7 +347,7 @@ export function createBracketRouter(authService: AuthService): Router {
       }),
     ),
     requireAuthentication,
-    requirePermission("bracket_setup", "VIEW"),
+    requirePermission("matches", "VIEW"),
     async (request, response, next) => {
       try {
         const championshipId = requireUuid(request.params.championshipId, "championshipId");
@@ -386,7 +386,7 @@ export function createBracketRouter(authService: AuthService): Router {
       }),
     ),
     requireAuthentication,
-    requirePermission("bracket_setup", "EDIT"),
+    requirePermission("matches", "EDIT"),
     async (request, response, next) => {
       try {
         const championshipId = requireUuid(request.params.championshipId, "championshipId");
@@ -487,7 +487,7 @@ export function createBracketRouter(authService: AuthService): Router {
       }),
     ),
     requireAuthentication,
-    requirePermission("bracket_setup", "EDIT"),
+    requirePermission("matches", "EDIT"),
     async (request, response, next) => {
       try {
         const inheritedParams = request.params as Record<string, unknown>;
