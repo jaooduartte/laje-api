@@ -22,14 +22,8 @@ function requireRequestUserId(request: AuthenticatedRequest): string {
 export function createBracketPreviewRouter(authService: AuthService): Router {
   const router = Router({ mergeParams: true });
   const requireAuthentication = createRequireAuthentication(authService);
-  const requirePreviewView = [
-    requireAuthentication,
-    requirePermission("matches", "VIEW"),
-  ] as const;
-  const requirePreviewEdit = [
-    requireAuthentication,
-    requirePermission("matches", "EDIT"),
-  ] as const;
+  const requirePreviewView = [requireAuthentication, requirePermission("matches", "VIEW")] as const;
+  const requirePreviewEdit = [requireAuthentication, requirePermission("matches", "EDIT")] as const;
 
   router.post("/", ...requirePreviewEdit, async (request, response, next) => {
     try {
@@ -130,14 +124,8 @@ export function createBracketPreviewRouter(authService: AuthService): Router {
 export function createGlobalBracketPreviewRouter(authService: AuthService): Router {
   const router = Router();
   const requireAuthentication = createRequireAuthentication(authService);
-  const requirePreviewView = [
-    requireAuthentication,
-    requirePermission("matches", "VIEW"),
-  ] as const;
-  const requirePreviewEdit = [
-    requireAuthentication,
-    requirePermission("matches", "EDIT"),
-  ] as const;
+  const requirePreviewView = [requireAuthentication, requirePermission("matches", "VIEW")] as const;
+  const requirePreviewEdit = [requireAuthentication, requirePermission("matches", "EDIT")] as const;
 
   router.get("/:jobId", ...requirePreviewView, async (request, response, next) => {
     try {
