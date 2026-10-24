@@ -26,6 +26,7 @@ const MIGRATIONS = [
   "20261024203000_port_group_stage_standings.sql",
   "20261024204000_aws_admin_auth_adapter.sql",
   "20261024205000_port_court_preference_writes.sql",
+  "20261024213000_port_championship_review_reconfiguration.sql",
 ] as const;
 
 const MIGRATION_SCHEMA = "laje_api_internal";

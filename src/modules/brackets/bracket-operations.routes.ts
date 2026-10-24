@@ -3,7 +3,11 @@ import { rateLimit } from "express-rate-limit";
 
 import { ApiError } from "../../common/errors/api-error.js";
 import { createPostgresRateLimitOptions } from "../../common/middlewares/rate-limit.middleware.js";
-import { requireInteger, requireRecord, requireUuid } from "../../common/validation/common.schema.js";
+import {
+  requireInteger,
+  requireRecord,
+  requireUuid,
+} from "../../common/validation/common.schema.js";
 import { database } from "../../database/index.js";
 import {
   createRequireAuthentication,
@@ -15,9 +19,9 @@ import type { AuthService } from "../auth/auth.service.js";
 type RouteSpec = {
   scope: "edition" | "source" | "competition" | "match" | "tie-break" | "standings";
   sql: string;
-  parameterKind?: "json" | "revision" | "array" | "none";
+  parameterKind?:
+    "json" | "revision" | "array" | "none" | "reconfiguration" | "reconfiguration-revision";
 };
-
 
 /**
  * Read-only, schema-scoped projection of the championship's saved court hierarchy.
@@ -85,7 +89,28 @@ const VIEW_OPERATIONS = new Set([
 ]);
 
 /** Every SQL expression below is a static allowlisted function, never a client-supplied identifier. */
+const RECONFIGURATION_ACTIONS = new Set([
+  "DAY_SCHEDULE",
+  "REVERSE_DAY_COURT_MATCH_ORDER",
+  "INDIVIDUAL_SESSION",
+  "COMPETITION_SETTINGS",
+  "LOCATION_SPORT_PRIORITIES",
+  "COURT_SPORT_SEQUENCE",
+  "KNOCKOUT_COURT_PRIORITIES",
+  "LOCATION_GROUP",
+]);
+
 const OPERATIONS: Record<string, RouteSpec> = {
+  "reconfiguration-preview": {
+    scope: "edition",
+    sql: "SELECT public.preview_championship_bracket_reconfiguration($1::uuid, $2::text, $3::jsonb) AS result",
+    parameterKind: "reconfiguration",
+  },
+  "reconfiguration-apply": {
+    scope: "edition",
+    sql: "SELECT public.apply_championship_bracket_reconfiguration($1::uuid, $2::text, $3::jsonb, $4::bigint) AS result",
+    parameterKind: "reconfiguration-revision",
+  },
   "manual-relocation-preview": {
     scope: "edition",
     sql: "SELECT public.preview_manual_match_relocation($1::uuid, $2::jsonb) AS result",
@@ -320,7 +345,13 @@ export function createBracketOperationsRouter(authService: AuthService): Router 
   const requireAuthentication = createRequireAuthentication(authService);
   router.post(
     "/:operation",
-    rateLimit(createPostgresRateLimitOptions({ scope: "bracket-operations", maxRequests: 30, windowSeconds: 60 })),
+    rateLimit(
+      createPostgresRateLimitOptions({
+        scope: "bracket-operations",
+        maxRequests: 30,
+        windowSeconds: 60,
+      }),
+    ),
     requireAuthentication,
     (request, response, next) => {
       const operation = String(request.params.operation ?? "");
@@ -331,11 +362,13 @@ export function createBracketOperationsRouter(authService: AuthService): Router 
       try {
         const operation = String(request.params.operation ?? "");
         const spec = OPERATIONS[operation];
-        if (!spec) throw new ApiError(404, "BRACKET_OPERATION_NOT_FOUND", "Operação não suportada.");
+        if (!spec)
+          throw new ApiError(404, "BRACKET_OPERATION_NOT_FOUND", "Operação não suportada.");
         const payload = requireRecord(request.body);
         const data = await database.transaction(async (tx) => {
           const userId = (request as AuthenticatedRequest).authPrincipal?.userId;
-          if (!userId) throw new ApiError(401, "ACCESS_TOKEN_REQUIRED", "Autenticação obrigatória.");
+          if (!userId)
+            throw new ApiError(401, "ACCESS_TOKEN_REQUIRED", "Autenticação obrigatória.");
           await tx.query("SELECT set_config('laje.request_user_id', $1, true)", [userId]);
 
           const input = payload.input;
@@ -346,15 +379,46 @@ export function createBracketOperationsRouter(authService: AuthService): Router 
               "SELECT id FROM public.championship_bracket_editions WHERE id = $1",
               [id],
             );
-            if (!edition.rows[0]) throw new ApiError(404, "BRACKET_NOT_FOUND", "Edição não encontrada.");
-            if (spec.parameterKind === "array") {
-              if (!Array.isArray(input)) throw new ApiError(422, "VALIDATION_ERROR", "Informe as atualizações.");
+            if (!edition.rows[0])
+              throw new ApiError(404, "BRACKET_NOT_FOUND", "Edição não encontrada.");
+            if (
+              spec.parameterKind === "reconfiguration" ||
+              spec.parameterKind === "reconfiguration-revision"
+            ) {
+              const action = stringField(payload.action, "action");
+              if (!RECONFIGURATION_ACTIONS.has(action)) {
+                throw new ApiError(
+                  422,
+                  "INVALID_RECONFIGURATION_ACTION",
+                  "Tipo de reprogramação inválido.",
+                );
+              }
+              const body = requireRecord(input);
+              const serialized = JSON.stringify(body);
+              if (serialized.length > 65536) {
+                throw new ApiError(
+                  413,
+                  "PAYLOAD_TOO_LARGE",
+                  "Dados de reprogramação excedem o limite.",
+                );
+              }
+              values = [id, action, serialized];
+              if (spec.parameterKind === "reconfiguration-revision") {
+                values.push(
+                  requireInteger(payload.expectedRevision, "expectedRevision", { min: 0 }),
+                );
+              }
+            } else if (spec.parameterKind === "array") {
+              if (!Array.isArray(input))
+                throw new ApiError(422, "VALIDATION_ERROR", "Informe as atualizações.");
               values = [id, JSON.stringify(input)];
             } else if (spec.parameterKind === "json" || spec.parameterKind === "revision") {
               const body = requireRecord(input);
               values = [id, JSON.stringify(body)];
               if (spec.parameterKind === "revision") {
-                values.push(requireInteger(payload.expectedRevision, "expectedRevision", { min: 0 }));
+                values.push(
+                  requireInteger(payload.expectedRevision, "expectedRevision", { min: 0 }),
+                );
               }
             } else {
               values = [id];
@@ -365,32 +429,46 @@ export function createBracketOperationsRouter(authService: AuthService): Router 
               "SELECT id FROM public.championship_bracket_matches WHERE id = $1",
               [id],
             );
-            if (!found.rows[0]) throw new ApiError(404, "BRACKET_MATCH_NOT_FOUND", "Confronto não encontrado.");
+            if (!found.rows[0])
+              throw new ApiError(404, "BRACKET_MATCH_NOT_FOUND", "Confronto não encontrado.");
             values = [id];
           } else if (spec.scope === "match") {
             const body = requireRecord(input);
             const id = requireUuid(body.match_id, "match_id");
-            const found = await tx.query("SELECT id, status FROM public.matches WHERE id = $1 FOR UPDATE", [id]);
+            const found = await tx.query(
+              "SELECT id, status FROM public.matches WHERE id = $1 FOR UPDATE",
+              [id],
+            );
             if (!found.rows[0]) throw new ApiError(404, "MATCH_NOT_FOUND", "Jogo não encontrado.");
             if (found.rows[0].status !== "SCHEDULED")
-              throw new ApiError(409, "MATCH_STATE_CONFLICT", "Somente jogos agendados podem ser reprogramados.");
+              throw new ApiError(
+                409,
+                "MATCH_STATE_CONFLICT",
+                "Somente jogos agendados podem ser reprogramados.",
+              );
             if (operation === "editable-schedule-slots") {
               values = [
-                id, stringField(body.target_date, "target_date"),
+                id,
+                stringField(body.target_date, "target_date"),
                 stringField(body.target_location, "target_location"),
                 stringField(body.target_court_name, "target_court_name"),
-                uuidOrNull(body.sport_id), body.naipe ?? null,
-                uuidOrNull(body.home_team_id), uuidOrNull(body.away_team_id),
+                uuidOrNull(body.sport_id),
+                body.naipe ?? null,
+                uuidOrNull(body.home_team_id),
+                uuidOrNull(body.away_team_id),
               ];
             } else {
               values = [
-                id, stringField(body.scheduled_date, "scheduled_date"),
+                id,
+                stringField(body.scheduled_date, "scheduled_date"),
                 stringField(body.location, "location"),
                 stringField(body.court_name, "court_name"),
                 stringField(body.slot_start_time, "slot_start_time"),
                 body.representation_mode ?? "AUTO",
-                uuidOrNull(body.sport_id), body.naipe ?? null,
-                uuidOrNull(body.home_team_id), uuidOrNull(body.away_team_id),
+                uuidOrNull(body.sport_id),
+                body.naipe ?? null,
+                uuidOrNull(body.home_team_id),
+                uuidOrNull(body.away_team_id),
               ];
             }
           } else if (spec.scope === "competition") {
@@ -399,7 +477,8 @@ export function createBracketOperationsRouter(authService: AuthService): Router 
               "SELECT id FROM public.championship_bracket_competitions WHERE id = $1",
               [id],
             );
-            if (!found.rows[0]) throw new ApiError(404, "COMPETITION_NOT_FOUND", "Competição não encontrada.");
+            if (!found.rows[0])
+              throw new ApiError(404, "COMPETITION_NOT_FOUND", "Competição não encontrada.");
             const body = requireRecord(input);
             if (operation === "competition-settings-update") {
               values = [
@@ -409,14 +488,21 @@ export function createBracketOperationsRouter(authService: AuthService): Router 
                 stringField(body.knockoutPairingMode, "knockoutPairingMode"),
               ];
             } else {
-              values = [id, requireUuid(body.teamAId, "teamAId"), requireUuid(body.teamBId, "teamBId")];
+              values = [
+                id,
+                requireUuid(body.teamAId, "teamAId"),
+                requireUuid(body.teamBId, "teamBId"),
+              ];
             }
           } else if (spec.scope === "tie-break") {
             values = [JSON.stringify(requireRecord(input))];
           } else {
             const championshipId = requireUuid(payload.championshipId, "championshipId");
             if (operation === "group-stage-standings") {
-              values = [championshipId, requireInteger(payload.seasonYear, "seasonYear", { min: 2000, max: 2100 })];
+              values = [
+                championshipId,
+                requireInteger(payload.seasonYear, "seasonYear", { min: 2000, max: 2100 }),
+              ];
             } else {
               const competitionId = requireUuid(payload.competitionId, "competitionId");
               const editionId = requireUuid(payload.editionId, "editionId");
@@ -426,7 +512,8 @@ export function createBracketOperationsRouter(authService: AuthService): Router 
                   WHERE c.id=$1 AND e.id=$2 AND e.championship_id=$3`,
                 [competitionId, editionId, championshipId],
               );
-              if (!target.rows[0]) throw new ApiError(404, "COMPETITION_NOT_FOUND", "Competição não encontrada.");
+              if (!target.rows[0])
+                throw new ApiError(404, "COMPETITION_NOT_FOUND", "Competição não encontrada.");
               values = [championshipId, competitionId, editionId];
             }
           }
@@ -437,6 +524,22 @@ export function createBracketOperationsRouter(authService: AuthService): Router 
         });
         response.status(200).json({ data });
       } catch (error) {
+        if (
+          request.params.operation === "reconfiguration-apply" &&
+          typeof error === "object" &&
+          error !== null &&
+          "code" in error &&
+          error.code === "40001"
+        ) {
+          next(
+            new ApiError(
+              409,
+              "RECONFIGURATION_REVISION_CONFLICT",
+              "A agenda foi alterada desde a prévia. Gere uma nova prévia.",
+            ),
+          );
+          return;
+        }
         next(error);
       }
     },
