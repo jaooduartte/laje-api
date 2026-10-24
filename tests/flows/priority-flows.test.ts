@@ -112,17 +112,13 @@ test("LAJE-38 completes login, live operations, standings and calendar on isolat
 
   // LAJE-150: the RDS schedule-conflict trigger must enforce core invariants.
   await assert.rejects(
-    database.query(
-      "UPDATE public.matches SET away_team_id = home_team_id WHERE id = $1",
-      [IDS.match],
-    ),
+    database.query("UPDATE public.matches SET away_team_id = home_team_id WHERE id = $1", [
+      IDS.match,
+    ]),
     /Os times da partida devem ser diferentes/,
   );
   await assert.rejects(
-    database.query(
-      "UPDATE public.matches SET end_time = now() WHERE id = $1",
-      [IDS.match],
-    ),
+    database.query("UPDATE public.matches SET end_time = now() WHERE id = $1", [IDS.match]),
     /horário final sem horário inicial/,
   );
 
