@@ -14,6 +14,8 @@ process.env.MAIL_ENABLED = "false";
 const { hashPassword } = await import("../../src/modules/auth/auth.crypto.js");
 const { database } = await import("../../src/database/index.js");
 const { app } = await import("../../src/app.js");
+const { propagateExistingKnockoutResult } =
+  await import("../../src/modules/brackets/knockout-progress.service.js");
 
 const IDS = {
   championship: "f3d55f5c-32a9-44f4-afcf-dbe6e59da001",
@@ -71,6 +73,10 @@ async function seedFixture(): Promise<void> {
     [IDS.profile],
   );
   await database.query(
+    "INSERT INTO public.admin_profile_permissions (profile_id, admin_tab, access_level) VALUES ($1,'matches','EDIT')",
+    [IDS.profile],
+  );
+  await database.query(
     "INSERT INTO public.admin_user_profiles (user_id, profile_id, login_identifier, password_status, name) VALUES ($1,$2,'laje38-ci','ACTIVE','Synthetic Operator')",
     [IDS.operator, IDS.profile],
   );
@@ -83,6 +89,44 @@ async function seedFixture(): Promise<void> {
 test("LAJE-38 completes login, live operations, standings and calendar on isolated PostgreSQL", async (t) => {
   assert.match(process.env.DATABASE_URL ?? "", /laje_priority_flows/);
   await seedFixture();
+
+  // LAJE-150: an isolated eliminatory bracket is linked to the synthetic match.
+  const editionId = "f3d55f5c-32a9-44f4-afcf-dbe6e59da008";
+  const competitionId = "f3d55f5c-32a9-44f4-afcf-dbe6e59da009";
+  const sourceBracketId = "f3d55f5c-32a9-44f4-afcf-dbe6e59da010";
+  const targetBracketId = "f3d55f5c-32a9-44f4-afcf-dbe6e59da011";
+  await database.query(
+    "INSERT INTO public.championship_bracket_editions (id, championship_id, season_year, status) VALUES ($1,$2,2026,'KNOCKOUT_GENERATED')",
+    [editionId, IDS.championship],
+  );
+  await database.query(
+    "INSERT INTO public.championship_bracket_competitions (id, bracket_edition_id, sport_id, naipe, groups_count, qualifiers_per_group) VALUES ($1,$2,$3,'MASCULINO',1,1)",
+    [competitionId, editionId, IDS.sport],
+  );
+  await database.query(
+    "INSERT INTO public.championship_bracket_matches (id, bracket_edition_id, competition_id, phase, round_number, slot_number) VALUES ($1,$2,$3,'KNOCKOUT',2,1)",
+    [targetBracketId, editionId, competitionId],
+  );
+  await database.query(
+    "INSERT INTO public.championship_bracket_matches (id, bracket_edition_id, competition_id, phase, round_number, slot_number, match_id, next_bracket_match_id) VALUES ($1,$2,$3,'KNOCKOUT',1,1,$4,$5)",
+    [sourceBracketId, editionId, competitionId, IDS.match, targetBracketId],
+  );
+  await database.query(
+    "UPDATE public.championship_bracket_matches SET source_home_bracket_match_id = $2 WHERE id = $1",
+    [targetBracketId, sourceBracketId],
+  );
+
+  // LAJE-150: the RDS schedule-conflict trigger must enforce core invariants.
+  await assert.rejects(
+    database.query("UPDATE public.matches SET away_team_id = home_team_id WHERE id = $1", [
+      IDS.match,
+    ]),
+    /Os times da partida devem ser diferentes/,
+  );
+  await assert.rejects(
+    database.query("UPDATE public.matches SET end_time = now() WHERE id = $1", [IDS.match]),
+    /horário final sem horário inicial/,
+  );
 
   const server = app.listen(0, "127.0.0.1");
   t.after(async () => {
@@ -160,6 +204,20 @@ test("LAJE-38 completes login, live operations, standings and calendar on isolat
   assert.equal(finished.status, 200);
   assert.ok(finished.payload.data && !Array.isArray(finished.payload.data));
   assert.equal(finished.payload.data.status, "FINISHED");
+  const propagated = await database.query(
+    "SELECT winner_team_id AS winner FROM public.championship_bracket_matches WHERE id = $1",
+    [sourceBracketId],
+  );
+  assert.ok(propagated.rows[0]);
+  assert.equal(propagated.rows[0].winner, IDS.home);
+  const nextBracket = await database.query(
+    "SELECT home_team_id AS home, match_id AS match FROM public.championship_bracket_matches WHERE id = $1",
+    [targetBracketId],
+  );
+  assert.ok(nextBracket.rows[0]);
+  assert.equal(nextBracket.rows[0].home, IDS.home);
+  assert.equal(nextBracket.rows[0].match, null);
+  // A public next-round game must not be invented until both qualifiers are known.
   const invalidFinish = await call(`/matches/${IDS.match}/finish`, {
     method: "POST",
     headers: authorized,
@@ -180,6 +238,101 @@ test("LAJE-38 completes login, live operations, standings and calendar on isolat
   const standing = await call(`/championships/${IDS.championship}/standings?seasonYear=2026`);
   assert.equal(standing.status, 200);
   assert.ok(rows(standing.payload).some((item) => item.teamId === IDS.home && item.points === 3));
+
+  // Exact-v8: materialize a scheduled knockout match only with both qualifiers.
+  await database.query(
+    "UPDATE public.championship_bracket_editions SET payload_snapshot = jsonb_build_object('exact_preview_algorithm_version', 'async-exact-v8') WHERE id = $1",
+    [editionId],
+  );
+  await database.query(
+    `UPDATE public.championship_bracket_matches
+     SET away_team_id = $2,
+         planned_scheduled_date = '2026-11-22',
+         planned_scheduled_slot = 2,
+         planned_queue_position = 8,
+         planned_start_time = '14:00',
+         planned_end_time = '15:30',
+         planned_location_group_id = 'd3e4007c-6750-4294-a90c-2a3f7c8d3d4e',
+         planned_court_group_id = '92bd7fc9-5063-4a78-a15f-f37a96704e5f',
+         planned_location_name = 'Ginásio',
+         planned_court_name = 'Quadra 1'
+     WHERE id = $1`,
+    [targetBracketId, IDS.away],
+  );
+  await database.transaction(async (transaction) => {
+    await propagateExistingKnockoutResult(transaction, {
+      id: IDS.match,
+      homeTeamId: IDS.home,
+      awayTeamId: IDS.away,
+      homeScore: 2,
+      awayScore: 1,
+      isWalkover: false,
+      isDoubleWalkover: false,
+    });
+  });
+  const nextMatch = await database.query(
+    `SELECT m.id, m.status, m.scheduled_date::text AS scheduled_date,
+            m.location, m.court_name,
+            to_char(m.scheduled_start_time AT TIME ZONE 'America/Sao_Paulo', 'HH24:MI') AS planned_start
+       FROM public.championship_bracket_matches bm
+       JOIN public.matches m ON m.id = bm.match_id
+      WHERE bm.id = $1`,
+    [targetBracketId],
+  );
+  assert.equal(nextMatch.rows.length, 1);
+  assert.equal(nextMatch.rows[0]!.status, "SCHEDULED");
+  assert.equal(nextMatch.rows[0]!.scheduled_date, "2026-11-22");
+  assert.equal(nextMatch.rows[0]!.location, "Ginásio");
+  assert.equal(nextMatch.rows[0]!.court_name, "Quadra 1");
+  assert.equal(nextMatch.rows[0]!.planned_start, "14:00");
+
+  const absentIdentity = await database.query("SELECT auth.uid() AS current_user_id");
+  assert.equal(absentIdentity.rows[0]?.current_user_id, null);
+  await database.transaction(async (tx) => {
+    await tx.query("SELECT set_config('laje.request_user_id', $1, true)", [IDS.operator]);
+    const identity = await tx.query("SELECT auth.uid() AS current_user_id");
+    assert.equal(identity.rows[0]?.current_user_id, IDS.operator);
+  });
+  const identityAfterTransaction = await database.query("SELECT auth.uid() AS current_user_id");
+  assert.equal(identityAfterTransaction.rows[0]?.current_user_id, null);
+
+  // LAJE-150: AWS-only administrative routes must be authenticated, scoped
+  // and executable against real PostgreSQL function definitions.
+  const unauthorizedOperation = await call("/bracket-operations/generated-location-groups", {
+    method: "POST",
+    body: JSON.stringify({ editionId }),
+  });
+  assert.equal(unauthorizedOperation.status, 401);
+
+  const unknownEdition = await call("/bracket-operations/generated-location-groups", {
+    method: "POST",
+    headers: authorized,
+    body: JSON.stringify({ editionId: "8fd47b48-40d0-48d5-97f4-bb7561d16d35" }),
+  });
+  assert.equal(unknownEdition.status, 404);
+
+  const locationGroups = await call("/bracket-operations/generated-location-groups", {
+    method: "POST",
+    headers: authorized,
+    body: JSON.stringify({ editionId }),
+  });
+  assert.equal(locationGroups.status, 200);
+  assert.deepEqual(rows(locationGroups.payload), []);
+
+  const prohibitedReschedule = await call("/bracket-operations/editable-schedule-slots", {
+    method: "POST",
+    headers: authorized,
+    body: JSON.stringify({
+      input: {
+        match_id: IDS.match,
+        target_date: "2026-10-30",
+        target_location: "Ginásio",
+        target_court_name: "Quadra 1",
+      },
+    }),
+  });
+  assert.equal(prohibitedReschedule.status, 409);
+  assert.equal(prohibitedReschedule.payload.error?.code, "MATCH_STATE_CONFLICT");
 
   const revoke = await call("/auth/sessions/current", { method: "DELETE", headers: authorized });
   assert.equal(revoke.status, 204);

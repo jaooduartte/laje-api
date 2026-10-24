@@ -26,12 +26,7 @@ export function createRealtimeReadRouter(authService: AuthService): Router {
 
   for (const name of Object.keys(SNAPSHOTS) as RealtimeSnapshotName[]) {
     const spec = SNAPSHOTS[name];
-    const middlewares = spec.admin
-      ? [
-          authenticate,
-          requirePermission(name === "pending-tie-breaks" ? "bracket_setup" : "matches", "VIEW"),
-        ]
-      : [];
+    const middlewares = spec.admin ? [authenticate, requirePermission("matches", "VIEW")] : [];
 
     router.get(`/:championshipId/${name}`, ...middlewares, async (request, response, next) => {
       try {

@@ -326,6 +326,134 @@ export function createBracketRouter(authService: AuthService): Router {
 
   router.use("/preview-jobs", createBracketPreviewRouter(authService));
 
+  // LAJE-150: the AWS-only frontend must never call Supabase for bracket drafts.
+  const draftRowSql = `
+    SELECT e.id AS edition_id, e.status, e.season_year, e.payload_snapshot,
+           e.updated_at::text AS updated_at, e.updated_by,
+           p.name AS updated_by_name
+      FROM public.championship_bracket_editions e
+      LEFT JOIN public.admin_user_profiles p ON p.user_id = e.updated_by
+     WHERE e.championship_id = $1 AND e.season_year = $2 AND e.status = 'DRAFT'
+     ORDER BY e.updated_at DESC, e.created_at DESC LIMIT 1
+  `;
+
+  router.get(
+    "/draft",
+    rateLimit(
+      createPostgresRateLimitOptions({
+        scope: "bracket-draft-read",
+        maxRequests: 30,
+        windowSeconds: 60,
+      }),
+    ),
+    requireAuthentication,
+    requirePermission("matches", "VIEW"),
+    async (request, response, next) => {
+      try {
+        const championshipId = requireUuid(request.params.championshipId, "championshipId");
+        const championship = await database.query(
+          'SELECT current_season_year AS "seasonYear", status FROM public.championships WHERE id = $1',
+          [championshipId],
+        );
+        if (!championship.rows[0]) {
+          throw new ApiError(404, "CHAMPIONSHIP_NOT_FOUND", "Campeonato não encontrado.");
+        }
+        if (championship.rows[0].status !== "UPCOMING") {
+          throw new ApiError(
+            409,
+            "CHAMPIONSHIP_NOT_CONFIGURABLE",
+            "Somente campeonatos em configuração possuem rascunhos editáveis.",
+          );
+        }
+        const result = await database.query(draftRowSql, [
+          championshipId,
+          championship.rows[0].seasonYear,
+        ]);
+        response.status(200).json({ data: result.rows[0] ?? null });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.put(
+    "/draft",
+    rateLimit(
+      createPostgresRateLimitOptions({
+        scope: "bracket-draft-write",
+        maxRequests: 10,
+        windowSeconds: 60,
+      }),
+    ),
+    requireAuthentication,
+    requirePermission("matches", "EDIT"),
+    async (request, response, next) => {
+      try {
+        const championshipId = requireUuid(request.params.championshipId, "championshipId");
+        const input = requireRecord(request.body);
+        const snapshot = requireRecord(input.payloadSnapshot, "payloadSnapshot");
+        const serialized = JSON.stringify(snapshot);
+        if (Buffer.byteLength(serialized, "utf8") > 512 * 1024) {
+          throw new ApiError(422, "DRAFT_TOO_LARGE", "O rascunho excede o limite de 512 KB.");
+        }
+        const userId = (request as AuthenticatedRequest).authPrincipal?.userId;
+        if (!userId) {
+          throw new ApiError(401, "ACCESS_TOKEN_REQUIRED", "Autenticação obrigatória.");
+        }
+        const saved = await database.transaction(async (tx) => {
+          // Lock championship to serialize concurrent draft writes for a season.
+          const championship = await tx.query(
+            'SELECT current_season_year AS "seasonYear", status FROM public.championships WHERE id = $1 FOR UPDATE',
+            [championshipId],
+          );
+          if (!championship.rows[0]) {
+            throw new ApiError(404, "CHAMPIONSHIP_NOT_FOUND", "Campeonato não encontrado.");
+          }
+          if (championship.rows[0].status !== "UPCOMING") {
+            throw new ApiError(
+              409,
+              "CHAMPIONSHIP_NOT_CONFIGURABLE",
+              "Somente campeonatos em configuração aceitam rascunhos.",
+            );
+          }
+          const seasonYear = championship.rows[0].seasonYear;
+          const existing = await tx.query(
+            "SELECT id, status FROM public.championship_bracket_editions WHERE championship_id = $1 AND season_year = $2 ORDER BY updated_at DESC FOR UPDATE",
+            [championshipId, seasonYear],
+          );
+          if (existing.rows.some((edition) => edition.status !== "DRAFT")) {
+            throw new ApiError(
+              409,
+              "BRACKET_ALREADY_GENERATED",
+              "O campeonato já possui uma chave gerada.",
+            );
+          }
+          const draftId = existing.rows[0]?.id;
+          if (draftId) {
+            await tx.query(
+              "UPDATE public.championship_bracket_editions SET payload_snapshot = $2::jsonb, updated_by = $3, updated_at = now() WHERE id = $1",
+              [draftId, serialized, userId],
+            );
+          } else {
+            await tx.query(
+              `
+              INSERT INTO public.championship_bracket_editions
+                (championship_id, season_year, status, payload_snapshot, created_by, updated_by)
+              VALUES ($1, $2, 'DRAFT', $3::jsonb, $4, $4)
+              `,
+              [championshipId, seasonYear, serialized, userId],
+            );
+          }
+          const result = await tx.query(draftRowSql, [championshipId, seasonYear]);
+          return result.rows[0];
+        });
+        response.status(200).json({ data: saved });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
   router.get("/", async (request, response, next) => {
     try {
       const inheritedParams = request.params as Record<string, unknown>;
@@ -359,7 +487,7 @@ export function createBracketRouter(authService: AuthService): Router {
       }),
     ),
     requireAuthentication,
-    requirePermission("bracket_setup", "EDIT"),
+    requirePermission("matches", "EDIT"),
     async (request, response, next) => {
       try {
         const inheritedParams = request.params as Record<string, unknown>;
@@ -368,29 +496,68 @@ export function createBracketRouter(authService: AuthService): Router {
         await database.transaction(async (tx) => {
           await ensureChampionshipAndTeams(tx, championshipId, input.competitions);
           const existing = await tx.query(
-            `SELECT id FROM public.championship_bracket_editions
-             WHERE championship_id = $1 AND season_year = $2 LIMIT 1`,
+            `SELECT id, status FROM public.championship_bracket_editions
+             WHERE championship_id = $1 AND season_year = $2
+             ORDER BY created_at DESC FOR UPDATE`,
             [championshipId, input.seasonYear],
           );
-          if (existing.rows[0]) {
+          const draft = existing.rows[0];
+          if (existing.rows.length > 1 || (draft && draft.status !== "DRAFT")) {
             throw new ApiError(
               409,
               "BRACKET_ALREADY_EXISTS",
-              "Já existe uma edição de chave para este campeonato e temporada. Reprogramações devem usar o fluxo específico de reprogramação.",
+              "O campeonato já possui uma chave gerada. Reprogramações devem usar o fluxo específico de reprogramação.",
             );
+          }
+          if (draft) {
+            const competitions = await tx.query(
+              "SELECT id FROM public.championship_bracket_competitions WHERE bracket_edition_id = $1 LIMIT 1",
+              [draft.id],
+            );
+            if (competitions.rows[0]) {
+              throw new ApiError(
+                409,
+                "BRACKET_DRAFT_INCONSISTENT",
+                "O rascunho já possui competições persistidas e precisa de revisão administrativa.",
+              );
+            }
           }
 
           const actorUserId = (request as AuthenticatedRequest).authPrincipal?.userId ?? null;
-          const editionResult = await tx.query(
-            `INSERT INTO public.championship_bracket_editions
-              (championship_id, season_year, status, payload_snapshot, created_by, updated_by)
-             VALUES ($1, $2, 'GROUPS_GENERATED', $3::jsonb, $4, $4)
-             RETURNING id, championship_id AS "championshipId",
-               season_year AS "seasonYear", status,
-               payload_snapshot AS "payloadSnapshot",
-               created_at AS "createdAt", updated_at AS "updatedAt"`,
-            [championshipId, input.seasonYear, JSON.stringify(input.payloadSnapshot), actorUserId],
-          );
+          const editionResult = draft
+            ? await tx.query(
+                `UPDATE public.championship_bracket_editions
+                   SET status = 'GROUPS_GENERATED', payload_snapshot = $2::jsonb,
+                       updated_by = $3, updated_at = now()
+                 WHERE id = $1 AND status = 'DRAFT'
+                 RETURNING id, championship_id AS "championshipId",
+                   season_year AS "seasonYear", status,
+                   payload_snapshot AS "payloadSnapshot",
+                   created_at AS "createdAt", updated_at AS "updatedAt"`,
+                [draft.id, JSON.stringify(input.payloadSnapshot), actorUserId],
+              )
+            : await tx.query(
+                `INSERT INTO public.championship_bracket_editions
+                  (championship_id, season_year, status, payload_snapshot, created_by, updated_by)
+                 VALUES ($1, $2, 'GROUPS_GENERATED', $3::jsonb, $4, $4)
+                 RETURNING id, championship_id AS "championshipId",
+                   season_year AS "seasonYear", status,
+                   payload_snapshot AS "payloadSnapshot",
+                   created_at AS "createdAt", updated_at AS "updatedAt"`,
+                [
+                  championshipId,
+                  input.seasonYear,
+                  JSON.stringify(input.payloadSnapshot),
+                  actorUserId,
+                ],
+              );
+          if (editionResult.rows.length !== 1) {
+            throw new ApiError(
+              409,
+              "BRACKET_UPDATE_CONFLICT",
+              "A edição foi alterada concorrentemente.",
+            );
+          }
           const edition = editionResult.rows[0]!;
 
           for (const competitionInput of input.competitions) {

@@ -15,6 +15,16 @@ const MIGRATIONS = [
   "20261007160900_port_exact_preview_triggers.sql",
   "20261007161000_port_exact_preview_api_functions.sql",
   "20261013221800_port_realtime_read_rpc_dependencies.sql",
+  "20261024180000_restore_match_finish_guards.sql",
+  "20261024183000_restore_scheduling_invariants.sql",
+  "20261024193000_port_knockout_v8_hydration.sql",
+  "20261024195000_port_manual_relocation_and_logistics.sql",
+  "20261024200000_port_day_reorganization.sql",
+  "20261024201000_port_operational_intervals_and_knockout_adjustments.sql",
+  "20261024202000_port_tie_breaks_and_admin_config.sql",
+  "20261024202500_port_group_stage_standings_prerequisites.sql",
+  "20261024203000_port_group_stage_standings.sql",
+  "20261024204000_aws_admin_auth_adapter.sql",
 ] as const;
 
 const MIGRATION_SCHEMA = "laje_api_internal";

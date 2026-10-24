@@ -21,6 +21,8 @@ import {
   type AuthenticatedRequest,
 } from "../auth/auth.middleware.js";
 import type { AuthService } from "../auth/auth.service.js";
+import { hydrateKnockoutAfterGroupFinish } from "../brackets/knockout-hydration.service.js";
+import { propagateExistingKnockoutResult } from "../brackets/knockout-progress.service.js";
 import { recalculateCollectiveStandings } from "../standings/standings.repository.js";
 
 const MATCH_STATUSES = ["SCHEDULED", "LIVE", "FINISHED"] as const;
@@ -1452,6 +1454,8 @@ export function createMatchesRouter(authService: AuthService): Router {
           throw new ApiError(404, "MATCH_NOT_FOUND", "Jogo não encontrado.");
         }
 
+        await propagateExistingKnockoutResult(transaction, newMatch);
+
         await recalculateCollectiveStandings(transaction, {
           championshipId: String(newMatch.championshipId),
           seasonYear: Number(newMatch.seasonYear),
@@ -1459,6 +1463,8 @@ export function createMatchesRouter(authService: AuthService): Router {
           naipe: String(newMatch.naipe),
           division: typeof newMatch.division == "string" ? newMatch.division : null,
         });
+
+        await hydrateKnockoutAfterGroupFinish(transaction, matchId);
 
         await insertAudit(
           transaction,

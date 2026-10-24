@@ -26,5 +26,18 @@ const summary = [
   "",
 ].join("\n");
 console.log(summary);
+for (const [name, item] of Object.entries(audit.vulnerabilities ?? {})) {
+  if (item.severity !== "high" && item.severity !== "critical") continue;
+  const advisories = (item.via ?? []).filter((via) => typeof via !== "string");
+  console.log(
+    "SEVERE_PACKAGE " +
+      JSON.stringify({
+        name,
+        severity: item.severity,
+        via: advisories.map((via) => via.url ?? via.title),
+        fixAvailable: item.fixAvailable,
+      }),
+  );
+}
 if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
 if (high + critical > 0) process.exitCode = 1;

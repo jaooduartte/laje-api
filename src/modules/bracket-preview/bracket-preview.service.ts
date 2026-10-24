@@ -163,6 +163,25 @@ export class BracketPreviewService {
     requestedBy: string,
   ): Promise<string> {
     return this.withIdentity(requestedBy, async (executor) => {
+      // A draft is only an editable snapshot. Exact-v8 persists a new approved
+      // edition, so remove the obsolete empty DRAFT in the same transaction.
+      // Any failure in the engine rolls back the deletion automatically.
+      await executor.query(
+        `DELETE FROM public.championship_bracket_editions AS draft
+         USING championship_bracket_preview_private.jobs AS preview
+         WHERE preview.id = $1::uuid
+           AND preview.championship_id = $2::uuid
+           AND preview.requested_by = $3::uuid
+           AND preview.status = 'COMPLETED'
+           AND draft.championship_id = preview.championship_id
+           AND draft.season_year = preview.season_year
+           AND draft.status = 'DRAFT'
+           AND NOT EXISTS (
+             SELECT 1 FROM public.championship_bracket_competitions AS competition
+             WHERE competition.bracket_edition_id = draft.id
+           )`,
+        [jobId, championshipId, requestedBy],
+      );
       const result = await executor.query(
         `SELECT public.create_championship_bracket_from_preview_job(
            $1::uuid,
