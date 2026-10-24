@@ -2156,35 +2156,8 @@ CREATE TRIGGER championship_individual_sessions_prevent_review_operations
 BEFORE UPDATE OF status ON public.championship_individual_sessions
 FOR EACH ROW EXECUTE FUNCTION public.prevent_review_individual_session_operations();
 
-DO $migration_protect_individual_event_results$
-DECLARE
-  function_definition TEXT;
-  updated_function_definition TEXT;
-BEGIN
-  SELECT pg_get_functiondef('public.save_championship_individual_event_results(uuid,jsonb)'::regprocedure)
-  INTO function_definition;
-  updated_function_definition := replace(
-    function_definition,
-    '  IF current_event.id IS NULL THEN',
-    '  IF NOT EXISTS (' || chr(10) ||
-    '    SELECT 1' || chr(10) ||
-    '    FROM public.championship_individual_events AS events_table' || chr(10) ||
-    '    JOIN public.championships AS championships_table ON championships_table.id = events_table.championship_id' || chr(10) ||
-    '    WHERE events_table.id = _event_id' || chr(10) ||
-    '      AND championships_table.status = ''IN_PROGRESS''::public.championship_status' || chr(10) ||
-    '  ) THEN' || chr(10) ||
-    '    RAISE EXCEPTION ''Os resultados das provas individuais só podem ser registrados com o campeonato em andamento.'';' || chr(10) ||
-    '  END IF;' || chr(10) || chr(10) ||
-    '  IF current_event.id IS NULL THEN'
-  );
+-- Omitted obsolete individual-event results RPC patch: not part of the AWS/TCC flow.
 
-  IF updated_function_definition = function_definition THEN
-    RAISE EXCEPTION 'Não foi possível proteger o registro de resultados das provas individuais.';
-  END IF;
-
-  EXECUTE updated_function_definition;
-END;
-$migration_protect_individual_event_results$;
 
 
 DO $migration_implement_alternate_naipe$
