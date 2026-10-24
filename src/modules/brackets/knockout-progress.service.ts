@@ -222,7 +222,11 @@ export async function propagateExistingKnockoutResult(
       ],
     );
     if (created.rows.length !== 1) {
-      throw new ApiError(409, "KNOCKOUT_CREATION_FAILED", "Competição eliminatória não encontrada.");
+      throw new ApiError(
+        409,
+        "KNOCKOUT_CREATION_FAILED",
+        "Competição eliminatória não encontrada.",
+      );
     }
     await executor.query(
       "UPDATE public.championship_bracket_matches SET match_id = $2 WHERE id = $1",
