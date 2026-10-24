@@ -94,6 +94,11 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: LAJE-150 temporary format inspection
+        run: |
+          npx prettier tests/flows/priority-flows.test.ts --write
+          git diff -- tests/flows/priority-flows.test.ts
+
       - name: Check formatting
         run: npm run format:check
 
