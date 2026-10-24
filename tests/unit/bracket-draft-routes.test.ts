@@ -32,7 +32,7 @@ const principal = {
     email: "qa@example.invalid",
     role: "admin" as const,
     profile: null,
-    permissions: [{ scope: "bracket_setup", level: "EDIT" as const }],
+    permissions: [{ scope: "matches", level: "EDIT" as const }],
     canAccessAdminPanel: true,
   },
 };
