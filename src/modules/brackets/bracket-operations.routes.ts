@@ -85,6 +85,42 @@ const OPERATIONS: Record<string, RouteSpec> = {
     sql: "SELECT public.update_bracket_knockout_court_priorities($1::uuid, $2::jsonb) AS result",
     parameterKind: "array",
   },
+  "generated-location-groups": {
+    scope: "edition",
+    sql: `WITH location_rows AS (
+        SELECT DISTINCT ON (l.location_group_id)
+               l.location_group_id, l.name, l.position
+        FROM public.championship_bracket_days d
+        JOIN public.championship_bracket_locations l ON l.bracket_day_id = d.id
+        WHERE d.bracket_edition_id = $1
+        ORDER BY l.location_group_id, d.event_date, l.position
+      ), court_rows AS (
+        SELECT DISTINCT ON (l.location_group_id, c.court_group_id)
+               l.location_group_id, c.court_group_id, c.name, c.position
+        FROM public.championship_bracket_days d
+        JOIN public.championship_bracket_locations l ON l.bracket_day_id = d.id
+        JOIN public.championship_bracket_courts c ON c.bracket_location_id = l.id
+        WHERE d.bracket_edition_id = $1
+        ORDER BY l.location_group_id, c.court_group_id, d.event_date, c.position
+      )
+      SELECT COALESCE(jsonb_agg(
+        jsonb_build_object(
+          'location_group_id', l.location_group_id,
+          'location_name', l.name,
+          'position', l.position,
+          'courts', COALESCE((
+            SELECT jsonb_agg(
+              jsonb_build_object(
+                'court_group_id', c.court_group_id,
+                'court_name', c.name,
+                'position', c.position
+              ) ORDER BY c.position
+            )
+            FROM court_rows c WHERE c.location_group_id = l.location_group_id
+          ), '[]'::jsonb)
+        ) ORDER BY l.position
+      ), '[]'::jsonb) AS result FROM location_rows l`,
+  },
   "generated-location-update": {
     scope: "edition",
     sql: "SELECT public.update_bracket_generated_location_group($1::uuid, $2::jsonb) AS result",
