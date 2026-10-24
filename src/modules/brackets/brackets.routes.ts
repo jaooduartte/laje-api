@@ -345,14 +345,18 @@ export function createBracketRouter(authService: AuthService): Router {
       try {
         const championshipId = requireUuid(request.params.championshipId, "championshipId");
         const championship = await database.query(
-          "SELECT current_season_year AS \"seasonYear\", status FROM public.championships WHERE id = $1",
+          'SELECT current_season_year AS "seasonYear", status FROM public.championships WHERE id = $1',
           [championshipId],
         );
         if (!championship.rows[0]) {
           throw new ApiError(404, "CHAMPIONSHIP_NOT_FOUND", "Campeonato não encontrado.");
         }
         if (championship.rows[0].status !== "UPCOMING") {
-          throw new ApiError(409, "CHAMPIONSHIP_NOT_CONFIGURABLE", "Somente campeonatos em configuração possuem rascunhos editáveis.");
+          throw new ApiError(
+            409,
+            "CHAMPIONSHIP_NOT_CONFIGURABLE",
+            "Somente campeonatos em configuração possuem rascunhos editáveis.",
+          );
         }
         const result = await database.query(draftRowSql, [
           championshipId,
@@ -385,14 +389,18 @@ export function createBracketRouter(authService: AuthService): Router {
         const saved = await database.transaction(async (tx) => {
           // Lock championship to serialize concurrent draft writes for a season.
           const championship = await tx.query(
-            "SELECT current_season_year AS \"seasonYear\", status FROM public.championships WHERE id = $1 FOR UPDATE",
+            'SELECT current_season_year AS "seasonYear", status FROM public.championships WHERE id = $1 FOR UPDATE',
             [championshipId],
           );
           if (!championship.rows[0]) {
             throw new ApiError(404, "CHAMPIONSHIP_NOT_FOUND", "Campeonato não encontrado.");
           }
           if (championship.rows[0].status !== "UPCOMING") {
-            throw new ApiError(409, "CHAMPIONSHIP_NOT_CONFIGURABLE", "Somente campeonatos em configuração aceitam rascunhos.");
+            throw new ApiError(
+              409,
+              "CHAMPIONSHIP_NOT_CONFIGURABLE",
+              "Somente campeonatos em configuração aceitam rascunhos.",
+            );
           }
           const seasonYear = championship.rows[0].seasonYear;
           const existing = await tx.query(
@@ -400,7 +408,11 @@ export function createBracketRouter(authService: AuthService): Router {
             [championshipId, seasonYear],
           );
           if (existing.rows.some((edition) => edition.status !== "DRAFT")) {
-            throw new ApiError(409, "BRACKET_ALREADY_GENERATED", "O campeonato já possui uma chave gerada.");
+            throw new ApiError(
+              409,
+              "BRACKET_ALREADY_GENERATED",
+              "O campeonato já possui uma chave gerada.",
+            );
           }
           const draftId = existing.rows[0]?.id;
           if (draftId) {
