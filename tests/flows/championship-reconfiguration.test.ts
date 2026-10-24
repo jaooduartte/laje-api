@@ -35,7 +35,7 @@ test("LAJE-150 performs real PostgreSQL preview and revision-guarded application
     [IDS.edition, IDS.championship],
   );
   await database.query(
-    "INSERT INTO public.admin_profiles (id, name, is_system, system_role) VALUES ($1, 'LAJE-150 Admin', true, 'admin')",
+    "INSERT INTO public.admin_profiles (id, name, is_system) VALUES ($1, 'LAJE-150 Admin', false)",
     [IDS.profile],
   );
   for (const tab of ["control", "matches", "championship_schedule"]) {
