@@ -552,7 +552,11 @@ export function createBracketRouter(authService: AuthService): Router {
                 ],
               );
           if (editionResult.rows.length !== 1) {
-            throw new ApiError(409, "BRACKET_UPDATE_CONFLICT", "A edição foi alterada concorrentemente.");
+            throw new ApiError(
+              409,
+              "BRACKET_UPDATE_CONFLICT",
+              "A edição foi alterada concorrentemente.",
+            );
           }
           const edition = editionResult.rows[0]!;
 
