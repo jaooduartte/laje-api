@@ -1218,7 +1218,7 @@ $$;
 
 REVOKE ALL
 ON FUNCTION public.reprogram_championship_individual_session(UUID, JSONB)
-FROM PUBLIC, anon, authenticated;
+FROM PUBLIC;
 
 
 
