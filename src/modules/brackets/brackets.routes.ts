@@ -339,7 +339,13 @@ export function createBracketRouter(authService: AuthService): Router {
 
   router.get(
     "/draft",
-    rateLimit(createPostgresRateLimitOptions({ scope: "bracket-draft-read", maxRequests: 30, windowSeconds: 60 })),
+    rateLimit(
+      createPostgresRateLimitOptions({
+        scope: "bracket-draft-read",
+        maxRequests: 30,
+        windowSeconds: 60,
+      }),
+    ),
     requireAuthentication,
     requirePermission("bracket_setup", "VIEW"),
     async (request, response, next) => {
@@ -372,7 +378,13 @@ export function createBracketRouter(authService: AuthService): Router {
 
   router.put(
     "/draft",
-    rateLimit(createPostgresRateLimitOptions({ scope: "bracket-draft-write", maxRequests: 10, windowSeconds: 60 })),
+    rateLimit(
+      createPostgresRateLimitOptions({
+        scope: "bracket-draft-write",
+        maxRequests: 10,
+        windowSeconds: 60,
+      }),
+    ),
     requireAuthentication,
     requirePermission("bracket_setup", "EDIT"),
     async (request, response, next) => {
