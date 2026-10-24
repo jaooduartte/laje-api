@@ -96,8 +96,8 @@ jobs:
 
       - name: LAJE-150 inspect formatting
         run: |
-          npx prettier src/modules/brackets/bracket-operations.routes.ts --write
-          git diff -- src/modules/brackets/bracket-operations.routes.ts
+          npx prettier src/modules/brackets/bracket-operations.routes.ts tests/flows/championship-reconfiguration.test.ts --write
+          git diff -- src/modules/brackets/bracket-operations.routes.ts tests/flows/championship-reconfiguration.test.ts
 
       - name: Check formatting
         run: npm run format:check
