@@ -75,8 +75,7 @@ test("LAJE-150 routes bracket reconfiguration preview and revision-locked apply 
   t.mock.method(
     database,
     "transaction",
-    async <T>(work: (executor: DatabaseQueryExecutor) => Promise<T>): Promise<T> =>
-      work({ query }),
+    async <T>(work: (executor: DatabaseQueryExecutor) => Promise<T>): Promise<T> => work({ query }),
   );
   const authService = {
     authenticateAccessToken: async () => principal,
