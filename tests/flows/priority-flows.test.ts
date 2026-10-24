@@ -73,6 +73,10 @@ async function seedFixture(): Promise<void> {
     [IDS.profile],
   );
   await database.query(
+    "INSERT INTO public.admin_profile_permissions (profile_id, admin_tab, access_level) VALUES ($1,'bracket_setup','EDIT')",
+    [IDS.profile],
+  );
+  await database.query(
     "INSERT INTO public.admin_user_profiles (user_id, profile_id, login_identifier, password_status, name) VALUES ($1,$2,'laje38-ci','ACTIVE','Synthetic Operator')",
     [IDS.operator, IDS.profile],
   );
@@ -281,6 +285,44 @@ test("LAJE-38 completes login, live operations, standings and calendar on isolat
   assert.equal(nextMatch.rows[0]!.location, "Ginásio");
   assert.equal(nextMatch.rows[0]!.court_name, "Quadra 1");
   assert.equal(nextMatch.rows[0]!.planned_start, "14:00");
+
+  // LAJE-150: AWS-only administrative routes must be authenticated, scoped
+  // and executable against real PostgreSQL function definitions.
+  const unauthorizedOperation = await call("/bracket-operations/generated-location-groups", {
+    method: "POST",
+    body: JSON.stringify({ editionId }),
+  });
+  assert.equal(unauthorizedOperation.status, 401);
+
+  const unknownEdition = await call("/bracket-operations/generated-location-groups", {
+    method: "POST",
+    headers: authorized,
+    body: JSON.stringify({ editionId: "8fd47b48-40d0-48d5-97f4-bb7561d16d35" }),
+  });
+  assert.equal(unknownEdition.status, 404);
+
+  const locationGroups = await call("/bracket-operations/generated-location-groups", {
+    method: "POST",
+    headers: authorized,
+    body: JSON.stringify({ editionId }),
+  });
+  assert.equal(locationGroups.status, 200);
+  assert.deepEqual(rows(locationGroups.payload), []);
+
+  const prohibitedReschedule = await call("/bracket-operations/editable-schedule-slots", {
+    method: "POST",
+    headers: authorized,
+    body: JSON.stringify({
+      input: {
+        match_id: IDS.match,
+        target_date: "2026-10-30",
+        target_location: "Ginásio",
+        target_court_name: "Quadra 1",
+      },
+    }),
+  });
+  assert.equal(prohibitedReschedule.status, 409);
+  assert.equal(prohibitedReschedule.payload.error?.code, "MATCH_STATE_CONFLICT");
 
   const revoke = await call("/auth/sessions/current", { method: "DELETE", headers: authorized });
   assert.equal(revoke.status, 204);
