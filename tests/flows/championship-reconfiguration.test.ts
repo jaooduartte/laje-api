@@ -27,7 +27,7 @@ const IDS = {
 test("LAJE-150 performs real PostgreSQL preview and revision-guarded application without Supabase", async (t) => {
   assert.match(process.env.DATABASE_URL ?? "", /laje_priority_flows/);
   await database.query(
-    "INSERT INTO public.championships (id, code, name, status, current_season_year) VALUES ($1, 'INTERLAJE', 'LAJE-150 Reconfiguration Test', 'REVIEW', 2026)",
+    "INSERT INTO public.championships (id, code, name, status, current_season_year) VALUES ($1, 'CLV', 'LAJE-150 Reconfiguration Test', 'REVIEW', 2026)",
     [IDS.championship],
   );
   await database.query(
@@ -68,7 +68,10 @@ test("LAJE-150 performs real PostgreSQL preview and revision-guarded application
   const login = await fetch(base + "/auth/sessions", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ loginIdentifier: "laje150-ci", password: "LAJE-150-2026-Postgres-Check" }),
+    body: JSON.stringify({
+      loginIdentifier: "laje150-ci",
+      password: "LAJE-150-2026-Postgres-Check",
+    }),
   });
   assert.equal(login.status, 200);
   const token = (await login.json()).data.accessToken;
@@ -113,7 +116,10 @@ test("LAJE-150 performs real PostgreSQL preview and revision-guarded application
 
   const applied = await send("reconfiguration-apply", { ...request, expectedRevision: revision });
   assert.equal(applied.status, 200);
-  const conflict = await send("reconfiguration-apply", { ...request, expectedRevision: revision + 1 });
+  const conflict = await send("reconfiguration-apply", {
+    ...request,
+    expectedRevision: revision + 1,
+  });
   assert.equal(conflict.status, 409);
   assert.equal((await conflict.json()).error.code, "RECONFIGURATION_REVISION_CONFLICT");
 });
