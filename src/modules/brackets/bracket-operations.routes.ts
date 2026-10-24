@@ -146,6 +146,16 @@ const OPERATIONS: Record<string, RouteSpec> = {
     sql: "SELECT public.update_bracket_day_schedule($1::uuid, $2::jsonb) AS result",
     parameterKind: "array",
   },
+  "court-priorities-update": {
+    scope: "edition",
+    sql: "SELECT public.update_bracket_court_priorities($1::uuid, $2::jsonb) AS result",
+    parameterKind: "array",
+  },
+  "location-sport-priorities-update": {
+    scope: "edition",
+    sql: "SELECT public.update_bracket_location_sport_priorities($1::uuid, $2::jsonb) AS result",
+    parameterKind: "array",
+  },
   "knockout-court-priorities-update": {
     scope: "edition",
     sql: "SELECT public.update_bracket_knockout_court_priorities($1::uuid, $2::jsonb) AS result",
