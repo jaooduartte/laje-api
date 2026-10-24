@@ -85,19 +85,6 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: LAJE-150 resolve dependency lock for security patch
-        shell: bash
-        run: |
-          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
-          node --input-type=module <<'LOCK_DIAGNOSTIC'
-          import fs from "node:fs";
-          import {execFileSync} from "node:child_process";
-          const prev = JSON.parse(execFileSync("git", ["show", "HEAD:package-lock.json"], {encoding:"utf8"}));
-          const updated = JSON.parse(fs.readFileSync("package-lock.json", "utf8"));
-          const changes = Object.keys(updated.packages).filter(k=>JSON.stringify(prev.packages[k])!==JSON.stringify(updated.packages[k])).map(k=>({key:k,value:updated.packages[k]}));
-          console.log("LAJE150_LOCK_DIFF " + JSON.stringify({root:updated.packages[""],entries:changes}));
-          LOCK_DIAGNOSTIC
-
       - name: Install dependencies
         run: npm ci
 
