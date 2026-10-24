@@ -170,7 +170,7 @@ export function createBracketOperationsRouter(authService: AuthService): Router 
           await tx.query("SELECT set_config('laje.request_user_id', $1, true)", [userId]);
 
           const input = payload.input;
-          let values: unknown[] = [];
+          let values: unknown[];
           if (spec.scope === "edition") {
             const id = requireUuid(payload.editionId, "editionId");
             const edition = await tx.query(
