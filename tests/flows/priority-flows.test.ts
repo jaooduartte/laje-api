@@ -319,6 +319,48 @@ test("LAJE-38 completes login, live operations, standings and calendar on isolat
   assert.equal(locationGroups.status, 200);
   assert.deepEqual(rows(locationGroups.payload), []);
 
+  // The AWS frontend reads both location-sport and knockout court preferences
+  // from the isolated PostgreSQL API instead of connecting to Supabase.
+  const locationSource = await call("/bracket-operations/location-sport-source", {
+    method: "POST",
+    headers: authorized,
+    body: JSON.stringify({ editionId }),
+  });
+  assert.equal(locationSource.status, 200);
+  assert.ok(locationSource.payload.data && !Array.isArray(locationSource.payload.data));
+  assert.deepEqual(locationSource.payload.data.days, []);
+  assert.deepEqual(locationSource.payload.data.priorities, []);
+  const scheduledSources = locationSource.payload.data.bracketMatches;
+  assert.ok(Array.isArray(scheduledSources));
+  assert.equal(scheduledSources.length, 2);
+  assert.ok(
+    scheduledSources.some(
+      (item) =>
+        item.match_id === IDS.match &&
+        item.matches?.scheduled_date === "2026-10-30" &&
+        item.matches.sport_id === IDS.sport,
+    ),
+  );
+  assert.ok(
+    scheduledSources.some(
+      (item) =>
+        item.match_id !== IDS.match &&
+        item.matches?.scheduled_date === "2026-11-22" &&
+        item.matches.sport_id === IDS.sport,
+    ),
+  );
+
+  const knockoutCourtSource = await call("/bracket-operations/knockout-court-source", {
+    method: "POST",
+    headers: authorized,
+    body: JSON.stringify({ editionId }),
+  });
+  assert.equal(knockoutCourtSource.status, 200);
+  assert.ok(knockoutCourtSource.payload.data && !Array.isArray(knockoutCourtSource.payload.data));
+  assert.deepEqual(knockoutCourtSource.payload.data.days, []);
+  assert.ok(Array.isArray(knockoutCourtSource.payload.data.competitions));
+  assert.ok(Array.isArray(knockoutCourtSource.payload.data.finalProgram));
+
   const prohibitedReschedule = await call("/bracket-operations/editable-schedule-slots", {
     method: "POST",
     headers: authorized,

@@ -18,6 +18,72 @@ type RouteSpec = {
   parameterKind?: "json" | "revision" | "array" | "none";
 };
 
+
+/**
+ * Read-only, schema-scoped projection of the championship's saved court hierarchy.
+ * The same JSON shape is used by the original Supabase relationships so the
+ * business mapping in the AWS frontend does not drift from the operational app.
+ */
+const BRACKET_DAYS_SOURCE_SQL = `
+  COALESCE((
+    SELECT jsonb_agg(
+      jsonb_build_object(
+        'id', d.id,
+        'event_date', d.event_date,
+        'championship_bracket_locations', COALESCE((
+          SELECT jsonb_agg(
+            jsonb_build_object(
+              'id', l.id,
+              'name', l.name,
+              'position', l.position,
+              'location_group_id', l.location_group_id,
+              'championship_bracket_courts', COALESCE((
+                SELECT jsonb_agg(
+                  jsonb_build_object(
+                    'id', c.id,
+                    'name', c.name,
+                    'position', c.position,
+                    'court_group_id', c.court_group_id,
+                    'preferred_sport_id', c.preferred_sport_id,
+                    'championship_bracket_court_sports', COALESCE((
+                      SELECT jsonb_agg(
+                        jsonb_build_object(
+                          'sport_id', cs.sport_id,
+                          'preferred_naipe', cs.preferred_naipe,
+                          'preferred_division', cs.preferred_division,
+                          'sequence_mode', cs.sequence_mode
+                        ) ORDER BY cs.sport_id
+                      )
+                      FROM public.championship_bracket_court_sports cs
+                      WHERE cs.bracket_court_id = c.id
+                    ), '[]'::jsonb)
+                  ) ORDER BY c.position
+                )
+                FROM public.championship_bracket_courts c
+                WHERE c.bracket_location_id = l.id
+              ), '[]'::jsonb)
+            ) ORDER BY l.position
+          )
+          FROM public.championship_bracket_locations l
+          WHERE l.bracket_day_id = d.id
+        ), '[]'::jsonb)
+      ) ORDER BY d.event_date
+    )
+    FROM public.championship_bracket_days d
+    WHERE d.bracket_edition_id = $1::uuid
+  ), '[]'::jsonb)
+`;
+
+/** Read-only operations are available to a user with matches VIEW permission. */
+const VIEW_OPERATIONS = new Set([
+  "generated-location-groups",
+  "location-sport-source",
+  "knockout-court-source",
+  "knockout-adjustment-candidates",
+  "editable-schedule-slots",
+  "group-stage-standings",
+]);
+
 /** Every SQL expression below is a static allowlisted function, never a client-supplied identifier. */
 const OPERATIONS: Record<string, RouteSpec> = {
   "manual-relocation-preview": {
@@ -80,10 +146,73 @@ const OPERATIONS: Record<string, RouteSpec> = {
     sql: "SELECT public.update_bracket_day_schedule($1::uuid, $2::jsonb) AS result",
     parameterKind: "array",
   },
+  "court-priorities-update": {
+    scope: "edition",
+    sql: "SELECT public.update_bracket_court_priorities($1::uuid, $2::jsonb) AS result",
+    parameterKind: "array",
+  },
+  "location-sport-priorities-update": {
+    scope: "edition",
+    sql: "SELECT public.update_bracket_location_sport_priorities($1::uuid, $2::jsonb) AS result",
+    parameterKind: "array",
+  },
   "knockout-court-priorities-update": {
     scope: "edition",
     sql: "SELECT public.update_bracket_knockout_court_priorities($1::uuid, $2::jsonb) AS result",
     parameterKind: "array",
+  },
+  "location-sport-source": {
+    scope: "edition",
+    sql: `SELECT jsonb_build_object(
+      'days', ${BRACKET_DAYS_SOURCE_SQL},
+      'priorities', COALESCE((
+        SELECT jsonb_agg(jsonb_build_object(
+          'location_group_id', lp.location_group_id,
+          'sport_id', lp.sport_id,
+          'priority_mode', lp.priority_mode
+        ))
+        FROM public.championship_bracket_location_sport_priorities lp
+        WHERE lp.bracket_edition_id = $1::uuid
+      ), '[]'::jsonb),
+      'bracketMatches', COALESCE((
+        SELECT jsonb_agg(jsonb_build_object(
+          'match_id', bm.match_id,
+          'matches', jsonb_build_object(
+            'scheduled_date', m.scheduled_date,
+            'sport_id', m.sport_id
+          )
+        ))
+        FROM public.championship_bracket_matches bm
+        JOIN public.matches m ON m.id = bm.match_id
+        WHERE bm.bracket_edition_id = $1::uuid
+      ), '[]'::jsonb)
+    ) AS result`,
+  },
+  "knockout-court-source": {
+    scope: "edition",
+    sql: `SELECT jsonb_build_object(
+      'days', ${BRACKET_DAYS_SOURCE_SQL},
+      'competitions', COALESCE((
+        SELECT jsonb_agg(jsonb_build_object('sport_id', c.sport_id, 'division', c.division))
+        FROM public.championship_bracket_competitions c
+        WHERE c.bracket_edition_id = $1::uuid
+      ), '[]'::jsonb),
+      'priorities', COALESCE((
+        SELECT jsonb_agg(jsonb_build_object(
+          'sport_id', p.sport_id,
+          'phase', p.phase,
+          'division_scope', p.division_scope,
+          'location_group_id', p.location_group_id,
+          'court_group_id', p.court_group_id
+        ))
+        FROM public.championship_bracket_knockout_court_priorities p
+        WHERE p.bracket_edition_id = $1::uuid
+      ), '[]'::jsonb),
+      'finalProgram', COALESCE((
+        SELECT jsonb_agg(to_jsonb(fp))
+        FROM public.get_championship_knockout_final_program_schedule($1::uuid) fp
+      ), '[]'::jsonb)
+    ) AS result`,
   },
   "generated-location-groups": {
     scope: "edition",
@@ -193,7 +322,11 @@ export function createBracketOperationsRouter(authService: AuthService): Router 
     "/:operation",
     rateLimit(createPostgresRateLimitOptions({ scope: "bracket-operations", maxRequests: 30, windowSeconds: 60 })),
     requireAuthentication,
-    requirePermission("matches", "EDIT"),
+    (request, response, next) => {
+      const operation = String(request.params.operation ?? "");
+      const required = VIEW_OPERATIONS.has(operation) ? "VIEW" : "EDIT";
+      requirePermission("matches", required)(request, response, next);
+    },
     async (request, response, next) => {
       try {
         const operation = String(request.params.operation ?? "");
