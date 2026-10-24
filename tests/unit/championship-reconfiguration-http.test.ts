@@ -45,13 +45,13 @@ test("LAJE-150 routes bracket reconfiguration preview and revision-locked apply 
   ) => {
     queries.push({ sql, values });
     if (sql.includes("FROM public.championship_bracket_editions WHERE id = $1")) {
-      return { rows: [{ id: editionId }] as Row[], count: 1 };
+      return { rows: [{ id: editionId }] as unknown as Row[], count: 1 };
     }
     if (sql.includes("preview_championship_bracket_reconfiguration")) {
       return {
         rows: [{
           result: { revision: 7, action: "DAY_SCHEDULE", affected_matches: 1, changes: [], blockers: [] },
-        }] as Row[],
+        }] as unknown as Row[],
         count: 1,
       };
     }
@@ -59,7 +59,7 @@ test("LAJE-150 routes bracket reconfiguration preview and revision-locked apply 
       if (conflict) {
         throw Object.assign(new Error("revision conflict"), { code: "40001" });
       }
-      return { rows: [{ result: null }] as Row[], count: 1 };
+      return { rows: [{ result: null }] as unknown as Row[], count: 1 };
     }
     return { rows: [] as Row[], count: 0 };
   };
