@@ -29,7 +29,7 @@ export function createRealtimeReadRouter(authService: AuthService): Router {
     const middlewares = spec.admin
       ? [
           authenticate,
-          requirePermission(name === "pending-tie-breaks" ? "bracket_setup" : "matches", "VIEW"),
+          requirePermission("matches", "VIEW"),
         ]
       : [];
 
