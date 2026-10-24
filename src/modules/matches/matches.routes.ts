@@ -21,6 +21,7 @@ import {
   type AuthenticatedRequest,
 } from "../auth/auth.middleware.js";
 import type { AuthService } from "../auth/auth.service.js";
+import { hydrateKnockoutAfterGroupFinish } from "../brackets/knockout-hydration.service.js";
 import { propagateExistingKnockoutResult } from "../brackets/knockout-progress.service.js";
 import { recalculateCollectiveStandings } from "../standings/standings.repository.js";
 
@@ -1462,6 +1463,8 @@ export function createMatchesRouter(authService: AuthService): Router {
           naipe: String(newMatch.naipe),
           division: typeof newMatch.division == "string" ? newMatch.division : null,
         });
+
+        await hydrateKnockoutAfterGroupFinish(transaction, matchId);
 
         await insertAudit(
           transaction,
