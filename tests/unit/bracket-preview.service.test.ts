@@ -166,6 +166,10 @@ test("creates the approved bracket through the ported exact engine using the aut
 
   assert.equal(editionId, "66666666-6666-4666-8666-666666666666");
   assert.equal(calls[0]?.parameters[0], "99999999-9999-4999-8999-999999999999");
-  assert.ok(calls.some((call) => call.sql.includes("DELETE FROM public.championship_bracket_editions")));
-  assert.ok(calls.some((call) => call.sql.includes("create_championship_bracket_from_preview_job")));
+  assert.ok(
+    calls.some((call) => call.sql.includes("DELETE FROM public.championship_bracket_editions")),
+  );
+  assert.ok(
+    calls.some((call) => call.sql.includes("create_championship_bracket_from_preview_job")),
+  );
 });
