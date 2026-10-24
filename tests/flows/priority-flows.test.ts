@@ -84,6 +84,32 @@ test("LAJE-38 completes login, live operations, standings and calendar on isolat
   assert.match(process.env.DATABASE_URL ?? "", /laje_priority_flows/);
   await seedFixture();
 
+  // LAJE-150: an isolated eliminatory bracket is linked to the synthetic match.
+  const editionId = "f3d55f5c-32a9-44f4-afcf-dbe6e59da008";
+  const competitionId = "f3d55f5c-32a9-44f4-afcf-dbe6e59da009";
+  const sourceBracketId = "f3d55f5c-32a9-44f4-afcf-dbe6e59da010";
+  const targetBracketId = "f3d55f5c-32a9-44f4-afcf-dbe6e59da011";
+  await database.query(
+    "INSERT INTO public.championship_bracket_editions (id, championship_id, season_year, status) VALUES ($1,$2,2026,'KNOCKOUT_GENERATED')",
+    [editionId, IDS.championship],
+  );
+  await database.query(
+    "INSERT INTO public.championship_bracket_competitions (id, bracket_edition_id, sport_id, naipe, groups_count, qualifiers_per_group) VALUES ($1,$2,$3,'MASCULINO',1,1)",
+    [competitionId, editionId, IDS.sport],
+  );
+  await database.query(
+    "INSERT INTO public.championship_bracket_matches (id, bracket_edition_id, competition_id, phase, round_number, slot_number) VALUES ($1,$2,$3,'KNOCKOUT',2,1)",
+    [targetBracketId, editionId, competitionId],
+  );
+  await database.query(
+    "INSERT INTO public.championship_bracket_matches (id, bracket_edition_id, competition_id, phase, round_number, slot_number, match_id, next_bracket_match_id) VALUES ($1,$2,$3,'KNOCKOUT',1,1,$4,$5)",
+    [sourceBracketId, editionId, competitionId, IDS.match, targetBracketId],
+  );
+  await database.query(
+    "UPDATE public.championship_bracket_matches SET source_home_bracket_match_id = $2 WHERE id = $1",
+    [targetBracketId, sourceBracketId],
+  );
+
   // LAJE-150: the RDS schedule-conflict trigger must enforce core invariants.
   await assert.rejects(
     database.query(
@@ -176,6 +202,18 @@ test("LAJE-38 completes login, live operations, standings and calendar on isolat
   assert.equal(finished.status, 200);
   assert.ok(finished.payload.data && !Array.isArray(finished.payload.data));
   assert.equal(finished.payload.data.status, "FINISHED");
+  const propagated = await database.query(
+    "SELECT winner_team_id AS winner FROM public.championship_bracket_matches WHERE id = $1",
+    [sourceBracketId],
+  );
+  assert.equal(propagated.rows[0].winner, IDS.home);
+  const nextBracket = await database.query(
+    "SELECT home_team_id AS home, match_id AS match FROM public.championship_bracket_matches WHERE id = $1",
+    [targetBracketId],
+  );
+  assert.equal(nextBracket.rows[0].home, IDS.home);
+  assert.equal(nextBracket.rows[0].match, null);
+  // A public next-round game must not be invented until both qualifiers are known.
   const invalidFinish = await call(`/matches/${IDS.match}/finish`, {
     method: "POST",
     headers: authorized,
