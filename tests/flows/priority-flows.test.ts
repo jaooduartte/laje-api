@@ -202,11 +202,13 @@ test("LAJE-38 completes login, live operations, standings and calendar on isolat
     "SELECT winner_team_id AS winner FROM public.championship_bracket_matches WHERE id = $1",
     [sourceBracketId],
   );
+  assert.ok(propagated.rows[0]);
   assert.equal(propagated.rows[0].winner, IDS.home);
   const nextBracket = await database.query(
     "SELECT home_team_id AS home, match_id AS match FROM public.championship_bracket_matches WHERE id = $1",
     [targetBracketId],
   );
+  assert.ok(nextBracket.rows[0]);
   assert.equal(nextBracket.rows[0].home, IDS.home);
   assert.equal(nextBracket.rows[0].match, null);
   // A public next-round game must not be invented until both qualifiers are known.
