@@ -94,11 +94,6 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: LAJE-150 formatting inspection (temporary)
-        run: |
-          npx prettier src/modules/brackets/knockout-progress.service.ts tests/unit/knockout-progress.test.ts tests/flows/priority-flows.test.ts --write
-          git diff -- src/modules/brackets/knockout-progress.service.ts tests/unit/knockout-progress.test.ts tests/flows/priority-flows.test.ts
-
       - name: Check formatting
         run: npm run format:check
 
