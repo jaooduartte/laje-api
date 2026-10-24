@@ -14,9 +14,8 @@ process.env.MAIL_ENABLED = "false";
 const { hashPassword } = await import("../../src/modules/auth/auth.crypto.js");
 const { database } = await import("../../src/database/index.js");
 const { app } = await import("../../src/app.js");
-const { propagateExistingKnockoutResult } = await import(
-  "../../src/modules/brackets/knockout-progress.service.js"
-);
+const { propagateExistingKnockoutResult } =
+  await import("../../src/modules/brackets/knockout-progress.service.js");
 
 const IDS = {
   championship: "f3d55f5c-32a9-44f4-afcf-dbe6e59da001",
