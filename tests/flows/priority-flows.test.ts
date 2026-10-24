@@ -14,6 +14,9 @@ process.env.MAIL_ENABLED = "false";
 const { hashPassword } = await import("../../src/modules/auth/auth.crypto.js");
 const { database } = await import("../../src/database/index.js");
 const { app } = await import("../../src/app.js");
+const { propagateExistingKnockoutResult } = await import(
+  "../../src/modules/brackets/knockout-progress.service.js"
+);
 
 const IDS = {
   championship: "f3d55f5c-32a9-44f4-afcf-dbe6e59da001",
@@ -232,6 +235,53 @@ test("LAJE-38 completes login, live operations, standings and calendar on isolat
   const standing = await call(`/championships/${IDS.championship}/standings?seasonYear=2026`);
   assert.equal(standing.status, 200);
   assert.ok(rows(standing.payload).some((item) => item.teamId === IDS.home && item.points === 3));
+
+  // Exact-v8: materialize a scheduled knockout match only with both qualifiers.
+  await database.query(
+    "UPDATE public.championship_bracket_editions SET payload_snapshot = jsonb_build_object('exact_preview_algorithm_version', 'async-exact-v8') WHERE id = $1",
+    [editionId],
+  );
+  await database.query(
+    `UPDATE public.championship_bracket_matches
+     SET away_team_id = $2,
+         planned_scheduled_date = '2026-11-22',
+         planned_scheduled_slot = 2,
+         planned_queue_position = 8,
+         planned_start_time = '14:00',
+         planned_end_time = '15:30',
+         planned_location_group_id = 'd3e4007c-6750-4294-a90c-2a3f7c8d3d4e',
+         planned_court_group_id = '92bd7fc9-5063-4a78-a15f-f37a96704e5f',
+         planned_location_name = 'Ginásio',
+         planned_court_name = 'Quadra 1'
+     WHERE id = $1`,
+    [targetBracketId, IDS.away],
+  );
+  await database.transaction(async (transaction) => {
+    await propagateExistingKnockoutResult(transaction, {
+      id: IDS.match,
+      homeTeamId: IDS.home,
+      awayTeamId: IDS.away,
+      homeScore: 2,
+      awayScore: 1,
+      isWalkover: false,
+      isDoubleWalkover: false,
+    });
+  });
+  const nextMatch = await database.query(
+    `SELECT m.id, m.status, m.scheduled_date::text AS scheduled_date,
+            m.location, m.court_name,
+            to_char(m.scheduled_start_time AT TIME ZONE 'America/Sao_Paulo', 'HH24:MI') AS planned_start
+       FROM public.championship_bracket_matches bm
+       JOIN public.matches m ON m.id = bm.match_id
+      WHERE bm.id = $1`,
+    [targetBracketId],
+  );
+  assert.equal(nextMatch.rows.length, 1);
+  assert.equal(nextMatch.rows[0]!.status, "SCHEDULED");
+  assert.equal(nextMatch.rows[0]!.scheduled_date, "2026-11-22");
+  assert.equal(nextMatch.rows[0]!.location, "Ginásio");
+  assert.equal(nextMatch.rows[0]!.court_name, "Quadra 1");
+  assert.equal(nextMatch.rows[0]!.planned_start, "14:00");
 
   const revoke = await call("/auth/sessions/current", { method: "DELETE", headers: authorized });
   assert.equal(revoke.status, 204);
