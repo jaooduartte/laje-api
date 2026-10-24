@@ -144,7 +144,7 @@ test("LAJE-150 reads and saves draft in AWS RDS adapter without invoking Supabas
   assert.equal(update.status, 200);
   assert.deepEqual((await update.json()).data.payload_snapshot, { schedule_days: [] });
 
-  const generatedBracket = await fetch(path.replace(/\\/draft$/, "/generate"), {
+  const generatedBracket = await fetch(path.replace("/draft", "/generate"), {
     method: "POST",
     headers: { authorization: "Bearer test", "content-type": "application/json" },
     body: JSON.stringify({
