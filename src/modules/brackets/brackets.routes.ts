@@ -496,29 +496,64 @@ export function createBracketRouter(authService: AuthService): Router {
         await database.transaction(async (tx) => {
           await ensureChampionshipAndTeams(tx, championshipId, input.competitions);
           const existing = await tx.query(
-            `SELECT id FROM public.championship_bracket_editions
-             WHERE championship_id = $1 AND season_year = $2 LIMIT 1`,
+            `SELECT id, status FROM public.championship_bracket_editions
+             WHERE championship_id = $1 AND season_year = $2
+             ORDER BY created_at DESC FOR UPDATE`,
             [championshipId, input.seasonYear],
           );
-          if (existing.rows[0]) {
+          const draft = existing.rows[0];
+          if (existing.rows.length > 1 || (draft && draft.status !== "DRAFT")) {
             throw new ApiError(
               409,
               "BRACKET_ALREADY_EXISTS",
-              "Já existe uma edição de chave para este campeonato e temporada. Reprogramações devem usar o fluxo específico de reprogramação.",
+              "O campeonato já possui uma chave gerada. Reprogramações devem usar o fluxo específico de reprogramação.",
             );
+          }
+          if (draft) {
+            const competitions = await tx.query(
+              "SELECT id FROM public.championship_bracket_competitions WHERE bracket_edition_id = $1 LIMIT 1",
+              [draft.id],
+            );
+            if (competitions.rows[0]) {
+              throw new ApiError(
+                409,
+                "BRACKET_DRAFT_INCONSISTENT",
+                "O rascunho já possui competições persistidas e precisa de revisão administrativa.",
+              );
+            }
           }
 
           const actorUserId = (request as AuthenticatedRequest).authPrincipal?.userId ?? null;
-          const editionResult = await tx.query(
-            `INSERT INTO public.championship_bracket_editions
-              (championship_id, season_year, status, payload_snapshot, created_by, updated_by)
-             VALUES ($1, $2, 'GROUPS_GENERATED', $3::jsonb, $4, $4)
-             RETURNING id, championship_id AS "championshipId",
-               season_year AS "seasonYear", status,
-               payload_snapshot AS "payloadSnapshot",
-               created_at AS "createdAt", updated_at AS "updatedAt"`,
-            [championshipId, input.seasonYear, JSON.stringify(input.payloadSnapshot), actorUserId],
-          );
+          const editionResult = draft
+            ? await tx.query(
+                `UPDATE public.championship_bracket_editions
+                   SET status = 'GROUPS_GENERATED', payload_snapshot = $2::jsonb,
+                       updated_by = $3, updated_at = now()
+                 WHERE id = $1 AND status = 'DRAFT'
+                 RETURNING id, championship_id AS "championshipId",
+                   season_year AS "seasonYear", status,
+                   payload_snapshot AS "payloadSnapshot",
+                   created_at AS "createdAt", updated_at AS "updatedAt"`,
+                [draft.id, JSON.stringify(input.payloadSnapshot), actorUserId],
+              )
+            : await tx.query(
+                `INSERT INTO public.championship_bracket_editions
+                  (championship_id, season_year, status, payload_snapshot, created_by, updated_by)
+                 VALUES ($1, $2, 'GROUPS_GENERATED', $3::jsonb, $4, $4)
+                 RETURNING id, championship_id AS "championshipId",
+                   season_year AS "seasonYear", status,
+                   payload_snapshot AS "payloadSnapshot",
+                   created_at AS "createdAt", updated_at AS "updatedAt"`,
+                [
+                  championshipId,
+                  input.seasonYear,
+                  JSON.stringify(input.payloadSnapshot),
+                  actorUserId,
+                ],
+              );
+          if (editionResult.rows.length !== 1) {
+            throw new ApiError(409, "BRACKET_UPDATE_CONFLICT", "A edição foi alterada concorrentemente.");
+          }
           const edition = editionResult.rows[0]!;
 
           for (const competitionInput of input.competitions) {
