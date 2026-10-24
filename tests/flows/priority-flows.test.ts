@@ -286,6 +286,16 @@ test("LAJE-38 completes login, live operations, standings and calendar on isolat
   assert.equal(nextMatch.rows[0]!.court_name, "Quadra 1");
   assert.equal(nextMatch.rows[0]!.planned_start, "14:00");
 
+  const absentIdentity = await database.query("SELECT auth.uid() AS current_user_id");
+  assert.equal(absentIdentity.rows[0]?.current_user_id, null);
+  await database.transaction(async (tx) => {
+    await tx.query("SELECT set_config('laje.request_user_id', $1, true)", [IDS.operator]);
+    const identity = await tx.query("SELECT auth.uid() AS current_user_id");
+    assert.equal(identity.rows[0]?.current_user_id, IDS.operator);
+  });
+  const identityAfterTransaction = await database.query("SELECT auth.uid() AS current_user_id");
+  assert.equal(identityAfterTransaction.rows[0]?.current_user_id, null);
+
   // LAJE-150: AWS-only administrative routes must be authenticated, scoped
   // and executable against real PostgreSQL function definitions.
   const unauthorizedOperation = await call("/bracket-operations/generated-location-groups", {
