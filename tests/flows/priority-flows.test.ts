@@ -330,15 +330,25 @@ test("LAJE-38 completes login, live operations, standings and calendar on isolat
   assert.ok(locationSource.payload.data && !Array.isArray(locationSource.payload.data));
   assert.deepEqual(locationSource.payload.data.days, []);
   assert.deepEqual(locationSource.payload.data.priorities, []);
-  assert.deepEqual(locationSource.payload.data.bracketMatches, [
-    {
-      match_id: IDS.match,
-      matches: {
-        scheduled_date: "2026-10-30",
-        sport_id: IDS.sport,
-      },
-    },
-  ]);
+  const scheduledSources = locationSource.payload.data.bracketMatches;
+  assert.ok(Array.isArray(scheduledSources));
+  assert.equal(scheduledSources.length, 2);
+  assert.ok(
+    scheduledSources.some(
+      (item) =>
+        item.match_id === IDS.match &&
+        item.matches?.scheduled_date === "2026-10-30" &&
+        item.matches.sport_id === IDS.sport,
+    ),
+  );
+  assert.ok(
+    scheduledSources.some(
+      (item) =>
+        item.match_id !== IDS.match &&
+        item.matches?.scheduled_date === "2026-11-22" &&
+        item.matches.sport_id === IDS.sport,
+    ),
+  );
 
   const knockoutCourtSource = await call("/bracket-operations/knockout-court-source", {
     method: "POST",
