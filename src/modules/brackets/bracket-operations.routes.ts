@@ -15,7 +15,7 @@ import type { AuthService } from "../auth/auth.service.js";
 type RouteSpec = {
   scope: "edition" | "source" | "competition" | "match" | "tie-break" | "standings";
   sql: string;
-  parameterKind?: "json" | "revision" | "array" | "none";
+  parameterKind?: "json" | "revision" | "array" | "none" | "reconfiguration" | "reconfiguration-revision";
 };
 
 
@@ -85,7 +85,28 @@ const VIEW_OPERATIONS = new Set([
 ]);
 
 /** Every SQL expression below is a static allowlisted function, never a client-supplied identifier. */
+const RECONFIGURATION_ACTIONS = new Set([
+  "DAY_SCHEDULE",
+  "REVERSE_DAY_COURT_MATCH_ORDER",
+  "INDIVIDUAL_SESSION",
+  "COMPETITION_SETTINGS",
+  "LOCATION_SPORT_PRIORITIES",
+  "COURT_SPORT_SEQUENCE",
+  "KNOCKOUT_COURT_PRIORITIES",
+  "LOCATION_GROUP",
+]);
+
 const OPERATIONS: Record<string, RouteSpec> = {
+  "reconfiguration-preview": {
+    scope: "edition",
+    sql: "SELECT public.preview_championship_bracket_reconfiguration($1::uuid, $2::text, $3::jsonb) AS result",
+    parameterKind: "reconfiguration",
+  },
+  "reconfiguration-apply": {
+    scope: "edition",
+    sql: "SELECT public.apply_championship_bracket_reconfiguration($1::uuid, $2::text, $3::jsonb, $4::bigint) AS result",
+    parameterKind: "reconfiguration-revision",
+  },
   "manual-relocation-preview": {
     scope: "edition",
     sql: "SELECT public.preview_manual_match_relocation($1::uuid, $2::jsonb) AS result",
@@ -347,7 +368,24 @@ export function createBracketOperationsRouter(authService: AuthService): Router 
               [id],
             );
             if (!edition.rows[0]) throw new ApiError(404, "BRACKET_NOT_FOUND", "Edição não encontrada.");
-            if (spec.parameterKind === "array") {
+            if (
+              spec.parameterKind === "reconfiguration" ||
+              spec.parameterKind === "reconfiguration-revision"
+            ) {
+              const action = stringField(payload.action, "action");
+              if (!RECONFIGURATION_ACTIONS.has(action)) {
+                throw new ApiError(422, "INVALID_RECONFIGURATION_ACTION", "Tipo de reprogramação inválido.");
+              }
+              const body = requireRecord(input);
+              const serialized = JSON.stringify(body);
+              if (serialized.length > 65536) {
+                throw new ApiError(413, "PAYLOAD_TOO_LARGE", "Dados de reprogramação excedem o limite.");
+              }
+              values = [id, action, serialized];
+              if (spec.parameterKind === "reconfiguration-revision") {
+                values.push(requireInteger(payload.expectedRevision, "expectedRevision", { min: 0 }));
+              }
+            } else if (spec.parameterKind === "array") {
               if (!Array.isArray(input)) throw new ApiError(422, "VALIDATION_ERROR", "Informe as atualizações.");
               values = [id, JSON.stringify(input)];
             } else if (spec.parameterKind === "json" || spec.parameterKind === "revision") {
@@ -437,6 +475,14 @@ export function createBracketOperationsRouter(authService: AuthService): Router 
         });
         response.status(200).json({ data });
       } catch (error) {
+        if (
+          request.params.operation === "reconfiguration-apply" &&
+          typeof error === "object" && error !== null &&
+          "code" in error && error.code === "40001"
+        ) {
+          next(new ApiError(409, "RECONFIGURATION_REVISION_CONFLICT", "A agenda foi alterada desde a prévia. Gere uma nova prévia."));
+          return;
+        }
         next(error);
       }
     },
