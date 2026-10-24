@@ -73,7 +73,7 @@ async function seedFixture(): Promise<void> {
     [IDS.profile],
   );
   await database.query(
-    "INSERT INTO public.admin_profile_permissions (profile_id, admin_tab, access_level) VALUES ($1,'bracket_setup','EDIT')",
+    "INSERT INTO public.admin_profile_permissions (profile_id, admin_tab, access_level) VALUES ($1,'matches','EDIT')",
     [IDS.profile],
   );
   await database.query(
