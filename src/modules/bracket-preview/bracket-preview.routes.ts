@@ -24,11 +24,11 @@ export function createBracketPreviewRouter(authService: AuthService): Router {
   const requireAuthentication = createRequireAuthentication(authService);
   const requirePreviewView = [
     requireAuthentication,
-    requirePermission("bracket_setup", "VIEW"),
+    requirePermission("matches", "VIEW"),
   ] as const;
   const requirePreviewEdit = [
     requireAuthentication,
-    requirePermission("bracket_setup", "EDIT"),
+    requirePermission("matches", "EDIT"),
   ] as const;
 
   router.post("/", ...requirePreviewEdit, async (request, response, next) => {
@@ -132,11 +132,11 @@ export function createGlobalBracketPreviewRouter(authService: AuthService): Rout
   const requireAuthentication = createRequireAuthentication(authService);
   const requirePreviewView = [
     requireAuthentication,
-    requirePermission("bracket_setup", "VIEW"),
+    requirePermission("matches", "VIEW"),
   ] as const;
   const requirePreviewEdit = [
     requireAuthentication,
-    requirePermission("bracket_setup", "EDIT"),
+    requirePermission("matches", "EDIT"),
   ] as const;
 
   router.get("/:jobId", ...requirePreviewView, async (request, response, next) => {
