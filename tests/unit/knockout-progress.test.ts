@@ -84,7 +84,10 @@ test("LAJE-150 materializes an exact-v8 next-round fixture with approved date an
 test("LAJE-150 does not materialize a future fixture while a qualifier is unknown", async () => {
   const { executor, calls } = mockKnockoutExecutor({ awayTeamId: null });
   await propagateExistingKnockoutResult(executor, finished);
-  assert.equal(calls.some((call) => call.sql.includes("INSERT INTO public.matches")), false);
+  assert.equal(
+    calls.some((call) => call.sql.includes("INSERT INTO public.matches")),
+    false,
+  );
 });
 
 test("LAJE-150 rejects a fully qualified exact-v8 fixture missing a planned court", async () => {
