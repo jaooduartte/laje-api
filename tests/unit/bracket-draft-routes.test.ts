@@ -78,8 +78,7 @@ test("LAJE-150 reads and saves draft in AWS RDS adapter without invoking Supabas
   t.mock.method(
     database,
     "transaction",
-    async <T>(work: (executor: DatabaseQueryExecutor) => Promise<T>): Promise<T> =>
-      work({ query }),
+    async <T>(work: (executor: DatabaseQueryExecutor) => Promise<T>): Promise<T> => work({ query }),
   );
 
   const app = express();
@@ -96,7 +95,8 @@ test("LAJE-150 reads and saves draft in AWS RDS adapter without invoking Supabas
   await once(server, "listening");
   const address = server.address();
   assert.ok(address && typeof address === "object");
-  const path = "http://127.0.0.1:" + address.port + "/championships/" + CHAMPIONSHIP_ID + "/bracket/draft";
+  const path =
+    "http://127.0.0.1:" + address.port + "/championships/" + CHAMPIONSHIP_ID + "/bracket/draft";
 
   const empty = await fetch(path, { headers: { authorization: "Bearer test" } });
   assert.equal(empty.status, 200);
