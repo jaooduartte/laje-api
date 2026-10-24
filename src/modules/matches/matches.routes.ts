@@ -21,6 +21,7 @@ import {
   type AuthenticatedRequest,
 } from "../auth/auth.middleware.js";
 import type { AuthService } from "../auth/auth.service.js";
+import { propagateExistingKnockoutResult } from "../brackets/knockout-progress.service.js";
 import { recalculateCollectiveStandings } from "../standings/standings.repository.js";
 
 const MATCH_STATUSES = ["SCHEDULED", "LIVE", "FINISHED"] as const;
@@ -1451,6 +1452,8 @@ export function createMatchesRouter(authService: AuthService): Router {
         if (!newMatch) {
           throw new ApiError(404, "MATCH_NOT_FOUND", "Jogo não encontrado.");
         }
+
+        await propagateExistingKnockoutResult(transaction, newMatch);
 
         await recalculateCollectiveStandings(transaction, {
           championshipId: String(newMatch.championshipId),
