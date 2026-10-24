@@ -84,6 +84,22 @@ test("LAJE-38 completes login, live operations, standings and calendar on isolat
   assert.match(process.env.DATABASE_URL ?? "", /laje_priority_flows/);
   await seedFixture();
 
+  // LAJE-150: the RDS schedule-conflict trigger must enforce core invariants.
+  await assert.rejects(
+    database.query(
+      "UPDATE public.matches SET away_team_id = home_team_id WHERE id = $1",
+      [IDS.match],
+    ),
+    /Os times da partida devem ser diferentes/,
+  );
+  await assert.rejects(
+    database.query(
+      "UPDATE public.matches SET end_time = now() WHERE id = $1",
+      [IDS.match],
+    ),
+    /horário final sem horário inicial/,
+  );
+
   const server = app.listen(0, "127.0.0.1");
   t.after(async () => {
     await new Promise<void>((resolve, reject) => {
