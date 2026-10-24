@@ -17,6 +17,7 @@ const MIGRATIONS = [
   "20261013221800_port_realtime_read_rpc_dependencies.sql",
   "20261024180000_restore_match_finish_guards.sql",
   "20261024183000_restore_scheduling_invariants.sql",
+  "20261024193000_port_knockout_v8_hydration.sql",
 ] as const;
 
 const MIGRATION_SCHEMA = "laje_api_internal";
