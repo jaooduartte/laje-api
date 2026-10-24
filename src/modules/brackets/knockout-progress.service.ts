@@ -25,13 +25,21 @@ export async function propagateExistingKnockoutResult(
   const homeTeamId = String(match.homeTeamId);
   const awayTeamId = String(match.awayTeamId);
   if (match.isDoubleWalkover === true) {
-    throw new ApiError(409, "KNOCKOUT_UNRESOLVED", "Mata-mata com W.O. duplo exige resolução administrativa.");
+    throw new ApiError(
+      409,
+      "KNOCKOUT_UNRESOLVED",
+      "Mata-mata com W.O. duplo exige resolução administrativa.",
+    );
   }
   let winnerTeamId: string;
   if (match.isWalkover === true) {
     const loser = String(match.walkoverLoserTeamId ?? "");
     if (loser !== homeTeamId && loser !== awayTeamId) {
-      throw new ApiError(422, "INVALID_WALKOVER_LOSER", "A equipe perdedora do W.O. deve disputar a partida.");
+      throw new ApiError(
+        422,
+        "INVALID_WALKOVER_LOSER",
+        "A equipe perdedora do W.O. deve disputar a partida.",
+      );
     }
     winnerTeamId = loser === homeTeamId ? awayTeamId : homeTeamId;
   } else {
@@ -42,14 +50,22 @@ export async function propagateExistingKnockoutResult(
     else {
       const tieBreakWinner = String(match.resolvedTieBreakWinnerTeamId ?? "");
       if (tieBreakWinner !== homeTeamId && tieBreakWinner !== awayTeamId) {
-        throw new ApiError(409, "KNOCKOUT_UNRESOLVED", "O empate eliminatório exige vencedor validado.");
+        throw new ApiError(
+          409,
+          "KNOCKOUT_UNRESOLVED",
+          "O empate eliminatório exige vencedor validado.",
+        );
       }
       winnerTeamId = tieBreakWinner;
     }
   }
 
   if (source.winnerTeamId && String(source.winnerTeamId) !== winnerTeamId) {
-    throw new ApiError(409, "KNOCKOUT_WINNER_CONFLICT", "O vencedor já registrado precisa de correção administrativa do chaveamento.");
+    throw new ApiError(
+      409,
+      "KNOCKOUT_WINNER_CONFLICT",
+      "O vencedor já registrado precisa de correção administrativa do chaveamento.",
+    );
   }
   await executor.query(
     "UPDATE public.championship_bracket_matches SET winner_team_id = $2 WHERE id = $1",
@@ -68,7 +84,11 @@ export async function propagateExistingKnockoutResult(
   );
   const target = targetResult.rows[0];
   if (!target) {
-    throw new ApiError(409, "KNOCKOUT_TARGET_NOT_FOUND", "A próxima partida eliminatória não existe.");
+    throw new ApiError(
+      409,
+      "KNOCKOUT_TARGET_NOT_FOUND",
+      "A próxima partida eliminatória não existe.",
+    );
   }
 
   const slot =
@@ -78,11 +98,19 @@ export async function propagateExistingKnockoutResult(
         ? "away_team_id"
         : null;
   if (!slot) {
-    throw new ApiError(409, "KNOCKOUT_LINK_INCONSISTENT", "Não foi possível identificar o lado de avanço no chaveamento.");
+    throw new ApiError(
+      409,
+      "KNOCKOUT_LINK_INCONSISTENT",
+      "Não foi possível identificar o lado de avanço no chaveamento.",
+    );
   }
   const currentTeam = slot === "home_team_id" ? target.homeTeamId : target.awayTeamId;
   if (currentTeam && String(currentTeam) !== winnerTeamId) {
-    throw new ApiError(409, "KNOCKOUT_TARGET_CONFLICT", "A próxima fase já contém uma equipe diferente.");
+    throw new ApiError(
+      409,
+      "KNOCKOUT_TARGET_CONFLICT",
+      "A próxima fase já contém uma equipe diferente.",
+    );
   }
 
   await executor.query(
@@ -101,7 +129,11 @@ export async function propagateExistingKnockoutResult(
       [target.matchId, winnerTeamId],
     );
     if (changed.rows.length !== 1) {
-      throw new ApiError(409, "KNOCKOUT_TARGET_ALREADY_STARTED", "Não é seguro alterar uma partida eliminatória já iniciada.");
+      throw new ApiError(
+        409,
+        "KNOCKOUT_TARGET_ALREADY_STARTED",
+        "Não é seguro alterar uma partida eliminatória já iniciada.",
+      );
     }
   }
 }
