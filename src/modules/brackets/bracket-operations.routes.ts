@@ -160,7 +160,8 @@ export function createBracketOperationsRouter(authService: AuthService): Router 
     requirePermission("bracket_setup", "EDIT"),
     async (request, response, next) => {
       try {
-        const spec = OPERATIONS[request.params.operation];
+        const operation = String(request.params.operation ?? "");
+        const spec = OPERATIONS[operation];
         if (!spec) throw new ApiError(404, "BRACKET_OPERATION_NOT_FOUND", "Operação não suportada.");
         const payload = requireRecord(request.body);
         const data = await database.transaction(async (tx) => {
@@ -204,7 +205,7 @@ export function createBracketOperationsRouter(authService: AuthService): Router 
             if (!found.rows[0]) throw new ApiError(404, "MATCH_NOT_FOUND", "Jogo não encontrado.");
             if (found.rows[0].status !== "SCHEDULED")
               throw new ApiError(409, "MATCH_STATE_CONFLICT", "Somente jogos agendados podem ser reprogramados.");
-            if (request.params.operation === "editable-schedule-slots") {
+            if (operation === "editable-schedule-slots") {
               values = [
                 id, stringField(body.target_date, "target_date"),
                 stringField(body.target_location, "target_location"),
@@ -231,7 +232,7 @@ export function createBracketOperationsRouter(authService: AuthService): Router 
             );
             if (!found.rows[0]) throw new ApiError(404, "COMPETITION_NOT_FOUND", "Competição não encontrada.");
             const body = requireRecord(input);
-            if (request.params.operation === "competition-settings-update") {
+            if (operation === "competition-settings-update") {
               values = [
                 id,
                 requireInteger(body.qualifiersPerGroup, "qualifiersPerGroup", { min: 1, max: 16 }),
@@ -245,7 +246,7 @@ export function createBracketOperationsRouter(authService: AuthService): Router 
             values = [JSON.stringify(requireRecord(input))];
           } else {
             const championshipId = requireUuid(payload.championshipId, "championshipId");
-            if (request.params.operation === "group-stage-standings") {
+            if (operation === "group-stage-standings") {
               values = [championshipId, requireInteger(payload.seasonYear, "seasonYear", { min: 2000, max: 2100 })];
             } else {
               const competitionId = requireUuid(payload.competitionId, "competitionId");
@@ -261,7 +262,7 @@ export function createBracketOperationsRouter(authService: AuthService): Router 
             }
           }
           const result = await tx.query(spec.sql, values);
-          return ["editable-schedule-slots", "group-stage-standings"].includes(request.params.operation)
+          return ["editable-schedule-slots", "group-stage-standings"].includes(operation)
             ? result.rows.map((row) => row.result)
             : (result.rows[0]?.result ?? null);
         });
