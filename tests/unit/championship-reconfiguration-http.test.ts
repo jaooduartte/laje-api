@@ -49,9 +49,17 @@ test("LAJE-150 routes bracket reconfiguration preview and revision-locked apply 
     }
     if (sql.includes("preview_championship_bracket_reconfiguration")) {
       return {
-        rows: [{
-          result: { revision: 7, action: "DAY_SCHEDULE", affected_matches: 1, changes: [], blockers: [] },
-        }] as unknown as Row[],
+        rows: [
+          {
+            result: {
+              revision: 7,
+              action: "DAY_SCHEDULE",
+              affected_matches: 1,
+              changes: [],
+              blockers: [],
+            },
+          },
+        ] as unknown as Row[],
         count: 1,
       };
     }
@@ -99,10 +107,14 @@ test("LAJE-150 routes bracket reconfiguration preview and revision-locked apply 
   });
   assert.equal(preview.status, 200);
   assert.equal((await preview.json()).data.revision, 7);
-  assert.ok(queries.some(({ sql, values }) =>
-    sql.includes("preview_championship_bracket_reconfiguration") &&
-    values[0] === editionId && values[1] === "DAY_SCHEDULE",
-  ));
+  assert.ok(
+    queries.some(
+      ({ sql, values }) =>
+        sql.includes("preview_championship_bracket_reconfiguration") &&
+        values[0] === editionId &&
+        values[1] === "DAY_SCHEDULE",
+    ),
+  );
 
   const apply = await fetch(root + "reconfiguration-apply", {
     method: "POST",
@@ -110,9 +122,12 @@ test("LAJE-150 routes bracket reconfiguration preview and revision-locked apply 
     body: JSON.stringify({ ...input, expectedRevision: 7 }),
   });
   assert.equal(apply.status, 200);
-  assert.ok(queries.some(({ sql, values }) =>
-    sql.includes("apply_championship_bracket_reconfiguration") && values[3] === 7,
-  ));
+  assert.ok(
+    queries.some(
+      ({ sql, values }) =>
+        sql.includes("apply_championship_bracket_reconfiguration") && values[3] === 7,
+    ),
+  );
 
   conflict = true;
   const stale = await fetch(root + "reconfiguration-apply", {
