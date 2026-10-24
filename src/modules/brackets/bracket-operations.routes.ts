@@ -193,7 +193,7 @@ export function createBracketOperationsRouter(authService: AuthService): Router 
     "/:operation",
     rateLimit(createPostgresRateLimitOptions({ scope: "bracket-operations", maxRequests: 30, windowSeconds: 60 })),
     requireAuthentication,
-    requirePermission("bracket_setup", "EDIT"),
+    requirePermission("matches", "EDIT"),
     async (request, response, next) => {
       try {
         const operation = String(request.params.operation ?? "");
