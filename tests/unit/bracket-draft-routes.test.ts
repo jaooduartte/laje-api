@@ -46,6 +46,11 @@ test("LAJE-150 reads and saves draft in AWS RDS adapter without invoking Supabas
   let championshipStatus = "UPCOMING";
   const statements: string[] = [];
 
+  const sportId = "2d315ae6-2b6b-4949-916f-48913b37f9ee";
+  const homeTeamId = "df232ceb-1076-44cb-8131-16635cf28b4d";
+  const awayTeamId = "e535838b-5f29-46a0-b85e-58295172815d";
+  let generated = false;
+
   const query = async <Row extends DatabaseRow = DatabaseRow>(
     statement: string,
     params: readonly unknown[] = [],
@@ -53,9 +58,13 @@ test("LAJE-150 reads and saves draft in AWS RDS adapter without invoking Supabas
     statements.push(statement);
     let rows: Record<string, unknown>[] = [];
     if (statement.includes("FROM public.championships WHERE id = $1")) {
-      rows = [{ seasonYear: 2026, status: championshipStatus }];
+      rows = [{ id: CHAMPIONSHIP_ID, seasonYear: 2026, status: championshipStatus }];
+    } else if (statement.includes("FROM public.teams WHERE id = ANY")) {
+      rows = [homeTeamId, awayTeamId].map((id) => ({ id }));
+    } else if (statement.includes("SELECT sport_id AS id FROM public.championship_sports")) {
+      rows = [{ id: sportId }];
     } else if (statement.includes("SELECT id, status FROM public.championship_bracket_editions")) {
-      rows = draft ? [{ id: DRAFT_ID, status: "DRAFT" }] : [];
+      rows = draft ? [{ id: DRAFT_ID, status: generated ? "GROUPS_GENERATED" : "DRAFT" }] : [];
     } else if (statement.includes("INSERT INTO public.championship_bracket_editions")) {
       draft = {
         edition_id: DRAFT_ID,
@@ -66,8 +75,20 @@ test("LAJE-150 reads and saves draft in AWS RDS adapter without invoking Supabas
         updated_at: "2026-10-24T10:00:00.000Z",
         updated_by_name: "QA",
       };
+    } else if (
+      statement.includes("UPDATE public.championship_bracket_editions") &&
+      statement.includes("status = 'GROUPS_GENERATED'")
+    ) {
+      generated = true;
+      rows = [{ id: DRAFT_ID, seasonYear: 2026, status: "GROUPS_GENERATED" }];
     } else if (statement.includes("UPDATE public.championship_bracket_editions")) {
       if (draft) draft.payload_snapshot = JSON.parse(String(params[1]));
+    } else if (statement.includes("INSERT INTO public.championship_bracket_competitions")) {
+      rows = [{ id: "85b6ea7b-f791-40fd-94c7-c4747c3d43f9" }];
+    } else if (statement.includes("INSERT INTO public.championship_bracket_groups")) {
+      rows = [{ id: "81b8613e-eb50-4930-8c69-2f5e0a52162e" }];
+    } else if (statement.includes("INSERT INTO public.matches")) {
+      rows = [{ id: "63826d5c-ff49-4566-be1f-a60d0c59d095" }];
     } else if (statement.includes("FROM public.championship_bracket_editions e")) {
       rows = draft ? [draft] : [];
     }
@@ -122,6 +143,30 @@ test("LAJE-150 reads and saves draft in AWS RDS adapter without invoking Supabas
   });
   assert.equal(update.status, 200);
   assert.deepEqual((await update.json()).data.payload_snapshot, { schedule_days: [] });
+
+  const generatedBracket = await fetch(path.replace(/\\/draft$/, "/generate"), {
+    method: "POST",
+    headers: { authorization: "Bearer test", "content-type": "application/json" },
+    body: JSON.stringify({
+      seasonYear: 2026,
+      competitions: [
+        {
+          sportId,
+          naipe: "MASCULINO",
+          groupsCount: 1,
+          qualifiersPerGroup: 1,
+          groups: [{ groupNumber: 1, teamIds: [homeTeamId, awayTeamId] }],
+        },
+      ],
+    }),
+  });
+  assert.equal(generatedBracket.status, 201);
+  assert.equal(generated, true);
+  assert.ok(
+    statements.some((statement) =>
+      statement.includes("UPDATE public.championship_bracket_editions"),
+    ),
+  );
 
   championshipStatus = "IN_PROGRESS";
   const closed = await fetch(path, {
