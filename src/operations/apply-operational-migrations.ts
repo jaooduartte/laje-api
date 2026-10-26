@@ -15,6 +15,7 @@ const MIGRATIONS = [
   "20261007160900_port_exact_preview_triggers.sql",
   "20261007161000_port_exact_preview_api_functions.sql",
   "20261013221800_port_realtime_read_rpc_dependencies.sql",
+  "20261015030000_create_api_rate_limit_windows.sql",
   "20261024180000_restore_match_finish_guards.sql",
   "20261024183000_restore_scheduling_invariants.sql",
   "20261024193000_port_knockout_v8_hydration.sql",

@@ -78,3 +78,7 @@ VITE_API_URL=https://<api>/api/v1
 ```
 
 A ausência de `VITE_API_URL` mantém temporariamente o fluxo Supabase para compatibilidade durante a migração. Isso não representa a arquitetura final.
+
+## Teste local do frontend com a API AWS
+
+O frontend local deve selecionar `VITE_BACKEND_PROVIDER=aws` e apontar para o endpoint AWS configurado. O API Gateway de staging permite a origem publicada do TCC; para desenvolvimento local, use o proxy do servidor Vite documentado na Wiki do projeto. O proxy encaminha as chamadas `/api/v1` para a API AWS sem inicializar o cliente Supabase.
