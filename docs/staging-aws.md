@@ -85,6 +85,16 @@ O RDS continua gerando e armazenando a credencial master no Secrets Manager. A t
 
 Nenhuma credencial real deve ser adicionada à documentação, ao repositório ou aos artefatos de CI.
 
+## Desenvolvimento local conectado ao RDS de staging
+
+O comando `npm start` inicia somente um túnel SSM para o RDS e permanece em execução até ser encerrado com `Ctrl+C`. Configure `AWS_REGION`, `AWS_ECS_CLUSTER`, `AWS_ECS_SERVICE`, `AWS_ECS_CONTAINER`, `AWS_RDS_HOST`, `AWS_RDS_PORT` e `AWS_RDS_LOCAL_PORT` no `.env` local. O exemplo `.env.example` contém os identificadores não secretos do ambiente de staging.
+
+O script procura uma tarefa ECS em execução e monta o destino do ECS Exec dinamicamente; não depende do ID de uma tarefa específica. A sessão SSM permanece no primeiro plano. Antes de usar o script, encerre um túnel manual que já esteja ocupando a porta local configurada.
+
+É necessário ter AWS CLI, Session Manager Plugin, uma sessão AWS válida e permissões para listar/descrever tarefas ECS e iniciar sessões SSM. Se a porta local já estiver ocupada, encerre o túnel existente com `Ctrl+C` antes de iniciar outro. Em um segundo terminal, rode `npm run dev` para iniciar a API, que conecta ao banco pelo endereço local encaminhado pelo túnel. O script não compila a API nem aplica migrations.
+
+Para usar o frontend local junto da API local, configure `VITE_BACKEND_PROVIDER=aws` e `API_PROXY_TARGET=http://localhost:3100` no `.env` do frontend, mantendo a porta da API e `PORT` consistentes. As chamadas `/api/v1` feitas em `http://localhost:8080` serão encaminhadas pelo Vite para a API local.
+
 ## Operação
 
 O workflow `Deploy AWS` oferece:
