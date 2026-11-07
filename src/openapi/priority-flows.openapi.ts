@@ -393,10 +393,11 @@ export const priorityFlowSchemas = {
   },
   AdminContext: {
     type: "object",
-    required: ["id", "email", "role", "profile", "permissions", "canAccessAdminPanel"],
+    required: ["id", "name", "email", "role", "profile", "permissions", "canAccessAdminPanel"],
     additionalProperties: false,
     properties: {
       id: { type: "string", format: "uuid" },
+      name: { type: "string" },
       email: { type: "string", format: "email" },
       role: {
         type: ["string", "null"],

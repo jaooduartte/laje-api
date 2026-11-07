@@ -7,9 +7,11 @@ import { createPostgresRateLimitOptions } from "../../common/middlewares/rate-li
 import {
   optionalBoolean,
   optionalEnum,
+  optionalString,
   requireEnum,
   requireInteger,
   requireRecord,
+  requireString,
   requireUuid,
 } from "../../common/validation/common.schema.js";
 import { database } from "../../database/index.js";
@@ -212,8 +214,8 @@ async function auditGeneration(
       principal?.user.role ?? null,
       String(edition.id),
       "Chave de grupos gerada via laje-api.",
-      JSON.stringify(edition),
-      principal?.user.profile?.name ?? null,
+      edition,
+      principal?.user.name ?? null,
     ],
   );
 }
@@ -432,7 +434,7 @@ export function createBracketRouter(authService: AuthService): Router {
           if (draftId) {
             await tx.query(
               "UPDATE public.championship_bracket_editions SET payload_snapshot = $2::jsonb, updated_by = $3, updated_at = now() WHERE id = $1",
-              [draftId, serialized, userId],
+              [draftId, snapshot, userId],
             );
           } else {
             await tx.query(
@@ -441,13 +443,90 @@ export function createBracketRouter(authService: AuthService): Router {
                 (championship_id, season_year, status, payload_snapshot, created_by, updated_by)
               VALUES ($1, $2, 'DRAFT', $3::jsonb, $4, $4)
               `,
-              [championshipId, seasonYear, serialized, userId],
+              [championshipId, seasonYear, snapshot, userId],
             );
           }
           const result = await tx.query(draftRowSql, [championshipId, seasonYear]);
           return result.rows[0];
         });
         response.status(200).json({ data: saved });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.post(
+    "/draft/workflow-logs",
+    rateLimit(
+      createPostgresRateLimitOptions({
+        scope: "bracket-draft-workflow-log",
+        maxRequests: 30,
+        windowSeconds: 60,
+      }),
+    ),
+    requireAuthentication,
+    requirePermission("matches", "EDIT"),
+    async (request, response, next) => {
+      try {
+        const championshipId = requireUuid(request.params.championshipId, "championshipId");
+        const input = requireRecord(request.body);
+        const actionType = requireEnum(input.actionType, "actionType", ["INSERT", "UPDATE"]);
+        const step = requireString(input.step, "step", 120);
+        const description = optionalString(input.description, "description", 500) ?? null;
+        const workflowAction = requireString(input.workflowAction, "workflowAction", 120);
+        if (input.changedFields != null && !Array.isArray(input.changedFields)) {
+          throw new ApiError(422, "VALIDATION_ERROR", "O campo changedFields deve ser uma lista.");
+        }
+        const changedFields = (input.changedFields ?? []) as unknown[];
+        if (changedFields.length > 100) {
+          throw new ApiError(422, "VALIDATION_ERROR", "Informe no máximo 100 campos alterados.");
+        }
+        const validatedChangedFields = changedFields.map((field, index) =>
+          requireString(field, `changedFields[${index}]`, 160),
+        );
+        const principal = (request as AuthenticatedRequest).authPrincipal;
+        if (!principal) {
+          throw new ApiError(401, "ACCESS_TOKEN_REQUIRED", "Autenticação obrigatória.");
+        }
+        const championship = await database.query(
+          'SELECT current_season_year AS "seasonYear", status FROM public.championships WHERE id = $1',
+          [championshipId],
+        );
+        if (!championship.rows[0]) {
+          throw new ApiError(404, "CHAMPIONSHIP_NOT_FOUND", "Campeonato não encontrado.");
+        }
+        if (championship.rows[0].status !== "UPCOMING") {
+          throw new ApiError(
+            409,
+            "CHAMPIONSHIP_NOT_CONFIGURABLE",
+            "Somente campeonatos em configuração aceitam logs de rascunho.",
+          );
+        }
+        await database.query(
+          `INSERT INTO public.admin_action_logs
+            (actor_user_id, actor_email, actor_role, action_type, resource_table,
+             record_id, description, metadata, actor_name)
+           VALUES ($1, $2, $3::public.app_role, $4::public.admin_action_type,
+             'public.championship_bracket_workflow', NULL, $5, $6::jsonb, $7)`,
+          [
+            principal.userId,
+            principal.user.email,
+            principal.user.role,
+            actionType,
+            description,
+            {
+              source: "laje-api",
+              step,
+              workflow_action: workflowAction,
+              championship_id: championshipId,
+              season_year: championship.rows[0].seasonYear,
+              changed_fields: validatedChangedFields,
+            },
+            principal.user.name,
+          ],
+        );
+        response.status(204).end();
       } catch (error) {
         next(error);
       }

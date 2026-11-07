@@ -28,6 +28,12 @@ const MIGRATIONS = [
   "20261024204000_aws_admin_auth_adapter.sql",
   "20261024205000_port_court_preference_writes.sql",
   "20261024213000_port_championship_review_reconfiguration.sql",
+  "20261104150000_fix_exact_preview_job_event_id_sequence.sql",
+  "20261104170000_fix_bracket_court_preference_sync_helper.sql",
+  "20261104180000_add_championship_sport_estimated_start_time_setting.sql",
+  "20261105004000_fix_bracket_qualification_pool_ranking_recursion.sql",
+  "20261105012000_fix_knockout_match_queue_position_conflicts.sql",
+  "20261106220454_reset_current_championship_season_to_planning.sql",
 ] as const;
 
 const MIGRATION_SCHEMA = "laje_api_internal";

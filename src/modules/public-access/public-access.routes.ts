@@ -120,10 +120,10 @@ async function insertAudit(
       resourceTable,
       recordId,
       description,
-      oldData ? JSON.stringify(oldData) : null,
-      newData ? JSON.stringify(newData) : null,
-      JSON.stringify({ source: "laje-api", task: "LAJE-87" }),
-      principal?.user.profile?.name ?? null,
+      oldData,
+      newData,
+      { source: "laje-api", task: "LAJE-87" },
+      principal?.user.name ?? null,
     ],
   );
 }

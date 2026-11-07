@@ -19,6 +19,24 @@ function requireRequestUserId(request: AuthenticatedRequest): string {
   return userId;
 }
 
+function requireEstimatedStartTimeSettings(value: unknown): Record<string, boolean> {
+  if (value == null) return {};
+  const settings = requireRecord(value, "Configuração de horário estimado inválida.");
+  return Object.fromEntries(
+    Object.entries(settings).map(([sportId, enabled]) => {
+      const validSportId = requireUuid(sportId, "sportId");
+      if (typeof enabled != "boolean") {
+        throw new ApiError(
+          422,
+          "VALIDATION_ERROR",
+          "A configuração de horário estimado deve ser booleana.",
+        );
+      }
+      return [validSportId, enabled];
+    }),
+  );
+}
+
 export function createBracketPreviewRouter(authService: AuthService): Router {
   const router = Router({ mergeParams: true });
   const requireAuthentication = createRequireAuthentication(authService);
@@ -103,14 +121,28 @@ export function createBracketPreviewRouter(authService: AuthService): Router {
         "championshipId",
       );
       const jobId = requireUuid(request.params.jobId, "jobId");
-      const payload = requireRecord(request.body, "Payload de chaveamento inválido.");
+      const requestBody = requireRecord(request.body, "Payload de chaveamento inválido.");
+      const usesCreationEnvelope = Object.hasOwn(requestBody, "payload");
+      const payload = usesCreationEnvelope
+        ? requireRecord(requestBody.payload, "Payload de chaveamento inválido.")
+        : requestBody;
+      const showEstimatedStartTimeOnCardsBySportId = requireEstimatedStartTimeSettings(
+        requestBody.showEstimatedStartTimeOnCardsBySportId,
+      );
       const requestedBy = requireRequestUserId(request as AuthenticatedRequest);
+      const principal = (request as AuthenticatedRequest).authPrincipal;
       await bracketPreviewService.getForChampionship(jobId, championshipId, requestedBy);
       const editionId = await bracketPreviewService.createBracket(
         jobId,
         championshipId,
         payload,
         requestedBy,
+        showEstimatedStartTimeOnCardsBySportId,
+        {
+          email: principal?.user.email ?? null,
+          name: principal?.user.name ?? null,
+          role: principal?.user.role ?? null,
+        },
       );
       response.status(201).json({ data: { editionId } });
     } catch (error) {

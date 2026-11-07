@@ -87,11 +87,23 @@ Nenhuma credencial real deve ser adicionada à documentação, ao repositório o
 
 ## Desenvolvimento local conectado ao RDS de staging
 
-O comando `npm start` inicia somente um túnel SSM para o RDS e permanece em execução até ser encerrado com `Ctrl+C`. Configure `AWS_REGION`, `AWS_ECS_CLUSTER`, `AWS_ECS_SERVICE`, `AWS_ECS_CONTAINER`, `AWS_RDS_HOST`, `AWS_RDS_PORT` e `AWS_RDS_LOCAL_PORT` no `.env` local. O exemplo `.env.example` contém os identificadores não secretos do ambiente de staging.
+O comando `npm start` verifica a conta AWS esperada, inicia o RDS caso esteja parado, ajusta o serviço ECS para uma tarefa e aguarda os recursos ficarem disponíveis. Depois inicia um túnel SSM para o RDS em `127.0.0.1:15432` e permanece em execução até ser encerrado.
 
-O script procura uma tarefa ECS em execução e monta o destino do ECS Exec dinamicamente; não depende do ID de uma tarefa específica. A sessão SSM permanece no primeiro plano. Antes de usar o script, encerre um túnel manual que já esteja ocupando a porta local configurada.
+Configure `AWS_REGION`, `AWS_EXPECTED_ACCOUNT_ID`, `AWS_ECS_CLUSTER`, `AWS_ECS_SERVICE`, `AWS_ECS_CONTAINER`, `AWS_RDS_INSTANCE_IDENTIFIER`, `AWS_RDS_HOST`, `AWS_RDS_PORT` e `AWS_RDS_LOCAL_PORT` no `.env` local. O `.env.example` contém os identificadores não secretos do ambiente de staging e o ID da conta validado. O script procura uma tarefa ECS em execução e monta o destino do ECS Exec dinamicamente; não depende do ID de uma tarefa específica.
 
-É necessário ter AWS CLI, Session Manager Plugin, uma sessão AWS válida e permissões para listar/descrever tarefas ECS e iniciar sessões SSM. Se a porta local já estiver ocupada, encerre o túnel existente com `Ctrl+C` antes de iniciar outro. Em um segundo terminal, rode `npm run dev` para iniciar a API, que conecta ao banco pelo endereço local encaminhado pelo túnel. O script não compila a API nem aplica migrations.
+É necessário ter AWS CLI, Session Manager Plugin, uma sessão AWS válida e permissões para consultar a identidade da conta, consultar/iniciar/parar a instância RDS, consultar/atualizar/aguardar o serviço ECS e iniciar sessões SSM. A porta local é verificada antes e depois de iniciar os recursos; se já estiver ocupada, encerre o túnel existente antes de tentar novamente.
+
+Em outro terminal, rode `npm run dev` para iniciar a API, que conecta ao banco pelo endereço local encaminhado pelo túnel. Configure `DATABASE_URL` ou as variáveis `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_NAME`, `DATABASE_USER`, `DATABASE_PASSWORD` e `DATABASE_SSLMODE` para usar `127.0.0.1:15432` com TLS habilitado. O script não compila a API nem aplica migrations.
+
+Para aplicar as migrations operacionais pendentes no RDS de staging, mantenha o túnel ativo e execute em outro terminal, a partir de `laje-api`:
+
+```bash
+node --import tsx ./src/operations/apply-operational-migrations.ts
+```
+
+O aplicador usa as configurações de banco do `.env` local e executa somente as migrations ainda não registradas no banco alcançado por essas configurações. Confirme que o host e a porta são `127.0.0.1:15432` antes de executar. O comando não altera a configuração do frontend nem o destino AWS da API local.
+
+Pare a API local antes de encerrar o terminal do túnel. `Ctrl+C`, `SIGTERM` ou o fechamento do terminal encerra a sessão SSM e desliga ECS/RDS, aguardando o ECS ficar sem tarefas antes de parar o banco. Se a sessão SSM encerrar por uma falha de rede sem um desses sinais, os recursos permanecem ligados. `npm run aws:on` inicia RDS/ECS sem abrir o túnel e `npm run aws:off` continua disponível para desligamento manual. A AWS reinicia automaticamente o RDS após sete dias consecutivos parado. O ECS permanece provisionado com desired count zero; ALB e API Gateway continuam ativos e podem manter custos.
 
 Para usar o frontend local junto da API local, configure `VITE_BACKEND_PROVIDER=aws` e `API_PROXY_TARGET=http://localhost:3100` no `.env` do frontend, mantendo a porta da API e `PORT` consistentes. As chamadas `/api/v1` feitas em `http://localhost:8080` serão encaminhadas pelo Vite para a API local.
 

@@ -3,6 +3,7 @@ import "dotenv/config";
 import { execFileSync, spawn } from "node:child_process";
 import { createConnection, createServer } from "node:net";
 import { setTimeout as delay } from "node:timers/promises";
+import { startAwsInfrastructure, stopAwsInfrastructure } from "./aws-infrastructure.mjs";
 
 const awsRegion = process.env.AWS_REGION || "sa-east-1";
 const ecsCluster = process.env.AWS_ECS_CLUSTER || "laje-staging-api";
@@ -131,6 +132,8 @@ async function startTunnel() {
   }
 
   await assertLocalPortIsFree(localPort);
+  await startAwsInfrastructure();
+  await assertLocalPortIsFree(localPort);
   const target = resolveRunningEcsExecTarget();
   const parameters = JSON.stringify({
     host: [databaseHost],
@@ -170,31 +173,41 @@ async function startTunnel() {
   console.log(`Túnel SSM conectado em 127.0.0.1:${localPort}. Pressione Ctrl+C para encerrá-lo.`);
 
   return new Promise((resolve, reject) => {
+    let shutdownRequested = false;
     const stopTunnel = (signal) => {
       if (tunnelProcess.exitCode === null && tunnelProcess.signalCode === null) {
+        shutdownRequested = true;
         tunnelProcess.kill(signal);
       }
     };
     const handleSigint = () => stopTunnel("SIGINT");
     const handleSigterm = () => stopTunnel("SIGTERM");
+    const handleSighup = () => stopTunnel("SIGHUP");
 
     process.once("SIGINT", handleSigint);
     process.once("SIGTERM", handleSigterm);
+    process.once("SIGHUP", handleSighup);
 
     tunnelProcess.once("error", reject);
     tunnelProcess.once("exit", (code, signal) => {
       process.removeListener("SIGINT", handleSigint);
       process.removeListener("SIGTERM", handleSigterm);
+      process.removeListener("SIGHUP", handleSighup);
       if (signal) {
         console.log(`Sessão SSM encerrada (${signal}).`);
       }
-      resolve(code ?? 0);
+      resolve({ code: code ?? 0, shutdownRequested });
     });
   });
 }
 
 async function main() {
-  process.exitCode = await startTunnel();
+  const result = await startTunnel();
+  if (result.shutdownRequested) {
+    console.log("Encerramento solicitado. Desligando ECS e RDS.");
+    await stopAwsInfrastructure();
+  }
+  process.exitCode = result.code;
 }
 
 main().catch((error) => {

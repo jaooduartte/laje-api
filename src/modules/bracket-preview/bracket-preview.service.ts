@@ -72,7 +72,7 @@ export class BracketPreviewService {
            $1::uuid,
            $2::jsonb
          ) AS job`,
-        [championshipId, serializedPayload],
+        [championshipId, payload],
       );
       return requireJob(result.rows[0]?.job);
     });
@@ -161,6 +161,8 @@ export class BracketPreviewService {
     championshipId: string,
     payload: Record<string, unknown>,
     requestedBy: string,
+    showEstimatedStartTimeOnCardsBySportId: Record<string, boolean> = {},
+    actor: { email: string | null; name: string | null; role: string | null },
   ): Promise<string> {
     return this.withIdentity(requestedBy, async (executor) => {
       // A draft is only an editable snapshot. Exact-v8 persists a new approved
@@ -188,12 +190,55 @@ export class BracketPreviewService {
            $2::uuid,
            $3::jsonb
          )::text AS edition_id`,
-        [jobId, championshipId, JSON.stringify(payload)],
+        [jobId, championshipId, payload],
       );
       const editionId = result.rows[0]?.edition_id;
       if (typeof editionId !== "string" || !editionId) {
         throw new Error("O motor exato não retornou a edição criada.");
       }
+      for (const [sportId, showEstimatedStartTimeOnCards] of Object.entries(
+        showEstimatedStartTimeOnCardsBySportId,
+      )) {
+        const updatedSetting = await executor.query(
+          `UPDATE public.championship_sports
+              SET show_estimated_start_time_on_cards = $3::boolean
+            WHERE championship_id = $1::uuid
+              AND sport_id = $2::uuid
+            RETURNING id`,
+          [championshipId, sportId, showEstimatedStartTimeOnCards],
+        );
+        if (updatedSetting.count === 0) {
+          throw new Error(
+            "Não foi possível salvar a configuração de horário estimado do Beach Soccer.",
+          );
+        }
+      }
+      await executor.query(
+        `INSERT INTO public.admin_action_logs
+          (actor_user_id, actor_email, actor_name, actor_role, action_type, resource_table,
+           record_id, description, new_data, metadata)
+         VALUES (
+          $1::uuid,
+          $2,
+          $3,
+          $4::public.app_role,
+          'INSERT'::public.admin_action_type,
+          'public.championship_bracket_workflow',
+          NULL,
+          'Chaveamento e jogos do campeonato gerados a partir da prévia exata.',
+          NULL,
+          jsonb_build_object(
+            'source', 'laje-api',
+            'step', 'Revisão',
+            'workflow_action', 'BRACKET_GENERATED',
+            'championship_id', $6::uuid,
+            'edition_id', $5::uuid,
+            'preview_job_id', $7::uuid,
+            'changed_fields', jsonb_build_array()
+          )
+        )`,
+        [requestedBy, actor.email, actor.name, actor.role, editionId, championshipId, jobId],
+      );
       return editionId;
     });
   }

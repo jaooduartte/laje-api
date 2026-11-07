@@ -8,6 +8,8 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.build.json",
     "start": "node scripts/start-local-api.mjs",
+    "aws:on": "node scripts/manage-aws-infrastructure.mjs on",
+    "aws:off": "node scripts/manage-aws-infrastructure.mjs off",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings=0",
     "lint:fix": "eslint . --fix",
