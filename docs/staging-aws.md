@@ -87,9 +87,9 @@ Nenhuma credencial real deve ser adicionada à documentação, ao repositório o
 
 ## Desenvolvimento local conectado ao RDS de staging
 
-O comando `npm start` verifica a conta AWS esperada, inicia o RDS caso esteja parado, ajusta o serviço ECS para uma tarefa e aguarda os recursos ficarem disponíveis. Depois inicia um túnel SSM para o RDS em `127.0.0.1:15432` e permanece em execução até ser encerrado.
+O comando `npm run dev:aws` verifica a conta AWS esperada, inicia os recursos que estiverem parados e aguarda que fiquem disponíveis. Depois inicia um túnel SSM para o RDS em `127.0.0.1:15432` e permanece em execução até ser encerrado. `npm start` inicia a API compilada em `dist/server.js`; execute `npm run build` antes de usá-lo localmente.
 
-Configure `AWS_REGION`, `AWS_EXPECTED_ACCOUNT_ID`, `AWS_ECS_CLUSTER`, `AWS_ECS_SERVICE`, `AWS_ECS_CONTAINER`, `AWS_RDS_INSTANCE_IDENTIFIER`, `AWS_RDS_HOST`, `AWS_RDS_PORT` e `AWS_RDS_LOCAL_PORT` no `.env` local. O `.env.example` contém os identificadores não secretos do ambiente de staging e o ID da conta validado. O script procura uma tarefa ECS em execução e monta o destino do ECS Exec dinamicamente; não depende do ID de uma tarefa específica.
+Configure `AWS_REGION`, `AWS_EXPECTED_ACCOUNT_ID`, `AWS_ECS_CLUSTER`, `AWS_ECS_SERVICE`, `AWS_ECS_CONTAINER`, `AWS_RDS_INSTANCE_IDENTIFIER`, `AWS_RDS_HOST`, `AWS_RDS_PORT` e `AWS_RDS_LOCAL_PORT` no `.env` local. Os valores específicos do ambiente devem ser preenchidos localmente; `.env.example` não contém identificadores reais da infraestrutura. O script procura uma tarefa ECS em execução e monta o destino do ECS Exec dinamicamente; não depende do ID de uma tarefa específica.
 
 É necessário ter AWS CLI, Session Manager Plugin, uma sessão AWS válida e permissões para consultar a identidade da conta, consultar/iniciar/parar a instância RDS, consultar/atualizar/aguardar o serviço ECS e iniciar sessões SSM. A porta local é verificada antes e depois de iniciar os recursos; se já estiver ocupada, encerre o túnel existente antes de tentar novamente.
 
@@ -103,7 +103,7 @@ node --import tsx ./src/operations/apply-operational-migrations.ts
 
 O aplicador usa as configurações de banco do `.env` local e executa somente as migrations ainda não registradas no banco alcançado por essas configurações. Confirme que o host e a porta são `127.0.0.1:15432` antes de executar. O comando não altera a configuração do frontend nem o destino AWS da API local.
 
-Pare a API local antes de encerrar o terminal do túnel. `Ctrl+C`, `SIGTERM` ou o fechamento do terminal encerra a sessão SSM e desliga ECS/RDS, aguardando o ECS ficar sem tarefas antes de parar o banco. Se a sessão SSM encerrar por uma falha de rede sem um desses sinais, os recursos permanecem ligados. `npm run aws:on` inicia RDS/ECS sem abrir o túnel e `npm run aws:off` continua disponível para desligamento manual. A AWS reinicia automaticamente o RDS após sete dias consecutivos parado. O ECS permanece provisionado com desired count zero; ALB e API Gateway continuam ativos e podem manter custos.
+Pare a API local antes de encerrar o terminal do túnel. `Ctrl+C`, `SIGTERM`, `SIGHUP`, uma falha na inicialização ou o encerramento inesperado da sessão SSM acionam o cleanup. O script para apenas ECS/RDS que iniciou naquela sessão, aguardando o ECS ficar sem tarefas antes de parar o banco. `npm run aws:on` inicia RDS/ECS sem abrir o túnel e `npm run aws:off` continua disponível para desligamento manual completo. A AWS reinicia automaticamente o RDS após sete dias consecutivos parado. O ECS permanece provisionado com desired count zero; ALB e API Gateway continuam ativos e podem manter custos.
 
 Para usar o frontend local junto da API local, configure `VITE_BACKEND_PROVIDER=aws` e `API_PROXY_TARGET=http://localhost:3100` no `.env` do frontend, mantendo a porta da API e `PORT` consistentes. As chamadas `/api/v1` feitas em `http://localhost:8080` serão encaminhadas pelo Vite para a API local.
 

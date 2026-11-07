@@ -3,12 +3,16 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 const awsRegion = process.env.AWS_REGION || "sa-east-1";
-const expectedAccountId = process.env.AWS_EXPECTED_ACCOUNT_ID || "549243453554";
-const ecsCluster = process.env.AWS_ECS_CLUSTER || "laje-staging-api";
-const ecsService = process.env.AWS_ECS_SERVICE || "laje-staging-api";
-const rdsInstanceIdentifier = process.env.AWS_RDS_INSTANCE_IDENTIFIER || "laje-staging-postgres";
 const rdsStoppedPollIntervalMs = 15_000;
 const rdsStoppedTimeoutMs = 30 * 60 * 1_000;
+
+function requiredEnvironmentValue(name) {
+  const value = process.env[name]?.trim();
+  if (!value) {
+    throw new Error(`${name} precisa ser configurado no .env local.`);
+  }
+  return value;
+}
 
 async function runAws(argumentsList, description, outputJson = false) {
   const options = ["--region", awsRegion, "--no-cli-pager"];
@@ -26,6 +30,7 @@ async function runAws(argumentsList, description, outputJson = false) {
 }
 
 async function assertExpectedAwsAccount() {
+  const expectedAccountId = requiredEnvironmentValue("AWS_EXPECTED_ACCOUNT_ID");
   if (!/^\d{12}$/.test(expectedAccountId)) {
     throw new Error("AWS_EXPECTED_ACCOUNT_ID precisa conter um ID de conta AWS com 12 dígitos.");
   }
@@ -48,6 +53,7 @@ async function assertExpectedAwsAccount() {
 }
 
 async function getRdsStatus() {
+  const rdsInstanceIdentifier = requiredEnvironmentValue("AWS_RDS_INSTANCE_IDENTIFIER");
   const response = await runAws(
     ["rds", "describe-db-instances", "--db-instance-identifier", rdsInstanceIdentifier],
     "consultar a instância RDS " + rdsInstanceIdentifier,
@@ -63,6 +69,7 @@ async function getRdsStatus() {
 }
 
 async function waitForRds(status) {
+  const rdsInstanceIdentifier = requiredEnvironmentValue("AWS_RDS_INSTANCE_IDENTIFIER");
   console.log("Aguardando o RDS " + rdsInstanceIdentifier + " ficar " + status + "...");
 
   if (status === "stopped") {
@@ -93,7 +100,7 @@ async function waitForRds(status) {
   );
 }
 
-async function startRds() {
+async function startRds(resourcesStartedBySession) {
   let status = await getRdsStatus();
 
   if (status === "available") {
@@ -107,6 +114,8 @@ async function startRds() {
   }
 
   if (status === "stopped") {
+    resourcesStartedBySession.rds = true;
+    const rdsInstanceIdentifier = requiredEnvironmentValue("AWS_RDS_INSTANCE_IDENTIFIER");
     console.log("Iniciando o RDS...");
     await runAws(
       ["rds", "start-db-instance", "--db-instance-identifier", rdsInstanceIdentifier],
@@ -121,6 +130,7 @@ async function startRds() {
 }
 
 async function stopRds() {
+  const rdsInstanceIdentifier = requiredEnvironmentValue("AWS_RDS_INSTANCE_IDENTIFIER");
   let status = await getRdsStatus();
 
   if (status === "stopped") {
@@ -153,6 +163,8 @@ async function stopRds() {
 }
 
 async function getEcsService() {
+  const ecsCluster = requiredEnvironmentValue("AWS_ECS_CLUSTER");
+  const ecsService = requiredEnvironmentValue("AWS_ECS_SERVICE");
   const response = await runAws(
     ["ecs", "describe-services", "--cluster", ecsCluster, "--services", ecsService],
     "consultar o serviço ECS " + ecsService,
@@ -178,8 +190,19 @@ async function getEcsService() {
   return service;
 }
 
-async function setEcsDesiredCount(desiredCount) {
-  const service = await getEcsService();
+async function waitForEcsServiceToStabilize() {
+  const ecsCluster = requiredEnvironmentValue("AWS_ECS_CLUSTER");
+  const ecsService = requiredEnvironmentValue("AWS_ECS_SERVICE");
+  console.log("Aguardando o serviço ECS estabilizar...");
+  await runAws(
+    ["ecs", "wait", "services-stable", "--cluster", ecsCluster, "--services", ecsService],
+    "aguardar a estabilização do serviço ECS",
+  );
+}
+
+async function updateEcsDesiredCount(desiredCount, service) {
+  const ecsCluster = requiredEnvironmentValue("AWS_ECS_CLUSTER");
+  const ecsService = requiredEnvironmentValue("AWS_ECS_SERVICE");
 
   if (service.desiredCount !== desiredCount) {
     console.log(
@@ -203,23 +226,81 @@ async function setEcsDesiredCount(desiredCount) {
     console.log("Serviço ECS já está configurado com desired count " + String(desiredCount) + ".");
   }
 
-  console.log("Aguardando o serviço ECS estabilizar...");
-  await runAws(
-    ["ecs", "wait", "services-stable", "--cluster", ecsCluster, "--services", ecsService],
-    "aguardar a estabilização do serviço ECS",
+  await waitForEcsServiceToStabilize();
+}
+
+async function setEcsDesiredCount(desiredCount) {
+  const service = await getEcsService();
+  await updateEcsDesiredCount(desiredCount, service);
+}
+
+async function startEcs(resourcesStartedBySession) {
+  const service = await getEcsService();
+  if (service.desiredCount === 0) {
+    resourcesStartedBySession.ecs = true;
+    await updateEcsDesiredCount(1, service);
+    return;
+  }
+
+  console.log(
+    `Serviço ECS já tinha desired count ${String(service.desiredCount)}; mantendo o estado existente.`,
   );
+  await waitForEcsServiceToStabilize();
 }
 
 export async function startAwsInfrastructure() {
-  await assertExpectedAwsAccount();
-  await startRds();
-  await setEcsDesiredCount(1);
-  console.log("RDS e ECS estão disponíveis para o desenvolvimento local.");
+  const resourcesStartedBySession = { ecs: false, rds: false };
+  try {
+    await assertExpectedAwsAccount();
+    await startRds(resourcesStartedBySession);
+    await startEcs(resourcesStartedBySession);
+    console.log("RDS e ECS estão disponíveis para o desenvolvimento local.");
+    return resourcesStartedBySession;
+  } catch (error) {
+    if (!resourcesStartedBySession.rds && !resourcesStartedBySession.ecs) {
+      throw error;
+    }
+    try {
+      await stopAwsInfrastructure(resourcesStartedBySession);
+    } catch (cleanupError) {
+      throw new AggregateError(
+        [error, cleanupError],
+        "Falha ao iniciar a infraestrutura AWS e ao limpar os recursos iniciados pela sessão.",
+        { cause: cleanupError },
+      );
+    }
+    throw error;
+  }
 }
 
-export async function stopAwsInfrastructure() {
+export async function stopAwsInfrastructure(resourcesStartedBySession) {
+  const stopAll = resourcesStartedBySession === undefined;
+  const shouldStopEcs = stopAll || resourcesStartedBySession.ecs;
+  const shouldStopRds = stopAll || resourcesStartedBySession.rds;
+  if (!shouldStopEcs && !shouldStopRds) return;
+
   await assertExpectedAwsAccount();
-  await setEcsDesiredCount(0);
-  await stopRds();
-  console.log("ECS e RDS foram parados.");
+  const cleanupErrors = [];
+  if (shouldStopEcs) {
+    try {
+      await setEcsDesiredCount(0);
+    } catch (error) {
+      cleanupErrors.push(error);
+    }
+  }
+  if (shouldStopRds) {
+    try {
+      await stopRds();
+    } catch (error) {
+      cleanupErrors.push(error);
+    }
+  }
+  if (cleanupErrors.length > 0) {
+    throw new AggregateError(cleanupErrors, "Falha ao desligar os recursos AWS da sessão.");
+  }
+  console.log(
+    stopAll
+      ? "ECS e RDS foram parados."
+      : "Os recursos AWS iniciados por esta sessão foram parados.",
+  );
 }

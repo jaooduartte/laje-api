@@ -34,6 +34,7 @@ const MIGRATIONS = [
   "20261105004000_fix_bracket_qualification_pool_ranking_recursion.sql",
   "20261105012000_fix_knockout_match_queue_position_conflicts.sql",
   "20261106220454_reset_current_championship_season_to_planning.sql",
+  "20261107164222_harden_championship_status_transition_search_path.sql",
 ] as const;
 
 const MIGRATION_SCHEMA = "laje_api_internal";

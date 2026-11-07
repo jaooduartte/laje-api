@@ -106,21 +106,30 @@ psql "$DATABASE_URL" \
 
 O baseline não contém dados produtivos, Supabase Auth, Storage, Realtime, policies RLS específicas da plataforma, Edge Functions ou jobs operacionais. Detalhes estão em [docs/migration/database-baseline.md](docs/migration/database-baseline.md).
 
+## Executar a API compilada
+
+Compile e inicie a API HTTP com os comandos abaixo:
+
+```bash
+npm run build
+npm start
+```
+
 ## Executar a API local com o RDS de staging
 
 Configure a conexão PostgreSQL no `.env` para usar o host `127.0.0.1`, a porta `15432` e TLS. Você pode usar `DATABASE_URL` ou as variáveis `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_NAME`, `DATABASE_USER`, `DATABASE_PASSWORD` e `DATABASE_SSLMODE`.
 
 ```bash
-npm start
+npm run dev:aws
 ```
 
-O `npm start` confere a conta AWS configurada, inicia o RDS se necessário, ajusta o serviço ECS para uma tarefa e aguarda ambos ficarem prontos. Em seguida abre o túnel SSM em `127.0.0.1:15432`. Mantenha esse processo em execução. Em outro terminal, execute:
+O `npm run dev:aws` confere a conta AWS configurada, inicia os recursos que estiverem parados e abre o túnel SSM em `127.0.0.1:15432`. Recursos que já estavam ativos são preservados quando a sessão termina. Mantenha esse processo em execução. Em outro terminal, execute:
 
 ```bash
 npm run dev
 ```
 
-Ao terminar, pare `npm run dev` e pressione `Ctrl+C` no terminal de `npm start`. Isso encerra o túnel e desliga ECS/RDS. O fechamento do terminal ou um sinal `SIGTERM` também dispara o desligamento. Se a sessão SSM cair sozinha por falha de rede, os recursos permanecem ligados; nesse caso, use `npm run aws:off` quando terminar. `npm run aws:on` inicia somente os recursos, sem abrir o túnel. O serviço ECS permanece provisionado com desired count zero quando desligado; o ALB e o API Gateway continuam ativos e podem manter custos. A AWS reinicia automaticamente uma instância RDS que permaneça parada por sete dias consecutivos.
+Ao terminar, pare `npm run dev` e pressione `Ctrl+C` no terminal de `npm run dev:aws`. Isso encerra o túnel e para apenas os recursos que essa sessão iniciou. Falhas de inicialização, encerramento do processo SSM, `SIGINT`, `SIGTERM` e `SIGHUP` também disparam o cleanup. `npm run aws:off` continua disponível para parar explicitamente todos os recursos. `npm run aws:on` inicia somente os recursos, sem abrir o túnel. O serviço ECS permanece provisionado com desired count zero quando desligado; o ALB e o API Gateway continuam ativos e podem manter custos. A AWS reinicia automaticamente uma instância RDS que permaneça parada por sete dias consecutivos.
 
 No startup, a aplicação local valida a conexão PostgreSQL antes de abrir a porta HTTP. Se `DATABASE_URL` estiver ausente ou o banco estiver inacessível, a inicialização deve falhar em vez de disponibilizar uma API parcialmente funcional.
 
@@ -158,7 +167,8 @@ A documentação não é montada automaticamente em `test` nem em `production`. 
 | --- | --- |
 | `npm run dev` | Executa o servidor TypeScript em modo watch |
 | `npm run build` | Compila TypeScript para `dist/` |
-| `npm start` | Inicia RDS/ECS se necessário e abre o túnel SSM local |
+| `npm start` | Inicia a API compilada em `dist/server.js` |
+| `npm run dev:aws` | Inicia recursos AWS parados e abre o túnel SSM local |
 | `npm run aws:on` | Inicia RDS/ECS e aguarda disponibilidade, sem abrir o túnel |
 | `npm run aws:off` | Define ECS com zero tarefas e para o RDS |
 | `npm run typecheck` | Valida tipos sem emitir arquivos |

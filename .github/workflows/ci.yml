@@ -170,6 +170,7 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/laje_api_test?sslmode=disable
+      CHAMPIONSHIP_RESET_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/laje_season_reset_test?sslmode=disable
       PGPASSWORD: postgres
 
     steps:
@@ -184,6 +185,18 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Install PostgreSQL client for reset integration tests
+        if: needs.quality.outputs.postgres_integration == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Prepare isolated championship reset database
+        if: needs.quality.outputs.postgres_integration == 'true'
+        run: |
+          createdb --host localhost --username postgres laje_season_reset_test
+          psql --host localhost --username postgres --dbname laje_season_reset_test --set ON_ERROR_STOP=1 --file infra/database/baseline/schema.sql
 
       - name: Run PostgreSQL integration tests
         if: needs.quality.outputs.postgres_integration == 'true'

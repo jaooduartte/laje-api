@@ -14,6 +14,8 @@ const qualificationPoolRankingMigrationName =
   "20261105004000_fix_bracket_qualification_pool_ranking_recursion.sql";
 const currentSeasonResetMigrationName =
   "20261106220454_reset_current_championship_season_to_planning.sql";
+const currentSeasonResetSearchPathMigrationName =
+  "20261107164222_harden_championship_status_transition_search_path.sql";
 
 test("LAJE-149 registers the rate limit table migration before the AWS API starts", async () => {
   const runner = await readFile(resolve("src/operations/apply-operational-migrations.ts"), "utf8");
@@ -149,4 +151,23 @@ test("registers the transactional current season reset status guard for the API 
   assert.match(migration, /allow_championship_planning_transition/i);
   assert.match(migration, /CREATE TRIGGER validate_championship_status_transition_trigger/i);
   assert.match(migration, /current_setting\('laje\.allow_championship_planning_transition'/i);
+});
+
+test("registers the championship status function search path hardening", async () => {
+  const runner = await readFile(resolve("src/operations/apply-operational-migrations.ts"), "utf8");
+  const migration = await readFile(
+    resolve("infra/database/migrations", currentSeasonResetSearchPathMigrationName),
+    "utf8",
+  );
+  const resetMigrationIndex = runner.indexOf(`"${currentSeasonResetMigrationName}"`);
+  const searchPathMigrationIndex = runner.indexOf(`"${currentSeasonResetSearchPathMigrationName}"`);
+  const statements = splitSqlStatements(migration);
+
+  assert.ok(resetMigrationIndex >= 0);
+  assert.ok(searchPathMigrationIndex > resetMigrationIndex);
+  assert.equal(statements.length, 1);
+  assert.match(
+    migration,
+    /ALTER FUNCTION public\.validate_championship_status_transition\(\) SET search_path = ''/i,
+  );
 });

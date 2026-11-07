@@ -41,7 +41,7 @@ const TEAM_DIVISIONS = ["DIVISAO_PRINCIPAL", "DIVISAO_ACESSO"] as const;
 
 const CHAMPIONSHIP_SELECT = `SELECT id, code, name, status, current_season_year AS "currentSeasonYear", uses_divisions AS "usesDivisions", default_location AS "defaultLocation", created_at::text AS "createdAt" FROM public.championships`;
 
-const CURRENT_SEASON_DELETE_OPERATIONS: Array<{
+export const CURRENT_SEASON_DELETE_OPERATIONS: Array<{
   schema?: string;
   table: string;
   condition: string;
