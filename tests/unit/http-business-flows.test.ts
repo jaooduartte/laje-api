@@ -51,6 +51,7 @@ const principal = {
   sessionId: ID,
   user: {
     id: ADMIN_ID,
+    name: "João Duarte",
     email: "ci@example.invalid",
     role: "admin" as const,
     profile: null,
@@ -87,9 +88,10 @@ const champ = {
 
 test("LAJE-38 HTTP controller coverage uses only synthetic database adapters", async (t) => {
   const executedSql: string[] = [];
+  const executedParameters: unknown[][] = [];
   let status = "SCHEDULED";
-  const homeScore = 0;
-  const awayScore = 0;
+  let homeScore = 0;
+  let awayScore = 0;
   const match = () => ({
     id: ID,
     championshipId: ID,
@@ -109,9 +111,10 @@ test("LAJE-38 HTTP controller coverage uses only synthetic database adapters", a
 
   const query = async <Row extends DatabaseRow = DatabaseRow>(
     statement: string,
-    _parameters?: readonly unknown[],
+    parameters?: readonly unknown[],
   ): Promise<{ rows: Row[]; count: number }> => {
     executedSql.push(statement);
+    executedParameters.push(parameters ? [...parameters] : []);
     let rows: Record<string, unknown>[] = [];
     if (
       /UPDATE public.matches SET/.test(statement) ||
@@ -120,7 +123,11 @@ test("LAJE-38 HTTP controller coverage uses only synthetic database adapters", a
       if (/SET status = 'LIVE'/.test(statement)) status = "LIVE";
       else if (/SET status = 'FINISHED'/.test(statement)) status = "FINISHED";
       else if (/SET\s+status = 'SCHEDULED'/.test(statement)) status = "SCHEDULED";
+      if (/home_score = \$2/.test(statement)) homeScore = Number(parameters?.[1]);
+      if (/away_score = \$3/.test(statement)) awayScore = Number(parameters?.[2]);
       rows = [{ id: ID }];
+    } else if (/FROM match_context mc/.test(statement)) {
+      rows = [{ context: { supports_cards: true } }];
     } else if (
       /FROM public.matches m/.test(statement) &&
       /JOIN public.championships/.test(statement)
@@ -198,6 +205,14 @@ test("LAJE-38 HTTP controller coverage uses only synthetic database adapters", a
   // Public browsing includes full list/query paths and input validation.
   assert.equal((jsonBody(await call("/matches")).data as unknown[]).length, 1);
   assert.equal((jsonBody(await call("/matches/" + ID)).data as Record<string, unknown>).id, ID);
+  assert.equal((await call("/matches/" + ID + "/score-sheet-awards")).status, 200);
+  assert.ok(
+    executedSql.some(
+      (statement) =>
+        statement.includes("AS effective_supports_cards") &&
+        statement.includes("'supports_cards', mc.effective_supports_cards"),
+    ),
+  );
   assert.equal((jsonBody(await call("/championships")).data as unknown[]).length, 1);
   assert.equal(
     (jsonBody(await call("/championships/" + ID)).data as Record<string, unknown>).id,
@@ -216,6 +231,19 @@ test("LAJE-38 HTTP controller coverage uses only synthetic database adapters", a
   });
   assert.equal(score.status, 200);
   assert.equal((score.body.data as Record<string, unknown>).status, "LIVE");
+  const scoreAuditIndex = executedSql.findLastIndex(
+    (statement) =>
+      statement.includes("INSERT INTO public.admin_action_logs") &&
+      statement.includes("old_data, new_data, metadata, actor_name"),
+  );
+  assert.notEqual(scoreAuditIndex, -1);
+  const scoreAuditParameters = executedParameters[scoreAuditIndex] ?? [];
+  assert.equal(scoreAuditParameters[7], "João Duarte");
+  assert.equal(typeof scoreAuditParameters[5], "object");
+  assert.equal(typeof scoreAuditParameters[6], "object");
+  assert.equal((scoreAuditParameters[5] as Record<string, unknown>).homeScore, 0);
+  assert.equal((scoreAuditParameters[6] as Record<string, unknown>).homeScore, 2);
+  assert.equal((scoreAuditParameters[6] as Record<string, unknown>).awayScore, 1);
   const invalid = await call("/matches/" + ID + "/scoreboard", {
     method: "PATCH",
     body: JSON.stringify({ homeScore: -1 }),

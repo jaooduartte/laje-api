@@ -41,6 +41,227 @@ const TEAM_DIVISIONS = ["DIVISAO_PRINCIPAL", "DIVISAO_ACESSO"] as const;
 
 const CHAMPIONSHIP_SELECT = `SELECT id, code, name, status, current_season_year AS "currentSeasonYear", uses_divisions AS "usesDivisions", default_location AS "defaultLocation", created_at::text AS "createdAt" FROM public.championships`;
 
+export const CURRENT_SEASON_DELETE_OPERATIONS: Array<{
+  schema?: string;
+  table: string;
+  condition: string;
+  optional?: boolean;
+}> = [
+  {
+    schema: "championship_bracket_preview_private",
+    table: "jobs",
+    condition: "championship_id = $1 AND season_year = $2",
+  },
+  {
+    table: "championship_knockout_result_corrections",
+    condition: "championship_id = $1 AND season_year = $2",
+  },
+  {
+    table: "match_award_goal_scorers",
+    condition:
+      "match_id IN (SELECT matches_table.id FROM public.matches AS matches_table WHERE matches_table.championship_id = $1 AND matches_table.season_year = $2)",
+  },
+  {
+    table: "match_blue_card_players",
+    condition:
+      "match_id IN (SELECT matches_table.id FROM public.matches AS matches_table WHERE matches_table.championship_id = $1 AND matches_table.season_year = $2)",
+  },
+  {
+    table: "match_red_card_players",
+    condition:
+      "match_id IN (SELECT matches_table.id FROM public.matches AS matches_table WHERE matches_table.championship_id = $1 AND matches_table.season_year = $2)",
+  },
+  {
+    table: "match_yellow_card_players",
+    condition:
+      "match_id IN (SELECT matches_table.id FROM public.matches AS matches_table WHERE matches_table.championship_id = $1 AND matches_table.season_year = $2)",
+  },
+  {
+    table: "match_two_minute_penalty_players",
+    optional: true,
+    condition:
+      "match_id IN (SELECT matches_table.id FROM public.matches AS matches_table WHERE matches_table.championship_id = $1 AND matches_table.season_year = $2)",
+  },
+  {
+    table: "match_sets",
+    condition:
+      "match_id IN (SELECT matches_table.id FROM public.matches AS matches_table WHERE matches_table.championship_id = $1 AND matches_table.season_year = $2)",
+  },
+  {
+    table: "championship_individual_event_entry_members",
+    condition:
+      "entry_id IN (SELECT entries_table.id FROM public.championship_individual_event_entries AS entries_table JOIN public.championship_individual_events AS events_table ON events_table.id = entries_table.event_id WHERE events_table.championship_id = $1 AND events_table.season_year = $2)",
+  },
+  {
+    table: "championship_individual_event_entries",
+    condition:
+      "event_id IN (SELECT events_table.id FROM public.championship_individual_events AS events_table WHERE events_table.championship_id = $1 AND events_table.season_year = $2)",
+  },
+  {
+    table: "championship_interlaje_individual_tie_break_resolutions",
+    condition:
+      "event_id IN (SELECT events_table.id FROM public.championship_individual_events AS events_table WHERE events_table.championship_id = $1 AND events_table.season_year = $2)",
+  },
+  {
+    table: "championship_individual_events",
+    condition: "championship_id = $1 AND season_year = $2",
+  },
+  {
+    table: "championship_individual_sessions",
+    condition: "championship_id = $1 AND season_year = $2",
+  },
+  {
+    table: "championship_individual_team_standings",
+    condition: "championship_id = $1 AND season_year = $2",
+  },
+  {
+    table: "championship_award_draw_results",
+    condition: "championship_id = $1 AND season_year = $2",
+  },
+  {
+    table: "championship_award_players",
+    condition: "championship_id = $1 AND season_year = $2",
+  },
+  {
+    table: "championship_competition_team_disqualifications",
+    condition: "championship_id = $1 AND season_year = $2",
+  },
+  {
+    table: "championship_interlaje_ranking_audits",
+    condition: "championship_id = $1 AND season_year = $2",
+  },
+  {
+    table: "championship_interlaje_tie_break_resolutions",
+    condition: "championship_id = $1 AND season_year = $2",
+  },
+  {
+    table: "championship_opening_ceremony_bonus_settings",
+    condition: "championship_id = $1 AND season_year = $2",
+  },
+  {
+    table: "championship_overall_competition_placements",
+    condition: "championship_id = $1 AND season_year = $2",
+  },
+  {
+    table: "championship_overall_position_point_settings",
+    condition: "championship_id = $1 AND season_year = $2",
+  },
+  {
+    table: "championship_overall_score_adjustments",
+    condition: "championship_id = $1 AND season_year = $2",
+  },
+  {
+    table: "championship_overall_tie_break_resolution_teams",
+    condition:
+      "resolution_id IN (SELECT resolutions_table.id FROM public.championship_overall_tie_break_resolutions AS resolutions_table WHERE resolutions_table.championship_id = $1 AND resolutions_table.season_year = $2)",
+  },
+  {
+    table: "championship_overall_tie_break_resolutions",
+    condition: "championship_id = $1 AND season_year = $2",
+  },
+  {
+    table: "championship_season_division_movements",
+    condition: "championship_id = $1 AND season_year = $2",
+  },
+  {
+    table: "championship_season_settings",
+    condition: "championship_id = $1 AND season_year = $2",
+  },
+  {
+    table: "championship_season_sport_removals",
+    condition: "championship_id = $1 AND season_year = $2",
+  },
+  {
+    table: "championship_walkover_penalty_counts",
+    condition: "championship_id = $1 AND season_year = $2",
+  },
+  {
+    table: "championship_walkover_penalty_settings",
+    condition: "championship_id = $1 AND season_year = $2",
+  },
+  { table: "standings", condition: "championship_id = $1 AND season_year = $2" },
+  {
+    table: "championship_bracket_team_registrations",
+    condition:
+      "bracket_edition_id IN (SELECT edition_table.id FROM public.championship_bracket_editions AS edition_table WHERE edition_table.championship_id = $1 AND edition_table.season_year = $2)",
+  },
+  {
+    table: "championship_bracket_team_modalities",
+    condition:
+      "bracket_edition_id IN (SELECT edition_table.id FROM public.championship_bracket_editions AS edition_table WHERE edition_table.championship_id = $1 AND edition_table.season_year = $2)",
+  },
+  {
+    table: "championship_bracket_tie_break_resolution_teams",
+    condition:
+      "resolution_id IN (SELECT resolution_table.id FROM public.championship_bracket_tie_break_resolutions AS resolution_table WHERE resolution_table.bracket_edition_id IN (SELECT edition_table.id FROM public.championship_bracket_editions AS edition_table WHERE edition_table.championship_id = $1 AND edition_table.season_year = $2))",
+  },
+  {
+    table: "championship_bracket_tie_break_resolutions",
+    condition:
+      "bracket_edition_id IN (SELECT edition_table.id FROM public.championship_bracket_editions AS edition_table WHERE edition_table.championship_id = $1 AND edition_table.season_year = $2)",
+  },
+  {
+    table: "championship_bracket_location_sport_priorities",
+    condition:
+      "bracket_edition_id IN (SELECT edition_table.id FROM public.championship_bracket_editions AS edition_table WHERE edition_table.championship_id = $1 AND edition_table.season_year = $2)",
+  },
+  {
+    table: "championship_bracket_knockout_court_priorities",
+    condition:
+      "bracket_edition_id IN (SELECT edition_table.id FROM public.championship_bracket_editions AS edition_table WHERE edition_table.championship_id = $1 AND edition_table.season_year = $2)",
+  },
+  {
+    table: "championship_bracket_day_breaks",
+    condition:
+      "bracket_day_id IN (SELECT day_table.id FROM public.championship_bracket_days AS day_table WHERE day_table.bracket_edition_id IN (SELECT edition_table.id FROM public.championship_bracket_editions AS edition_table WHERE edition_table.championship_id = $1 AND edition_table.season_year = $2))",
+  },
+  {
+    table: "championship_bracket_court_sports",
+    condition:
+      "bracket_court_id IN (SELECT court_table.id FROM public.championship_bracket_courts AS court_table JOIN public.championship_bracket_locations AS location_table ON location_table.id = court_table.bracket_location_id JOIN public.championship_bracket_days AS day_table ON day_table.id = location_table.bracket_day_id WHERE day_table.bracket_edition_id IN (SELECT edition_table.id FROM public.championship_bracket_editions AS edition_table WHERE edition_table.championship_id = $1 AND edition_table.season_year = $2))",
+  },
+  {
+    table: "championship_bracket_courts",
+    condition:
+      "bracket_location_id IN (SELECT location_table.id FROM public.championship_bracket_locations AS location_table JOIN public.championship_bracket_days AS day_table ON day_table.id = location_table.bracket_day_id WHERE day_table.bracket_edition_id IN (SELECT edition_table.id FROM public.championship_bracket_editions AS edition_table WHERE edition_table.championship_id = $1 AND edition_table.season_year = $2))",
+  },
+  {
+    table: "championship_bracket_locations",
+    condition:
+      "bracket_day_id IN (SELECT day_table.id FROM public.championship_bracket_days AS day_table WHERE day_table.bracket_edition_id IN (SELECT edition_table.id FROM public.championship_bracket_editions AS edition_table WHERE edition_table.championship_id = $1 AND edition_table.season_year = $2))",
+  },
+  {
+    table: "championship_bracket_days",
+    condition:
+      "bracket_edition_id IN (SELECT edition_table.id FROM public.championship_bracket_editions AS edition_table WHERE edition_table.championship_id = $1 AND edition_table.season_year = $2)",
+  },
+  {
+    table: "championship_bracket_group_teams",
+    condition:
+      "group_id IN (SELECT group_table.id FROM public.championship_bracket_groups AS group_table JOIN public.championship_bracket_competitions AS competition_table ON competition_table.id = group_table.competition_id WHERE competition_table.bracket_edition_id IN (SELECT edition_table.id FROM public.championship_bracket_editions AS edition_table WHERE edition_table.championship_id = $1 AND edition_table.season_year = $2))",
+  },
+  {
+    table: "championship_bracket_matches",
+    condition:
+      "bracket_edition_id IN (SELECT edition_table.id FROM public.championship_bracket_editions AS edition_table WHERE edition_table.championship_id = $1 AND edition_table.season_year = $2)",
+  },
+  { table: "matches", condition: "championship_id = $1 AND season_year = $2" },
+  {
+    table: "championship_bracket_groups",
+    condition:
+      "competition_id IN (SELECT competition_table.id FROM public.championship_bracket_competitions AS competition_table WHERE competition_table.bracket_edition_id IN (SELECT edition_table.id FROM public.championship_bracket_editions AS edition_table WHERE edition_table.championship_id = $1 AND edition_table.season_year = $2))",
+  },
+  {
+    table: "championship_bracket_competitions",
+    condition:
+      "bracket_edition_id IN (SELECT edition_table.id FROM public.championship_bracket_editions AS edition_table WHERE edition_table.championship_id = $1 AND edition_table.season_year = $2)",
+  },
+  {
+    table: "championship_bracket_editions",
+    condition: "championship_id = $1 AND season_year = $2",
+  },
+];
+
 async function getChampionship(executor: DatabaseQueryExecutor, championshipId: string) {
   const result = await executor.query(`${CHAMPIONSHIP_SELECT} WHERE id = $1`, [championshipId]);
   return result.rows[0] ?? null;
@@ -69,9 +290,9 @@ async function insertAudit(
       resourceTable,
       recordId,
       description,
-      oldData ? JSON.stringify(oldData) : null,
-      newData ? JSON.stringify(newData) : null,
-      principal?.user.profile?.name ?? null,
+      oldData,
+      newData,
+      principal?.user.name ?? null,
     ],
   );
 }
@@ -250,6 +471,18 @@ export function createChampionshipsRouter(authService: AuthService): Router {
         const oldRecord = await getChampionship(tx, championshipId);
         if (!oldRecord)
           throw new ApiError(404, "CHAMPIONSHIP_NOT_FOUND", "Campeonato não encontrado.");
+        if (
+          updates.some((update) => update.column === "status" && update.value === "PLANNING") &&
+          oldRecord.status !== "PLANNING"
+        ) {
+          throw new ApiError(
+            409,
+            "CHAMPIONSHIP_SEASON_RESET_REQUIRED",
+            oldRecord.status === "FINISHED"
+              ? "Reabra o campeonato como Em andamento antes de voltar para Em breve."
+              : "A mudança para Em breve exige confirmar o reset da temporada atual.",
+          );
+        }
         const assignments = updates.map(
           (update, index) =>
             `${update.column} = $${index + 2}${update.cast ? `::${update.cast}` : ""}`,
@@ -409,6 +642,9 @@ export function createChampionshipsRouter(authService: AuthService): Router {
           }
 
           await tx.query(
+            "SELECT set_config('laje.allow_championship_planning_transition', 'true', true)",
+          );
+          await tx.query(
             `UPDATE public.championships
              SET current_season_year = $2, status = 'PLANNING'::public.championship_status
              WHERE id = $1`,
@@ -489,6 +725,166 @@ export function createChampionshipsRouter(authService: AuthService): Router {
             "Jogos e chaveamento da temporada removidos via laje-api.",
             { matches: matches.rows, editions: editions.rows },
             null,
+          );
+        });
+        response.status(204).send();
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  router.post(
+    "/:championshipId/seasons/:seasonYear/reset-to-planning",
+    ...requireSettingsEdit,
+    async (request, response, next) => {
+      try {
+        const championshipId = requireUuid(request.params.championshipId, "championshipId");
+        const seasonYear = requireInteger(request.params.seasonYear, "seasonYear", {
+          min: 2000,
+          max: 2100,
+        });
+        const principal = (request as AuthenticatedRequest).authPrincipal;
+        await database.transaction(async (tx) => {
+          const championshipResult = await tx.query(
+            `${CHAMPIONSHIP_SELECT} WHERE id = $1 FOR UPDATE`,
+            [championshipId],
+          );
+          const oldRecord = championshipResult.rows[0];
+          if (!oldRecord)
+            throw new ApiError(404, "CHAMPIONSHIP_NOT_FOUND", "Campeonato não encontrado.");
+          if (Number(oldRecord.currentSeasonYear) !== seasonYear) {
+            throw new ApiError(
+              409,
+              "CHAMPIONSHIP_SEASON_CONFLICT",
+              "O reset só pode ser aplicado à temporada atual do campeonato.",
+            );
+          }
+          if (oldRecord.status === "FINISHED") {
+            throw new ApiError(
+              409,
+              "CHAMPIONSHIP_STATE_CONFLICT",
+              "Reabra o campeonato como Em andamento antes de voltar para Em breve.",
+            );
+          }
+          if (oldRecord.status === "PLANNING") {
+            throw new ApiError(
+              409,
+              "CHAMPIONSHIP_STATE_CONFLICT",
+              "O campeonato já está Em breve e não precisa de reset.",
+            );
+          }
+
+          await tx.query("SELECT set_config('laje.request_user_id', $1, true)", [
+            principal?.userId ?? "",
+          ]);
+
+          const movements = await tx.query(
+            `SELECT movements_table.team_id AS "teamId",
+                    movements_table.previous_division AS "previousDivision",
+                    movements_table.next_division AS "nextDivision",
+                    teams_table.division AS "currentDivision"
+             FROM public.championship_season_division_movements AS movements_table
+             JOIN public.teams AS teams_table ON teams_table.id = movements_table.team_id
+             WHERE movements_table.championship_id = $1
+               AND movements_table.season_year = $2
+               AND movements_table.confirmed_at IS NOT NULL
+             ORDER BY movements_table.id
+             FOR UPDATE OF teams_table`,
+            [championshipId, seasonYear],
+          );
+          for (const movement of movements.rows) {
+            if (movement.currentDivision !== movement.nextDivision) {
+              throw new ApiError(
+                409,
+                "CHAMPIONSHIP_DIVISION_MOVEMENT_CONFLICT",
+                "A divisão de uma atlética foi alterada após a confirmação da movimentação. O reset foi cancelado.",
+              );
+            }
+          }
+
+          let restoredTeamDivisionCount = 0;
+          for (const movement of movements.rows) {
+            const restored = await tx.query(
+              `UPDATE public.teams
+               SET division = $2::public.team_division
+               WHERE id = $1
+                 AND division IS NOT DISTINCT FROM $3::public.team_division
+               RETURNING id`,
+              [movement.teamId, movement.previousDivision, movement.nextDivision],
+            );
+            if (restored.rows.length !== 1) {
+              throw new ApiError(
+                409,
+                "CHAMPIONSHIP_DIVISION_MOVEMENT_CONFLICT",
+                "A divisão de uma atlética foi alterada após a confirmação da movimentação. O reset foi cancelado.",
+              );
+            }
+            restoredTeamDivisionCount += 1;
+          }
+
+          const deletedCounts: Record<string, number> = {};
+          const skippedTables: string[] = [];
+          const optionalDeleteOperations = CURRENT_SEASON_DELETE_OPERATIONS.filter(
+            (operation) => operation.optional,
+          );
+          const optionalRelationResult = optionalDeleteOperations.length
+            ? await tx.query(
+                `SELECT relation_name AS "relationName",
+                        to_regclass(relation_name) IS NOT NULL AS "exists"
+                 FROM unnest($1::text[]) AS requested_relations(relation_name)`,
+                [
+                  optionalDeleteOperations.map(
+                    (operation) => `${operation.schema ?? "public"}.${operation.table}`,
+                  ),
+                ],
+              )
+            : { rows: [], count: 0 };
+          const optionalRelationAvailability = new Map(
+            optionalRelationResult.rows.map((row) => [
+              String(row.relationName),
+              row.exists === true,
+            ]),
+          );
+          for (const operation of CURRENT_SEASON_DELETE_OPERATIONS) {
+            const relationName = `${operation.schema ?? "public"}.${operation.table}`;
+            if (operation.optional && optionalRelationAvailability.get(relationName) === false) {
+              deletedCounts[operation.table] = 0;
+              skippedTables.push(relationName);
+              continue;
+            }
+            const result = await tx.query(
+              `DELETE FROM ${relationName} WHERE ${operation.condition}`,
+              [championshipId, seasonYear],
+            );
+            deletedCounts[operation.table] = result.count;
+          }
+
+          await tx.query(
+            "SELECT set_config('laje.allow_championship_planning_transition', 'true', true)",
+          );
+          await tx.query(
+            `UPDATE public.championships
+             SET status = 'PLANNING'::public.championship_status
+             WHERE id = $1`,
+            [championshipId],
+          );
+
+          await insertAudit(
+            tx,
+            request as AuthenticatedRequest,
+            "UPDATE",
+            "championship_season_reset",
+            `${championshipId}:${seasonYear}`,
+            "Temporada atual reiniciada e campeonato retornado para Em breve via laje-api.",
+            { seasonYear, status: oldRecord.status },
+            {
+              seasonYear,
+              status: "PLANNING",
+              deletedCounts,
+              skippedTables,
+              restoredTeamDivisionCount,
+            },
           );
         });
         response.status(204).send();

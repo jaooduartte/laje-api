@@ -17,7 +17,8 @@ import {
 import type { AuthService } from "../auth/auth.service.js";
 
 type RouteSpec = {
-  scope: "edition" | "source" | "competition" | "match" | "tie-break" | "standings";
+  scope:
+    "edition" | "source" | "competition" | "match" | "tie-break" | "standings" | "knockout-edition";
   sql: string;
   parameterKind?:
     "json" | "revision" | "array" | "none" | "reconfiguration" | "reconfiguration-revision";
@@ -320,6 +321,10 @@ const OPERATIONS: Record<string, RouteSpec> = {
       $1::uuid, $2::uuid, $3::uuid
     ) AS result`,
   },
+  "knockout-generate-edition": {
+    scope: "knockout-edition",
+    sql: "SELECT public.sync_championship_bracket_edition_status($1::uuid) AS result",
+  },
   "group-stage-standings": {
     scope: "standings",
     sql: `SELECT to_jsonb(s) AS result
@@ -370,6 +375,36 @@ export function createBracketOperationsRouter(authService: AuthService): Router 
           if (!userId)
             throw new ApiError(401, "ACCESS_TOKEN_REQUIRED", "Autenticação obrigatória.");
           await tx.query("SELECT set_config('laje.request_user_id', $1, true)", [userId]);
+
+          if (spec.scope === "knockout-edition") {
+            const championshipId = requireUuid(payload.championshipId, "championshipId");
+            const requestedEditionId = uuidOrNull(payload.editionId);
+            const edition = await tx.query(
+              `SELECT id FROM public.championship_bracket_editions
+                WHERE championship_id = $1::uuid AND ($2::uuid IS NULL OR id = $2::uuid)
+                ORDER BY created_at DESC LIMIT 1`,
+              [championshipId, requestedEditionId],
+            );
+            if (!edition.rows[0])
+              throw new ApiError(404, "BRACKET_NOT_FOUND", "Edição não encontrada.");
+
+            const editionId = requireUuid(edition.rows[0].id, "editionId");
+            const competitions = await tx.query(
+              `SELECT id FROM public.championship_bracket_competitions
+                WHERE bracket_edition_id = $1::uuid ORDER BY created_at ASC, id ASC`,
+              [editionId],
+            );
+            for (const competition of competitions.rows) {
+              await tx.query(
+                `SELECT public.generate_championship_knockout_for_competition(
+                  $1::uuid, $2::uuid, $3::uuid
+                )`,
+                [championshipId, requireUuid(competition.id, "competitionId"), editionId],
+              );
+            }
+            await tx.query(spec.sql, [editionId]);
+            return editionId;
+          }
 
           const input = payload.input;
           let values: unknown[];
@@ -495,7 +530,25 @@ export function createBracketOperationsRouter(authService: AuthService): Router 
               ];
             }
           } else if (spec.scope === "tie-break") {
-            values = [JSON.stringify(requireRecord(input))];
+            const body = requireRecord(input, "Sorteio manual inválido.");
+            if (!Array.isArray(body.team_ids) || body.team_ids.length < 2) {
+              throw new ApiError(
+                422,
+                "VALIDATION_ERROR",
+                "Informe ao menos duas atléticas para o sorteio manual.",
+              );
+            }
+            const teamIds = body.team_ids.map((teamId, teamIndex) =>
+              requireUuid(teamId, `team_ids[${teamIndex}]`),
+            );
+            if (new Set(teamIds).size !== teamIds.length) {
+              throw new ApiError(
+                422,
+                "VALIDATION_ERROR",
+                "Informe ao menos duas atléticas diferentes para o sorteio manual.",
+              );
+            }
+            values = [{ ...body, team_ids: teamIds }];
           } else {
             const championshipId = requireUuid(payload.championshipId, "championshipId");
             if (operation === "group-stage-standings") {

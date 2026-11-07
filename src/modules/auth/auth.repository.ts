@@ -143,6 +143,7 @@ export class AuthRepository implements AuthRepositoryPort {
 
     return {
       id: context.user_id,
+      name: context.name,
       email: context.email,
       role,
       profile: { id: context.profile_id, name: context.profile_name },

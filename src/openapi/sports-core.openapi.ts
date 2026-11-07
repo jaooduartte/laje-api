@@ -304,6 +304,21 @@ export const sportsCorePaths = {
       },
     },
   },
+  "/api/v1/championships/{championshipId}/seasons/{seasonYear}/reset-to-planning": {
+    post: {
+      tags: ["Seasons"],
+      summary: "Apaga a edição da temporada atual e retorna o campeonato para Em breve",
+      operationId: "resetChampionshipSeasonToPlanning",
+      "x-implementation-status": implemented,
+      security: bearer,
+      parameters: [championshipId, seasonYearPath],
+      responses: {
+        "204": { description: "Temporada atual reiniciada e status alterado para Em breve." },
+        "404": error("Campeonato não encontrado."),
+        "409": error("Temporada, status ou movimentação de divisão incompatível com o reset."),
+      },
+    },
+  },
   "/api/v1/championships/{championshipId}/standings": {
     get: {
       tags: ["Standings"],

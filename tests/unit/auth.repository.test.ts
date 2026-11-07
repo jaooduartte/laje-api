@@ -78,6 +78,7 @@ test("LAJE-38 auth repository maps identity, permissions, sessions and audit wri
   assert.equal(second?.loginIdentifier, "operator");
 
   const context = await repo.getAdminContext(USER);
+  assert.equal(context?.name, "Operador");
   assert.equal(context?.role, "mesa");
   assert.equal(context?.canAccessAdminPanel, true);
   assert.deepEqual(context?.permissions, [

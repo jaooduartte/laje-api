@@ -21,7 +21,7 @@ O padrão é **`TRUST_PROXY_HOPS=0`**, que ignora `X-Forwarded-For` e evita spoo
 
 ### Migration e cuidados operacionais
 
-Aplicar `infra/database/migrations/20261015030000_create_api_rate_limit_windows.sql` **antes** de ativar a aplicação com autenticação administrativa. A tabela mantém uma linha por combinação de escopo e IP; adicionar rotina de limpeza de entradas antigas com janela de inatividade >=7 dias de acordo com o volume e uso de índices (não apagar entradas ativas). Não alterar o banco de produção durante revisão da PR. Os testes de middleware usam adaptador determinístico e requisições HTTP locais, sem banco real.
+O deploy AWS aplica as migrations listadas em `src/operations/apply-operational-migrations.ts` antes de iniciar a API. A migration `20261015030000_create_api_rate_limit_windows.sql` precisa permanecer nessa lista para que as rotas administrativas possam usar o store compartilhado. A tabela mantém uma linha por combinação de escopo e IP; adicionar rotina de limpeza de entradas antigas com janela de inatividade >=7 dias de acordo com o volume e uso de índices (não apagar entradas ativas). Não alterar o banco de produção durante revisão da PR. Os testes de middleware usam adaptador determinístico e requisições HTTP locais, sem banco real.
 
 ### Limitações e acompanhamento
 

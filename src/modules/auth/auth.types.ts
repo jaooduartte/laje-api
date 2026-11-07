@@ -9,6 +9,7 @@ export interface AdminPermission {
 
 export interface AuthUser {
   id: string;
+  name: string;
   email: string | null;
   role: AdminRole;
   profile: { id: string; name: string } | null;

@@ -350,9 +350,9 @@ async function insertAudit(
       principal?.user.role ?? null,
       recordId,
       description,
-      JSON.stringify(oldData),
-      JSON.stringify(newData),
-      principal?.user.profile?.name ?? null,
+      oldData,
+      newData,
+      principal?.user.name ?? null,
     ],
   );
 }
@@ -674,7 +674,7 @@ async function getScoreSheetAwardsContext(executor: DatabaseQueryExecutor, match
          m.*,
          c.code AS championship_code,
          s.name AS sport_name,
-         COALESCE(m.supports_cards, false) OR COALESCE(cs.supports_cards, false) AS supports_cards,
+         COALESCE(m.supports_cards, false) OR COALESCE(cs.supports_cards, false) AS effective_supports_cards,
          (
            c.code = 'SOCIETY'::public.championship_code
            AND COALESCE(cs.supports_individual_awards, false)
@@ -695,13 +695,13 @@ async function getScoreSheetAwardsContext(executor: DatabaseQueryExecutor, match
        'requires_goal_scorers', mc.requires_goal_scorers,
        'required_home_goals', CASE WHEN mc.requires_goal_scorers THEN COALESCE(mc.home_score, 0) ELSE 0 END,
        'required_away_goals', CASE WHEN mc.requires_goal_scorers THEN COALESCE(mc.away_score, 0) ELSE 0 END,
-       'required_home_yellow_cards', CASE WHEN mc.supports_cards THEN COALESCE(mc.home_yellow_cards, 0) ELSE 0 END,
-       'required_away_yellow_cards', CASE WHEN mc.supports_cards THEN COALESCE(mc.away_yellow_cards, 0) ELSE 0 END,
-       'required_home_red_cards', CASE WHEN mc.supports_cards THEN COALESCE(mc.home_red_cards, 0) ELSE 0 END,
-       'required_away_red_cards', CASE WHEN mc.supports_cards THEN COALESCE(mc.away_red_cards, 0) ELSE 0 END,
-       'required_home_blue_cards', CASE WHEN mc.supports_cards THEN COALESCE(mc.home_blue_cards, 0) ELSE 0 END,
-       'required_away_blue_cards', CASE WHEN mc.supports_cards THEN COALESCE(mc.away_blue_cards, 0) ELSE 0 END,
-       'supports_cards', mc.supports_cards,
+       'required_home_yellow_cards', CASE WHEN mc.effective_supports_cards THEN COALESCE(mc.home_yellow_cards, 0) ELSE 0 END,
+       'required_away_yellow_cards', CASE WHEN mc.effective_supports_cards THEN COALESCE(mc.away_yellow_cards, 0) ELSE 0 END,
+       'required_home_red_cards', CASE WHEN mc.effective_supports_cards THEN COALESCE(mc.home_red_cards, 0) ELSE 0 END,
+       'required_away_red_cards', CASE WHEN mc.effective_supports_cards THEN COALESCE(mc.away_red_cards, 0) ELSE 0 END,
+       'required_home_blue_cards', CASE WHEN mc.effective_supports_cards THEN COALESCE(mc.home_blue_cards, 0) ELSE 0 END,
+       'required_away_blue_cards', CASE WHEN mc.effective_supports_cards THEN COALESCE(mc.away_blue_cards, 0) ELSE 0 END,
+       'supports_cards', mc.effective_supports_cards,
        'is_walkover', COALESCE(mc.is_walkover, false),
        'home_players', COALESCE((
          SELECT jsonb_agg(jsonb_build_object('id', p.id, 'name', p.name) ORDER BY p.name)

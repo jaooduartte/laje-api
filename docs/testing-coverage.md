@@ -17,7 +17,9 @@ npm run test:coverage
 npm run test:flows
 ```
 
-O comando `test:coverage` requer Node.js **26.8.2** para usar a opção nativa `--test-coverage-include-all`, indisponível no Node 22 da aplicação. O pipeline mantém Node 22 para os testes, o lint, o typecheck e o build, e usa Node 26.8.2 **somente na aferição**. Esta opção inclui todos os fontes `src/**/*.ts` não carregados, reportando-os como 0%; exige 75% das linhas. O CI publica `coverage/backend/node-test-coverage.txt`, mesmo em caso de falha.
+O comando `test:coverage` requer Node.js **26.8.2** para usar a opção nativa `--test-coverage-include-all`, indisponível no Node 22 da aplicação. O pipeline mantém Node 22 para os testes, o lint, o typecheck e o build, e usa Node 26.8.2 **somente na aferição**. Esta opção inclui todos os fontes `src/**/*.ts` não carregados, reportando-os como 0%; exige 75% das linhas. Ao final, o comando imprime um resumo no mesmo formato do reporter `text-summary` do Vitest, com cores no terminal e as métricas disponíveis de branches, funções e linhas. As cores seguem as faixas padrão do Vitest: vermelho abaixo de 50%, amarelo de 50% a menos de 80% e verde a partir de 80%; respeitam o suporte do terminal e as variáveis `NO_COLOR` e `FORCE_COLOR`. A tabela detalhada continua disponível para localizar arquivos descobertos. O CI publica `coverage/backend/node-test-coverage.txt`, mesmo em caso de falha.
+
+Nas PRs, o CI publica ou atualiza um comentário com o resultado da cobertura, linhas cobertas e mínimo de 75%, branches, funções e o commit analisado. Esse comentário é informativo; o job de cobertura continua aplicando o limite existente.
 
 **Auditoria do denominador**: a ferramenta antiga no Node 22 reportava 96,75% porque limitava o denominador a módulos carregados. Com a opção nativa da versão 26.8.2, arquivos de `src` não importados entram com cobertura zero. Usar este número para comprovação; não é válido reutilizar o relatório da versão 22. A aprovação exige relatório com o denominador inteiro, e não apenas o percentual da ferramenta anterior.
 

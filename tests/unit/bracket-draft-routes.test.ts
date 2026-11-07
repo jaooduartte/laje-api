@@ -45,6 +45,8 @@ test("LAJE-150 reads and saves draft in AWS RDS adapter without invoking Supabas
   let draft: Record<string, unknown> | null = null;
   let championshipStatus = "UPCOMING";
   const statements: string[] = [];
+  const workflowLogParameters: unknown[][] = [];
+  const draftPayloadParameters: unknown[] = [];
 
   const sportId = "2d315ae6-2b6b-4949-916f-48913b37f9ee";
   const homeTeamId = "df232ceb-1076-44cb-8131-16635cf28b4d";
@@ -66,11 +68,12 @@ test("LAJE-150 reads and saves draft in AWS RDS adapter without invoking Supabas
     } else if (statement.includes("SELECT id, status FROM public.championship_bracket_editions")) {
       rows = draft ? [{ id: DRAFT_ID, status: generated ? "GROUPS_GENERATED" : "DRAFT" }] : [];
     } else if (statement.includes("INSERT INTO public.championship_bracket_editions")) {
+      draftPayloadParameters.push(params[2]);
       draft = {
         edition_id: DRAFT_ID,
         season_year: 2026,
         status: "DRAFT",
-        payload_snapshot: JSON.parse(String(params[2])),
+        payload_snapshot: params[2],
         updated_by: USER_ID,
         updated_at: "2026-10-24T10:00:00.000Z",
         updated_by_name: "QA",
@@ -82,7 +85,12 @@ test("LAJE-150 reads and saves draft in AWS RDS adapter without invoking Supabas
       generated = true;
       rows = [{ id: DRAFT_ID, seasonYear: 2026, status: "GROUPS_GENERATED" }];
     } else if (statement.includes("UPDATE public.championship_bracket_editions")) {
-      if (draft) draft.payload_snapshot = JSON.parse(String(params[1]));
+      if (draft) {
+        draftPayloadParameters.push(params[1]);
+        draft.payload_snapshot = params[1];
+      }
+    } else if (statement.includes("INSERT INTO public.admin_action_logs")) {
+      workflowLogParameters.push([...params]);
     } else if (statement.includes("INSERT INTO public.championship_bracket_competitions")) {
       rows = [{ id: "85b6ea7b-f791-40fd-94c7-c4747c3d43f9" }];
     } else if (statement.includes("INSERT INTO public.championship_bracket_groups")) {
@@ -131,6 +139,8 @@ test("LAJE-150 reads and saves draft in AWS RDS adapter without invoking Supabas
   });
   assert.equal(save.status, 200);
   assert.deepEqual((await save.json()).data.payload_snapshot, payloadSnapshot);
+  assert.deepEqual(draftPayloadParameters[0], payloadSnapshot);
+  assert.deepEqual(workflowLogParameters, []);
 
   const get = await fetch(path, { headers: { authorization: "Bearer test" } });
   assert.equal(get.status, 200);
@@ -143,6 +153,36 @@ test("LAJE-150 reads and saves draft in AWS RDS adapter without invoking Supabas
   });
   assert.equal(update.status, 200);
   assert.deepEqual((await update.json()).data.payload_snapshot, { schedule_days: [] });
+  assert.deepEqual(draftPayloadParameters[1], { schedule_days: [] });
+
+  const workflowLog = await fetch(path + "/workflow-logs", {
+    method: "POST",
+    headers: { authorization: "Bearer test", "content-type": "application/json" },
+    body: JSON.stringify({
+      actionType: "UPDATE",
+      step: "Agenda",
+      description: "Etapa Agenda atualizada e avançada.",
+      workflowAction: "STEP_ADVANCED",
+      changedFields: ["schedule_days"],
+    }),
+  });
+  assert.equal(workflowLog.status, 204);
+  assert.equal(workflowLogParameters.length, 1);
+  assert.deepEqual(workflowLogParameters[0]?.[5], {
+    source: "laje-api",
+    step: "Agenda",
+    workflow_action: "STEP_ADVANCED",
+    championship_id: CHAMPIONSHIP_ID,
+    season_year: 2026,
+    changed_fields: ["schedule_days"],
+  });
+  assert.ok(
+    statements.some(
+      (statement) =>
+        statement.includes("INSERT INTO public.admin_action_logs") &&
+        statement.includes("public.championship_bracket_workflow"),
+    ),
+  );
 
   const generatedBracket = await fetch(path.replace("/draft", "/generate"), {
     method: "POST",

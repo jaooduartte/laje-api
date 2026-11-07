@@ -132,6 +132,8 @@ jobs:
 
       - name: Measure backend unit coverage (75% line threshold)
         shell: bash
+        env:
+          COVERAGE_SUMMARY_JSON: coverage/backend/coverage-summary.json
         run: |
           set -o pipefail
           mkdir -p coverage/backend
@@ -145,6 +147,116 @@ jobs:
           path: coverage/backend/
           if-no-files-found: warn
           retention-days: 30
+
+  coverage-comment:
+    name: Publish Coverage Summary
+    needs: coverage
+    if: always() && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+
+    steps:
+      - name: Download backend coverage report
+        if: always() && (needs.coverage.result == 'success' || needs.coverage.result == 'failure')
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          name: laje-api-backend-coverage
+          path: coverage/backend/
+
+      - name: Create or update coverage comment
+        if: always()
+        continue-on-error: true
+        uses: actions/github-script@v9
+        env:
+          COVERAGE_RESULT: ${{ needs.coverage.result }}
+          RUN_ID: ${{ github.run_id }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require("node:fs");
+            const marker = "<!-- laje-api-coverage-summary -->";
+            const summaryPath = "coverage/backend/coverage-summary.json";
+            const threshold = 75;
+            const resultLabels = {
+              success: "✅ aprovado",
+              failure: "❌ falhou",
+              cancelled: "⏹️ cancelado",
+              skipped: "⏭️ não executado",
+            };
+            const result = process.env.COVERAGE_RESULT;
+            const formatMetric = (label, metric, minimum) => {
+              if (
+                !metric ||
+                !Number.isFinite(metric.pct) ||
+                metric.pct < 0 ||
+                metric.pct > 100 ||
+                !Number.isSafeInteger(metric.covered) ||
+                metric.covered < 0 ||
+                !Number.isSafeInteger(metric.total) ||
+                metric.total < 0
+              ) {
+                return `- **${label}:** indisponível`;
+              }
+
+              const percentage = metric.pct.toLocaleString("pt-BR", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              });
+              const counts = `${metric.covered.toLocaleString("pt-BR")}/${metric.total.toLocaleString("pt-BR")}`;
+              const thresholdLabel = minimum === undefined
+                ? ""
+                : ` — mínimo ${minimum}% ${metric.pct >= minimum ? "atingido" : "não atingido"}`;
+
+              return `- **${label}:** ${percentage}% (${counts})${thresholdLabel}`;
+            };
+
+            let reportLines = ["Relatório de cobertura indisponível. Consulte o job de cobertura."];
+            try {
+              const summary = JSON.parse(fs.readFileSync(summaryPath, "utf8"));
+              reportLines = [
+                formatMetric("Linhas", summary.total?.lines, threshold),
+                formatMetric("Branches", summary.total?.branches),
+                formatMetric("Funções", summary.total?.functions),
+              ];
+            } catch {}
+
+            const { owner, repo } = context.repo;
+            const pullRequest = context.payload.pull_request;
+            const body = [
+              marker,
+              "## 📊 Cobertura dos testes — API",
+              "",
+              `**Resultado da cobertura:** ${resultLabels[result] || "⚠️ indisponível"}`,
+              "",
+              ...reportLines,
+              "",
+              `[Ver execução da CI](https://github.com/${owner}/${repo}/actions/runs/${process.env.RUN_ID}) · Commit: \`${pullRequest.head.sha.slice(0, 7)}\``,
+            ].join("\n");
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number: pullRequest.number,
+              per_page: 100,
+            });
+            const existingComment = comments.find((comment) => comment.body?.includes(marker));
+
+            if (existingComment) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existingComment.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: pullRequest.number,
+                body,
+              });
+            }
 
   postgres:
     name: PostgreSQL Validation
@@ -170,6 +282,7 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/laje_api_test?sslmode=disable
+      CHAMPIONSHIP_RESET_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/laje_season_reset_test?sslmode=disable
       PGPASSWORD: postgres
 
     steps:
@@ -184,6 +297,18 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Install PostgreSQL client for reset integration tests
+        if: needs.quality.outputs.postgres_integration == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Prepare isolated championship reset database
+        if: needs.quality.outputs.postgres_integration == 'true'
+        run: |
+          createdb --host localhost --username postgres laje_season_reset_test
+          psql --host localhost --username postgres --dbname laje_season_reset_test --set ON_ERROR_STOP=1 --file infra/database/baseline/schema.sql
 
       - name: Run PostgreSQL integration tests
         if: needs.quality.outputs.postgres_integration == 'true'

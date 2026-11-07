@@ -44,6 +44,16 @@ test("LAJE-150 routes bracket reconfiguration preview and revision-locked apply 
     values: readonly unknown[] = [],
   ) => {
     queries.push({ sql, values });
+    if (sql.includes("WHERE championship_id = $1::uuid AND ($2::uuid IS NULL OR id = $2::uuid)")) {
+      const matchesEdition = values[1] == null || values[1] === editionId;
+      return {
+        rows: (matchesEdition ? [{ id: editionId }] : []) as unknown as Row[],
+        count: matchesEdition ? 1 : 0,
+      };
+    }
+    if (sql.includes("SELECT id FROM public.championship_bracket_competitions")) {
+      return { rows: [{ id: editionId }, { id: userId }] as unknown as Row[], count: 2 };
+    }
     if (sql.includes("FROM public.championship_bracket_editions WHERE id = $1")) {
       return { rows: [{ id: editionId }] as unknown as Row[], count: 1 };
     }
@@ -150,6 +160,99 @@ test("LAJE-150 routes bracket reconfiguration preview and revision-locked apply 
     body: JSON.stringify(input),
   });
   assert.equal(missingRevision.status, 422);
+
+  const tieBreakPayload = {
+    context_key: "context-group-b",
+    competition_id: editionId,
+    context_type: "GROUP",
+    group_id: editionId,
+    qualification_rank: null,
+    team_ids: [editionId, userId],
+  };
+  const tieBreak = await fetch(root + "tie-break-save", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ input: tieBreakPayload }),
+  });
+  assert.equal(tieBreak.status, 200);
+  const tieBreakQuery = queries.find(({ sql }) =>
+    sql.includes("save_championship_bracket_tie_break_resolution"),
+  );
+  assert.ok(tieBreakQuery);
+  assert.deepEqual(tieBreakQuery.values[0], tieBreakPayload);
+
+  const savedTieBreakQueryCount = queries.filter(({ sql }) =>
+    sql.includes("save_championship_bracket_tie_break_resolution"),
+  ).length;
+  const incompleteTieBreak = await fetch(root + "tie-break-save", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ input: { ...tieBreakPayload, team_ids: [] } }),
+  });
+  assert.equal(incompleteTieBreak.status, 422);
+  assert.equal(
+    (await incompleteTieBreak.json()).error.message,
+    "Informe ao menos duas atléticas para o sorteio manual.",
+  );
+  assert.equal(
+    queries.filter(({ sql }) => sql.includes("save_championship_bracket_tie_break_resolution"))
+      .length,
+    savedTieBreakQueryCount,
+  );
+
+  const duplicateTieBreak = await fetch(root + "tie-break-save", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      input: { ...tieBreakPayload, team_ids: [editionId, userId, editionId] },
+    }),
+  });
+  assert.equal(duplicateTieBreak.status, 422);
+  assert.equal(
+    (await duplicateTieBreak.json()).error.message,
+    "Informe ao menos duas atléticas diferentes para o sorteio manual.",
+  );
+  assert.equal(
+    queries.filter(({ sql }) => sql.includes("save_championship_bracket_tie_break_resolution"))
+      .length,
+    savedTieBreakQueryCount,
+  );
+
+  const knockout = await fetch(root + "knockout-generate-edition", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ championshipId: userId, editionId }),
+  });
+  assert.equal(knockout.status, 200);
+  assert.equal((await knockout.json()).data, editionId);
+  const generationQueries = queries.filter(({ sql }) =>
+    sql.includes("generate_championship_knockout_for_competition"),
+  );
+  assert.deepEqual(
+    generationQueries.map(({ values }) => values),
+    [
+      [userId, editionId, editionId],
+      [userId, userId, editionId],
+    ],
+  );
+  const syncIndex = queries.findIndex(({ sql }) =>
+    sql.includes("sync_championship_bracket_edition_status"),
+  );
+  const lastGeneration = generationQueries[1];
+  assert.ok(lastGeneration);
+  assert.ok(syncIndex > queries.indexOf(lastGeneration));
+
+  const otherEdition = await fetch(root + "knockout-generate-edition", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ championshipId: userId, editionId: userId }),
+  });
+  assert.equal(otherEdition.status, 404);
+  assert.equal(
+    queries.filter(({ sql }) => sql.includes("generate_championship_knockout_for_competition"))
+      .length,
+    2,
+  );
 });
 
 test("LAJE-150 denies reconfiguration without matches edit permission", async (t) => {
@@ -175,7 +278,11 @@ test("LAJE-150 denies reconfiguration without matches edit permission", async (t
   const address = server.address();
   assert.ok(address && typeof address === "object");
   const root = "http://127.0.0.1:" + address.port + "/bracket-operations/";
-  for (const operation of ["reconfiguration-preview", "reconfiguration-apply"]) {
+  for (const operation of [
+    "reconfiguration-preview",
+    "reconfiguration-apply",
+    "knockout-generate-edition",
+  ]) {
     const response = await fetch(root + operation, {
       method: "POST",
       headers: { authorization: "Bearer test", "content-type": "application/json" },

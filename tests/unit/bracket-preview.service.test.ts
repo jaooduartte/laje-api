@@ -54,6 +54,10 @@ test("starts the exact preview under the authenticated identity and publishes on
     championship_id: "22222222-2222-4222-8222-222222222222",
     status: "QUEUED",
   };
+  const payload = {
+    competitions: [{ sport_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }],
+    schedule_days: [{ date: "2026-11-28" }],
+  };
   const { database, calls } = createDatabase((sql) => {
     if (sql.includes("set_config('laje.request_user_id'")) return result();
     if (sql.includes("start_championship_bracket_preview_job")) {
@@ -70,7 +74,7 @@ test("starts the exact preview under the authenticated identity and publishes on
 
   const created = await service.start(
     "22222222-2222-4222-8222-222222222222",
-    { competitions: [], schedule_days: [] },
+    payload,
     "33333333-3333-4333-8333-333333333333",
   );
 
@@ -78,6 +82,11 @@ test("starts the exact preview under the authenticated identity and publishes on
   assert.equal(exactPreviewJobStatus(created), "QUEUED");
   assert.deepEqual(published, [{ jobId: job.job_id, delaySeconds: undefined }]);
   assert.equal(calls[0]?.parameters[0], "33333333-3333-4333-8333-333333333333");
+  const startQuery = calls.find((call) =>
+    call.sql.includes("start_championship_bracket_preview_job"),
+  );
+  assert.ok(startQuery);
+  assert.deepEqual(startQuery.parameters[1], payload);
 });
 
 test("rejects oversized preview payloads before touching PostgreSQL or SQS", async () => {
@@ -151,25 +160,64 @@ test("creates the approved bracket through the ported exact engine using the aut
     if (sql.includes("create_championship_bracket_from_preview_job")) {
       return result([{ edition_id: "66666666-6666-4666-8666-666666666666" }]);
     }
+    if (sql.includes("UPDATE public.championship_sports")) {
+      return result([{ id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" }]);
+    }
+    if (sql.includes("INSERT INTO public.admin_action_logs")) return result();
     throw new Error(`Unexpected SQL: ${sql}`);
   });
   const service = new BracketPreviewService(database, {
     async sendProcessJob() {},
   });
+  const payload = {
+    competitions: [{ sport_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }],
+    schedule_days: [{ date: "2026-11-28" }],
+  };
 
   const editionId = await service.createBracket(
     "77777777-7777-4777-8777-777777777777",
     "88888888-8888-4888-8888-888888888888",
-    { competitions: [] },
+    payload,
     "99999999-9999-4999-8999-999999999999",
+    { "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa": true },
+    { email: "admin@example.com", name: "Admin", role: "ADMIN" },
   );
 
   assert.equal(editionId, "66666666-6666-4666-8666-666666666666");
   assert.equal(calls[0]?.parameters[0], "99999999-9999-4999-8999-999999999999");
+  const createQuery = calls.find((call) =>
+    call.sql.includes("create_championship_bracket_from_preview_job"),
+  );
+  assert.ok(createQuery);
+  assert.deepEqual(createQuery.parameters[2], payload);
+  const settingQuery = calls.find((call) => call.sql.includes("UPDATE public.championship_sports"));
+  assert.ok(settingQuery);
+  assert.deepEqual(settingQuery.parameters, [
+    "88888888-8888-4888-8888-888888888888",
+    "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    true,
+  ]);
+  assert.ok(calls.indexOf(createQuery) < calls.indexOf(settingQuery));
   assert.ok(
     calls.some((call) => call.sql.includes("DELETE FROM public.championship_bracket_editions")),
   );
   assert.ok(
     calls.some((call) => call.sql.includes("create_championship_bracket_from_preview_job")),
   );
+  const auditQuery = calls.find((call) =>
+    call.sql.includes("INSERT INTO public.admin_action_logs"),
+  );
+  assert.ok(auditQuery);
+  assert.match(auditQuery.sql, /public\.championship_bracket_workflow/);
+  assert.match(auditQuery.sql, /BRACKET_GENERATED/);
+  assert.deepEqual(auditQuery.parameters, [
+    "99999999-9999-4999-8999-999999999999",
+    "admin@example.com",
+    "Admin",
+    "ADMIN",
+    "66666666-6666-4666-8666-666666666666",
+    "88888888-8888-4888-8888-888888888888",
+    "77777777-7777-4777-8777-777777777777",
+  ]);
+  assert.ok(calls.indexOf(settingQuery) < calls.indexOf(auditQuery));
 });
