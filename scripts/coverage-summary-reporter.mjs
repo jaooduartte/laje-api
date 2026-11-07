@@ -1,3 +1,6 @@
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
+
 const colors = {
   low: "31;1",
   medium: "33;1",
@@ -77,9 +80,47 @@ export function formatCoverageSummary(summary, enabled = supportsColor()) {
   ].join("\n");
 }
 
+export function createCoverageJsonSummary(summary) {
+  const { totals } = summary;
+  const metric = (covered, total, percentage) => ({
+    total,
+    covered,
+    skipped: 0,
+    pct: percentage,
+  });
+
+  return {
+    total: {
+      lines: metric(totals.coveredLineCount, totals.totalLineCount, totals.coveredLinePercent),
+      branches: metric(
+        totals.coveredBranchCount,
+        totals.totalBranchCount,
+        totals.coveredBranchPercent,
+      ),
+      functions: metric(
+        totals.coveredFunctionCount,
+        totals.totalFunctionCount,
+        totals.coveredFunctionPercent,
+      ),
+    },
+  };
+}
+
+async function writeCoverageJsonSummary(summary) {
+  const outputPath = process.env.COVERAGE_SUMMARY_JSON;
+
+  if (!outputPath) {
+    return;
+  }
+
+  await mkdir(dirname(outputPath), { recursive: true });
+  await writeFile(outputPath, `${JSON.stringify(createCoverageJsonSummary(summary), null, 2)}\n`);
+}
+
 export default async function* coverageSummaryReporter(source) {
   for await (const event of source) {
     if (event.type === "test:coverage") {
+      await writeCoverageJsonSummary(event.data.summary);
       yield formatCoverageSummary(event.data.summary);
     }
   }
