@@ -177,9 +177,10 @@ test("LAJE-150 reads and saves draft in AWS RDS adapter without invoking Supabas
     changed_fields: ["schedule_days"],
   });
   assert.ok(
-    statements.some((statement) =>
-      statement.includes("INSERT INTO public.admin_action_logs") &&
-      statement.includes("public.championship_bracket_workflow"),
+    statements.some(
+      (statement) =>
+        statement.includes("INSERT INTO public.admin_action_logs") &&
+        statement.includes("public.championship_bracket_workflow"),
     ),
   );
 
