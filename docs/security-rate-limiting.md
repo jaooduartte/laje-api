@@ -1,6 +1,6 @@
 # LAJE-146 — Rate limiting compartilhado (API)
 
-A proteção usa `express-rate-limit` v8 com store PostgreSQL próprio (sujeito à detecção do CodeQL) e utiliza `public.api_rate_limit_windows` no PostgreSQL 17 (Amazon RDS). A contagem é atômica por chave SHA-256 de `scope + IP`, dentro de uma janela fixa, e compartilhada entre todas as réplicas ECS. O banco registra **somente o hash**, sem armazenar IPs originais. O limite é aplicado antes da operação sensível, inclusive a troca de senha e a geração de chaves.
+A proteção usa `express-rate-limit` v8 com store PostgreSQL próprio e utiliza `public.api_rate_limit_windows` no PostgreSQL 17 (Amazon RDS). A contagem é atômica por chave SHA-256 de `scope + IP`, dentro de uma janela fixa, e compartilhada entre todas as réplicas ECS. O banco registra **somente o hash**, sem armazenar IPs originais. O limite é aplicado antes da operação sensível, inclusive a troca de senha e a geração de chaves.
 
 | Endpoint                                                       | Máximo | Janela |
 | -------------------------------------------------------------- | -----: | -----: |

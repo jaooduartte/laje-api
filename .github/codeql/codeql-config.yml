@@ -1,8 +1,0 @@
-name: LAJE API production code scanning
-paths:
-  - src
-  - scripts
-paths-ignore:
-  - "tests/**"
-  - "**/*.test.ts"
-  - "**/*.test.mjs"
