@@ -67,10 +67,6 @@ export class PostgresRateLimitStore implements Store {
   }
 }
 
-/**
- * The express-rate-limit package is used directly at Express route declarations,
- * allowing CodeQL to recognize rate-limited request handlers.
- */
 export function createPostgresRateLimitOptions(options: SensitiveRateLimitOptions) {
   const { scope, maxRequests, windowSeconds } = options;
   const enabled = options.enabled ?? environment.auth.enabled;

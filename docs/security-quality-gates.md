@@ -3,34 +3,34 @@
 ## Escopo e atendimento ao Portfólio
 
 Esta implementação atende ao requisito de **análise estática de código e segurança** da linha Web Apps do [The Portfolio Playbook](https://github.com/CatolicaSC-Portfolio/The-Portfolio-Playbook/blob/main/directions/portfolio-directions-webapp.md).
-Os repositórios usam GitHub Actions para executar verificações de qualidade e segurança. A análise SonarQube Cloud está sendo adicionada pela LAJE-151 e depende de projetos vinculados e de configuração no GitHub.
+Os repositórios usam GitHub Actions para executar verificações de qualidade e segurança, com análise estática pelo SonarQube Cloud.
 Este documento refere-se ao repositório **`jaooduartte/laje-api`**; o outro repositório possui workflow equivalente.
 
 ## Ferramentas e execução
 
-- **CodeQL SAST**: varre JavaScript/TypeScript com `security-extended` no PR para `main`, push para `main`, execução manual e agendamento semanal. O SARIF vai para a aba **Security → Code scanning** e é armazenado como artefato por 30 dias. Um script lê o SARIF original e **reprova qualquer alerta de segurança High (pontuação >=7) ou Critical (>=9)**; falha fechada se o relatório não existe ou é inválido.
+- **SonarQube Cloud**: analisa PRs internas para `main` e atualizações de `main`, importa `coverage/backend/lcov.info` e aguarda o Quality Gate para concluir o CI. A integração foi validada em PR e em `main`.
 - **Dependency Review**: em toda PR para `main`, reprova dependências novas/vulneráveis High/Critical nos escopos `runtime`, `development` e `unknown`, consultando a base de advisories do GitHub. Não interpreta alterações de lockfile como automaticamente seguras.
 - **npm audit**: verifica **toda** a árvore travada em `package-lock.json`, incluindo dependências de desenvolvimento, em PR, push, execução manual e semanal. `npm audit --audit-level=high` reprova High/Critical existentes. O JSON vai para o artefato `laje-npm-audit`; os totais por severidade aparecem no resumo do job.
 - **Qualidade e cobertura**: o CI principal permanece responsável por typecheck, ESLint sem warnings, formatação, testes e builds. A cobertura fica separada, sem misturar os denominadores: frontend >=25%; backend >=75%. O workflow de segurança **não substitui** essas medições.
 
-## Migração para SonarQube Cloud — LAJE-151
+## SonarQube Cloud e substituição do CodeQL — LAJE-151
 
-A primeira etapa adiciona análise SonarQube Cloud para PRs internas destinadas a `main` e para atualizações de `main`. O job aguarda o Quality Gate do Sonar. PRs de forks continuam executando os demais checks, mas não recebem secrets e, por isso, não executam a análise Sonar. A configuração usa `sonar-project.properties` e o LCOV produzido em `coverage/backend/lcov.info` pelo reporter nativo do Node.js 26.8.2; os reporters `spec` e de resumo permanecem ativos.
+A análise SonarQube Cloud está ativa para PRs internas destinadas a `main` e para atualizações de `main`. O job aguarda o Quality Gate do Sonar. PRs de forks continuam executando os demais checks, mas não recebem secrets e, por isso, não executam a análise Sonar. A configuração usa `sonar-project.properties` e o LCOV produzido em `coverage/backend/lcov.info` pelo reporter nativo do Node.js 26.8.2; os reporters `spec` e de resumo permanecem ativos.
 
 Cada repositório precisa ter as variáveis `SONAR_ORGANIZATION` e `SONAR_PROJECT_KEY` e o secret `SONAR_TOKEN` cadastrados nas configurações do GitHub. O token não deve ser gravado no repositório nem impresso nos logs. O projeto Sonar precisa estar vinculado ao repositório GitHub correspondente.
 
 O mínimo global de cobertura da API continua em 75% de linhas. No plano Free, o Quality Gate Sonar usa o gate padrão Sonar way, que exige 80% de cobertura em código novo; essa condição é diferente da meta global do projeto. A cobertura global de 75% não substitui nem altera a condição do Sonar para código novo.
 
-O CodeQL permanece ativo durante esta etapa. A remoção somente do CodeQL, mantendo `npm audit`, Dependency Review, testes, lint, typecheck, builds e os mínimos globais de cobertura, depende da aprovação da PR de integração e da confirmação de análises Sonar aprovadas em PR e em `main` nos dois repositórios. Esta migração não altera branch protection, Vercel, AWS/RDS ou Supabase de produção.
+As análises Sonar das PRs #78 e #52 e de `main` nos dois repositórios foram aprovadas. Esta segunda etapa propõe remover somente o CodeQL; até o merge desta PR, ele permanece ativo em `main`. `npm audit`, Dependency Review, testes, lint, typecheck, builds e os mínimos globais de cobertura permanecem ativos. Esta migração não altera branch protection, Vercel, AWS/RDS ou Supabase de produção.
 
 ## Painéis e evidências para a banca
 
-- [GitHub Code scanning](https://github.com/jaooduartte/laje-api/security/code-scanning): regras, severidade, arquivos atingidos, histórico e alertas.
+- [SonarQube Cloud — API](https://sonarcloud.io/dashboard?id=jaooduartte_laje-api): Quality Gate, issues e métricas da análise estática.
 - [GitHub Dependabot alerts](https://github.com/jaooduartte/laje-api/security/dependabot): advisories de dependências quando o recurso estiver habilitado para o repositório.
-- [GitHub Actions — Security & Static Analysis](https://github.com/jaooduartte/laje-api/actions/workflows/security.yml): status das verificações, sumários High/Critical, relatórios SARIF/JSON e datas das execuções.
+- [GitHub Actions — Security & Dependency Audit](https://github.com/jaooduartte/laje-api/actions/workflows/security.yml): status do Dependency Review, `npm audit`, sumários High/Critical e artefatos JSON.
 - [GitHub Actions — CI](https://github.com/jaooduartte/laje-api/actions/workflows/ci.yml): quality gate estático (TypeScript/ESLint/Prettier), testes, cobertura e builds.
 
-Para reproduzir a auditoria das dependências localmente: `npm ci --ignore-scripts && npm audit --audit-level=high`. O CodeQL roda no workflow com a suite `security-extended` e os resultados são analisados pelo script `scripts/ci/codeql-severity-gate.mjs`.
+Para reproduzir a auditoria das dependências localmente: `npm ci --ignore-scripts && npm audit --audit-level=high`. A análise estática e o Quality Gate são executados pelo workflow do SonarQube Cloud.
 
 ## Proteção da branch `main` (recomendação opcional)
 
@@ -38,13 +38,13 @@ As diretrizes do Portfólio Web Apps exigem pipeline CI/CD, análise estática, 
 
 Os workflows de CI e segurança continuam reprovando verificações quando encontram erros de tipagem, lint, formatação, cobertura insuficiente ou vulnerabilidades High/Critical. **Sem checks exigidos por branch protection, esses erros não impedem tecnicamente o merge**. A equipe deve conferir os resultados e não aprovar merges com checks reprovados.
 
-Como melhoria futura opcional, um administrador poderá exigir PR, `Quality Gate`, `CodeQL SAST (High/Critical gate)`, `Dependency Review (new High/Critical)` e `Dependency Audit (High/Critical gate)`; no backend, também `Full Backend Unit Coverage (75%)`. Não aplicar alteração de ruleset sem autorização.
+Como melhoria futura opcional, um administrador poderá exigir PR, `Quality Gate`, `Dependency Review (new High/Critical)` e `Dependency Audit (High/Critical gate)`; no backend, também `Full Backend Unit Coverage (75%)`. Não aplicar alteração de ruleset sem autorização.
 
 ## Limites e tratamento de achados
 
-CodeQL identifica padrões de risco, não substitui pentest, validação de autenticação/permissões nem revisão manual. Achados devem receber issue no Jira com severidade, arquivo/regra, impacto e mitigação; correções são tratadas em PRs próprias. Não desligar o gate, adicionar exceção silenciosa, alterar thresholds ou omitir dependências para obter um check verde. Dados e credenciais de produção não são lidos nem modificados por estes workflows.
+SonarQube Cloud identifica problemas de confiabilidade, segurança e manutenção, mas não substitui pentest, validação de autenticação/permissões nem revisão manual. Achados devem receber issue no Jira com severidade, arquivo/regra, impacto e mitigação; correções são tratadas em PRs próprias. Não adicionar exceções silenciosas, alterar thresholds ou omitir dependências para obter um check verde. Dados e credenciais de produção não são lidos nem modificados por estes workflows.
 
-**Observação arquitetural:** o frontend operacional `laje` permanece Vercel/Supabase; a instância de TCC `laje-tcc` usa a API AWS/RDS conforme o plano. Este trabalho modifica apenas o CI e a documentação, sem mudanças no banco ou deploy.
+**Observação arquitetural:** o frontend operacional `laje` permanece Vercel/Supabase; a instância de TCC `laje-tcc` usa a API AWS/RDS conforme o plano. Esta etapa altera workflows, documentação e anotações exclusivas do CodeQL, sem mudança funcional, de banco ou deploy.
 
 ## Histórico do primeiro ciclo — 14/10/2026 (superado pelas correções)
 

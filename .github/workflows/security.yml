@@ -1,4 +1,4 @@
-name: Security & Static Analysis
+name: Security & Dependency Audit
 
 on:
   pull_request:
@@ -19,47 +19,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  codeql:
-    name: CodeQL SAST (High/Critical gate)
-    runs-on: ubuntu-latest
-    timeout-minutes: 35
-    permissions:
-      contents: read
-      security-events: write
-      actions: read
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Initialize CodeQL (JavaScript/TypeScript)
-        uses: github/codeql-action/init@v4
-        with:
-          languages: javascript-typescript
-          build-mode: none
-          queries: security-extended
-          config-file: ./.github/codeql/codeql-config.yml
-
-      - name: Analyze and publish findings to GitHub Code Scanning
-        id: analyze
-        uses: github/codeql-action/analyze@v4
-        with:
-          category: /language:javascript-typescript
-          upload: always
-
-      - name: Fail on high or critical CodeQL findings
-        env:
-          SARIF_DIR: ${{ steps.analyze.outputs.sarif-output }}
-        run: node scripts/ci/codeql-severity-gate.mjs "$SARIF_DIR"
-
-      - name: Preserve CodeQL SARIF evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: laje-codeql-sarif
-          path: ${{ steps.analyze.outputs.sarif-output }}
-          if-no-files-found: warn
-          retention-days: 30
-
   dependency-review:
     name: Dependency Review (new High/Critical)
     if: github.event_name == 'pull_request'
