@@ -31,6 +31,17 @@ test("requester notification preserves legacy LAJE branding and details", () => 
   assert.equal(buildReservationSubject(original), "Solicitação recebida: TESTE LAJE-126");
 });
 
+test("reservation notifications remove every trailing slash from the app URL", () => {
+  const requester = buildReservationRequesterHtml(original, "https://laje-tcc.vercel.app///");
+  const admin = buildReservationAdminHtml(original, "https://laje-tcc.vercel.app///");
+
+  assert.match(requester, /src="https:\/\/laje-tcc\.vercel\.app\/logo\.png"/);
+  assert.match(requester, /href="https:\/\/laje-tcc\.vercel\.app"/);
+  assert.match(admin, /href="https:\/\/laje-tcc\.vercel\.app\/admin"/);
+  assert.doesNotMatch(requester, /vercel\.app\/\/\/logo\.png/);
+  assert.doesNotMatch(admin, /vercel\.app\/\/\/admin/);
+});
+
 test("approval and rejection reuse the same status cards and subjects as Supabase", () => {
   const approved = buildReservationRequesterHtml(
     { ...original, type: "APPROVED" },
@@ -70,14 +81,14 @@ test("HTML-escapes input fields and review notes without modifying the visible l
     ...original,
     type: "REJECTED" as const,
     eventName: "<script>alert(1)</script>",
-    requesterName: "<b>Fulano</b>",
+    requesterName: "<b title=\"x\">A & 'B'</b>",
     reviewNotes: "<img src=x onerror=alert(1)>",
   };
   const requester = buildReservationRequesterHtml(malicious, "https://laje-tcc.vercel.app");
   const admin = buildReservationAdminHtml(malicious, "https://laje-tcc.vercel.app");
   assert.match(requester, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
   assert.match(requester, /&lt;img src=x onerror=alert\(1\)&gt;/);
-  assert.match(requester, /&lt;b&gt;Fulano&lt;\/b&gt;/);
+  assert.match(requester, /&lt;b title=&quot;x&quot;&gt;A &amp; &#039;B&#039;&lt;\/b&gt;/);
   assert.match(admin, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
   assert.doesNotMatch(requester, /<script>|<img src=x/);
   assert.doesNotMatch(admin, /<script>/);
