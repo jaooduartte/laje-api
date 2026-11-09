@@ -3,7 +3,7 @@
 ## Escopo e atendimento ao Portfólio
 
 Esta implementação atende ao requisito de **análise estática de código e segurança** da linha Web Apps do [The Portfolio Playbook](https://github.com/CatolicaSC-Portfolio/The-Portfolio-Playbook/blob/main/directions/portfolio-directions-webapp.md).
-Ambos os repositórios públicos usam GitHub Actions e GitHub Code Scanning, sem depender de contas externas ou segredos adicionais.
+Os repositórios usam GitHub Actions para executar verificações de qualidade e segurança. A análise SonarQube Cloud está sendo adicionada pela LAJE-151 e depende de projetos vinculados e de configuração no GitHub.
 Este documento refere-se ao repositório **`jaooduartte/laje-api`**; o outro repositório possui workflow equivalente.
 
 ## Ferramentas e execução
@@ -12,6 +12,16 @@ Este documento refere-se ao repositório **`jaooduartte/laje-api`**; o outro rep
 - **Dependency Review**: em toda PR para `main`, reprova dependências novas/vulneráveis High/Critical nos escopos `runtime`, `development` e `unknown`, consultando a base de advisories do GitHub. Não interpreta alterações de lockfile como automaticamente seguras.
 - **npm audit**: verifica **toda** a árvore travada em `package-lock.json`, incluindo dependências de desenvolvimento, em PR, push, execução manual e semanal. `npm audit --audit-level=high` reprova High/Critical existentes. O JSON vai para o artefato `laje-npm-audit`; os totais por severidade aparecem no resumo do job.
 - **Qualidade e cobertura**: o CI principal permanece responsável por typecheck, ESLint sem warnings, formatação, testes e builds. A cobertura fica separada, sem misturar os denominadores: frontend >=25%; backend >=75%. O workflow de segurança **não substitui** essas medições.
+
+## Migração para SonarQube Cloud — LAJE-151
+
+A primeira etapa adiciona análise SonarQube Cloud para PRs internas destinadas a `main` e para atualizações de `main`. O job aguarda o Quality Gate do Sonar. PRs de forks continuam executando os demais checks, mas não recebem secrets e, por isso, não executam a análise Sonar. A configuração usa `sonar-project.properties` e o LCOV produzido em `coverage/backend/lcov.info` pelo reporter nativo do Node.js 26.8.2; os reporters `spec` e de resumo permanecem ativos.
+
+Cada repositório precisa ter as variáveis `SONAR_ORGANIZATION` e `SONAR_PROJECT_KEY` e o secret `SONAR_TOKEN` cadastrados nas configurações do GitHub. O token não deve ser gravado no repositório nem impresso nos logs. O projeto Sonar precisa estar vinculado ao repositório GitHub correspondente.
+
+O mínimo global de cobertura da API continua em 75% de linhas. No plano Free, o Quality Gate Sonar usa o gate padrão Sonar way, que exige 80% de cobertura em código novo; essa condição é diferente da meta global do projeto. A cobertura global de 75% não substitui nem altera a condição do Sonar para código novo.
+
+O CodeQL permanece ativo durante esta etapa. A remoção somente do CodeQL, mantendo `npm audit`, Dependency Review, testes, lint, typecheck, builds e os mínimos globais de cobertura, depende da aprovação da PR de integração e da confirmação de análises Sonar aprovadas em PR e em `main` nos dois repositórios. Esta migração não altera branch protection, Vercel, AWS/RDS ou Supabase de produção.
 
 ## Painéis e evidências para a banca
 
