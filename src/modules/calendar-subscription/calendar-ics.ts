@@ -47,9 +47,9 @@ export function resolveScheduledSessionDateTime(
 
 function escapeIcsText(value: string): string {
   return value
-    .replace(/\\/g, "\\\\")
-    .replace(/;/g, "\\;")
-    .replace(/,/g, "\\,")
+    .replaceAll("\\", "\\\\")
+    .replaceAll(";", "\\;")
+    .replaceAll(",", "\\,")
     .replace(/\r?\n/g, "\\n");
 }
 

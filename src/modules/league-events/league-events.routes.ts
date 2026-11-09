@@ -160,7 +160,14 @@ function parseReservationCreate(body: unknown) {
     throw new ApiError(422, "VALIDATION_ERROR", "O campo eventDate é obrigatório.");
   }
   const requesterEmail = requireString(payload.requesterEmail, "requesterEmail", 320).toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(requesterEmail)) {
+  const atIndex = requesterEmail.indexOf("@");
+  const domainSeparatorIndex = requesterEmail.lastIndexOf(".", requesterEmail.length - 2);
+  if (
+    /\s/.test(requesterEmail) ||
+    atIndex <= 0 ||
+    atIndex !== requesterEmail.lastIndexOf("@") ||
+    domainSeparatorIndex <= atIndex + 1
+  ) {
     throw new ApiError(422, "VALIDATION_ERROR", "Informe um email válido.");
   }
   return {

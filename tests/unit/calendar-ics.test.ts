@@ -29,8 +29,8 @@ test("calendar helper emits deterministic ICS and ETag", () => {
   const document = buildCalendarDocument([
     {
       uid: "match-1@laje.app",
-      title: "LAJE · Vôlei Feminino — A x B",
-      description: "Interlaje\nFeminino",
+      title: "LAJE · Vôlei Feminino — A; B,C\\D",
+      description: "Interlaje\nFeminino; A,B\\C",
       location: "Ginásio • Quadra 1",
       startTime: "2026-10-11T15:00:00.000Z",
       endTime: "2026-10-11T16:00:00.000Z",
@@ -42,6 +42,8 @@ test("calendar helper emits deterministic ICS and ETag", () => {
   assert.match(document, /BEGIN:VEVENT/);
   assert.match(document, /TZID:America\/Sao_Paulo/);
   assert.match(document, /UID:match-1@laje.app/);
+  assert.match(document, /SUMMARY:LAJE · Vôlei Feminino — A\\; B\\,C\\\\D/);
+  assert.match(document, /DESCRIPTION:Interlaje\\nFeminino\\; A\\,B\\\\C/);
   assert.match(document, /LOCATION:Ginásio • Quadra 1/);
   assert.match(resolveETag(document), /^"[0-9a-f]{64}"$/);
   assert.equal(resolveETag(document), resolveETag(document));

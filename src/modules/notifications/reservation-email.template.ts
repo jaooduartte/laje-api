@@ -11,11 +11,19 @@ const LEAGUE_EVENT_TYPE_LABELS: Record<string, string> = {
 
 function escapeHtml(value: string): string {
   return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/\x27/g, "&#039;");
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function removeTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value[end - 1] === "/") {
+    end -= 1;
+  }
+  return value.slice(0, end);
 }
 
 function formatDate(dateStr: string): string {
@@ -105,7 +113,7 @@ export function buildReservationRequesterHtml(
   payload: ReservationEmailInput,
   appUrl: string,
 ): string {
-  const normalizedAppUrl = appUrl.replace(/\/+$/, "");
+  const normalizedAppUrl = removeTrailingSlashes(appUrl);
   const eventTypeLabel = LEAGUE_EVENT_TYPE_LABELS[payload.eventType] ?? payload.eventType;
   const formattedDate = formatDate(payload.eventDate);
   const statusBlock = buildStatusBlock(payload);
@@ -204,7 +212,7 @@ export function buildReservationRequesterHtml(
 }
 
 export function buildReservationAdminHtml(payload: ReservationEmailInput, appUrl: string): string {
-  const normalizedAppUrl = appUrl.replace(/\/+$/, "");
+  const normalizedAppUrl = removeTrailingSlashes(appUrl);
   const eventTypeLabel = LEAGUE_EVENT_TYPE_LABELS[payload.eventType] ?? payload.eventType;
   const formattedDate = formatDate(payload.eventDate);
 
