@@ -1,73 +1,80 @@
-# CI/CD multi-repositório — LAJE-33
+# Publicação do LAJE TCC
 
-## Escopo e situação
+## Escopo
 
-A aplicação é dividida entre dois repositórios independentes: `jaooduartte/laje` (frontend React/Vite na Vercel) e `jaooduartte/laje-api` (API Node.js/Express na AWS). O banco de dados do estado-alvo é Amazon RDS PostgreSQL 17.
+Este documento descreve a publicação do frontend `laje-tcc` e da API `laje-api` na AWS para o Portfólio. O RDS `laje-staging-postgres` é o único banco AWS selecionado para essa entrega; os nomes dos recursos conservam a nomenclatura de staging.
 
-O projeto Vercel `laje` permanecerá **permanentemente** na infraestrutura Supabase como produção operacional independente. A entrega do TCC é exclusivamente o projeto Vercel `laje-tcc`, que consome a `laje-api` AWS/RDS, atualmente validada em staging. O release final da LAJE-139 vale somente para o ambiente do TCC, **sem migração nem redirecionamento do `laje`**.
+| Componente | Projeto/serviço                        | Endereço atual                                                  |
+| ---------- | -------------------------------------- | --------------------------------------------------------------- |
+| Frontend   | Vercel `laje-tcc`                      | `https://laje-tcc.vercel.app`                                   |
+| API        | API Gateway HTTP API em `sa-east-1`    | `https://rkckaptyaf.execute-api.sa-east-1.amazonaws.com/api/v1` |
+| Runtime    | ECS/Fargate `laje-staging-api`         | Acesso interno pela API Gateway e ALB                           |
+| Banco      | RDS PostgreSQL `laje-staging-postgres` | Privado na VPC; sem endpoint público                            |
 
-A LAJE-33 entrega CI automatizado dos dois repositórios e deployment AWS de staging controlado via GitHub Actions, OIDC e Terraform. **Não habilita deploy automático em todo merge, não provisiona RDS produtivo e não interfere na produção `laje`.** A ativação de CD automático ao merge foi adiada para a LAJE-142, por economia, como trabalho posterior e independente da conclusão da LAJE-33.
+Em 09/11/2026, a AWS reportou o serviço ECS com 1 tarefa em execução, deployment concluído e task definition `:36`; o RDS PostgreSQL 17.9 estava disponível. Confirme o estado nos health checks e na execução mais recente do workflow antes de uma demonstração.
 
-## CI por pull request
+O fluxo GitHub Actions/Terraform publica os recursos AWS usados pelo `laje-tcc`. O frontend Vercel e o desenvolvimento local conectado por túnel SSM usam o mesmo RDS, com isolamento lógico por contas e fixtures de homologação.
 
-No frontend (`laje/.github/workflows/ci.yml`), `pull_request -> main` e `push -> main` executam typecheck, lint, Prettier incremental, testes e builds separados para Supabase e AWS-only.
+## CI
 
-No backend (`.github/workflows/ci.yml`), `pull_request -> main` e `push -> main` executam typecheck, lint, Prettier, testes unitários e E2E, build, testes de integração PostgreSQL 17, validação do baseline/migrations e validação da imagem Docker quando os arquivos relevantes forem alterados. A pipeline `.github/workflows/terraform.yml` verifica formatação, lockfile e `terraform validate` em PRs que alterem a infraestrutura.
+Os dois repositórios executam CI em pull requests e atualizações da branch `main`.
 
-Aprovação do CI e revisão por pares devem ocorrer **antes do merge**. A execução pós-merge é uma evidência adicional, não um mecanismo para bloquear um merge já executado.
+- Frontend: typecheck, lint, formatação, testes, builds e análise SonarQube Cloud.
+- API: typecheck, lint, formatação, testes unitários e E2E, build, integração PostgreSQL, baseline/migrations, validação Docker e análise SonarQube Cloud.
+- Terraform: formatação, lockfile e validação da infraestrutura nas mudanças correspondentes.
 
-## Staging AWS: deploy controlado
+Os Quality Gates SonarQube Cloud estão ativos. Consulte os workflows dos repositórios para o resultado associado ao commit que será publicado.
 
-Workflow: `.github/workflows/deploy-aws.yml` (**somente `workflow_dispatch` na `main`**).
+## Publicar a API AWS do TCC
 
-1. No GitHub Actions do repositório `laje-api`, selecione **Deploy AWS** e a branch `main`.
-2. Escolha `action=deploy` para iniciar/atualizar o staging ou `action=suspend` para desligar o runtime com custo contínuo.
-3. O deploy utiliza GitHub OIDC e a role `laje-github-actions-staging-deploy`; não usa chaves AWS estáticas.
-4. Terraform valida/aplica a infraestrutura de staging; a imagem Docker é publicada no ECR com tag `sha-<commit>` imutável.
-5. Uma task efêmera aplica migrations operacionais no RDS staging; depois o serviço ECS/Fargate inicia e a API é validada via HTTPS, health do PostgreSQL, CORS e smoke E2E.
-6. Registre URL do workflow, SHA da imagem, endpoint e resultado dos testes na PR/Jira. Não registre senhas, tokens ou dados pessoais.
-7. Ao terminar a validação, execute `action=suspend` e confirme os recursos desligados.
+Workflow: `.github/workflows/deploy-aws.yml` (`workflow_dispatch`, branch `main`).
 
-O gatilho automático antigo da branch `LAJE-136` foi removido para impedir reprovisionamento acidental. O fluxo não é acionado por PR nem por push. A LAJE-142 definirá futuramente o gatilho de `main`, filtros de paths, condições de custo e o comportamento de reativação do staging.
+1. No repositório `laje-api`, abra GitHub Actions e selecione **Deploy AWS**.
+2. Escolha a branch `main` e a ação `deploy`.
+3. O workflow assume a role AWS por GitHub OIDC e inicializa o Terraform do ambiente TCC.
+4. O Docker image recebe uma tag imutável `sha-<commit>` e é publicado/reutilizado no Amazon ECR.
+5. O workflow aplica as migrations operacionais pendentes no RDS escolhido para a entrega e atualiza uma task Fargate do serviço `laje-staging-api`.
+6. A publicação valida `GET /api/v1/health`, `GET /api/v1/health/database`, CORS para o domínio do `laje-tcc` e smoke E2E dos principais contratos.
+7. Guarde a URL da execução, o SHA da imagem e os resultados dos health checks como evidência da versão publicada. Não registre segredos ou dados pessoais.
 
-## Configuração de ambientes e segurança
+O workflow não é acionado automaticamente por merge ou push. Cada publicação deve ser identificada pela execução do GitHub Actions correspondente.
 
-Frontend Vercel:
+## Configuração do frontend Vercel
 
-- `laje`: `VITE_BACKEND_PROVIDER=supabase`, com URL e chave publicável do Supabase.
-- `laje-tcc`: `VITE_BACKEND_PROVIDER=aws` e `VITE_API_URL=<url-https-da-api>/api/v1`, sem inicialização do cliente Supabase.
-- Variáveis `VITE_*` são públicas e não podem conter secrets.
+O projeto `laje-tcc` deve usar:
 
-Backend AWS:
+```text
+VITE_BACKEND_PROVIDER=aws
+VITE_API_URL=https://rkckaptyaf.execute-api.sa-east-1.amazonaws.com/api/v1
+```
 
-- Staging usa OIDC, AWS Secrets Manager, variável `CORS_ORIGINS=https://laje-tcc.vercel.app` e Terraform state específico de staging.
-- Senhas de PostgreSQL, JWT e Brevo ficam fora do GitHub e do bundle Vite. O RDS é privado e exige TLS.
-- Para futura produção, usar role OIDC, Secrets Manager, estado Terraform, ambientes e credenciais **distintos** dos de staging.
-- A origem permitida em produção deve ser o domínio do frontend efetivamente promovido; não liberar `*` com credenciais.
+`VITE_*` é público e não deve conter tokens privados, credenciais de banco ou segredos de integração. A API Gateway permite a origem publicada `https://laje-tcc.vercel.app`; o desenvolvimento local deve usar o proxy Vite documentado na [Wiki de setup](https://github.com/jaooduartte/laje/wiki/Setup-e-Configura%C3%A7%C3%A3o-do-Ambiente).
 
-O pipeline não deve executar migrações de dados produtivos automaticamente. Mudanças de schema devem ser novas migrations versionadas; não editar migrations já aplicadas.
+## Configuração do backend
 
-## Gates do futuro release produtivo
+- A API usa variáveis privadas definidas pela task definition e segredos referenciados no AWS Secrets Manager.
+- O RDS é privado e a aplicação conecta com TLS.
+- A publicação usa GitHub OIDC; não crie access keys permanentes para o workflow.
+- Migrations devem ser novas e versionadas. Não edite migrations já aplicadas.
+- O workflow descrito aplica somente as migrations operacionais no RDS selecionado para o TCC.
 
-Antes de publicar o ambiente final do TCC `laje-tcc` com backend AWS de produção, exigir (sem alterar o projeto `laje`):
+## Evidências para uma entrega do Portfólio
 
-1. LAJE-89 (realtime) e LAJE-126 (workloads) concluídas e testadas, além das dependências descritas em LAJE-139.
-2. CI/quality gate aprovado nos dois repositórios, revisão por pares e SHA/versionamento rastreável.
-3. Terraform `plan` de produção revisado, estimativa de custo aprovada, credenciais e infraestrutura segregadas, backup/snapshot e rollback preparado.
-4. Write freeze efetivo na origem, sincronização/paridade finais da LAJE-139 e migrations validadas.
-5. Deploy da API produtiva com imagem imutável ECR, aprovação manual de promoção, ECS saudável, health PostgreSQL, CORS e smoke E2E.
-6. Atualização controlada apenas das configurações do projeto Vercel `laje-tcc`, novo build, validação funcional e observabilidade; somente então publicar a instalação final do TCC. Não modificar `laje`.
-7. Plano de reversão compatível com a existência de escritas no banco novo, incluindo decisão explícita sobre reversão de dados. Reverter apenas a versão da aplicação não reverte dados.
+Para comprovar uma versão publicada, registre:
 
-A LAJE-33 pode ser concluída quando os checks de CI dos dois repositórios, deployments Vercel dos ambientes separados, workflow manual AWS e validação HTTPS/CORS/PostgreSQL/smoke em staging estiverem comprovados. A LAJE-142 (gatilho automático por merge) e a LAJE-139 (release AWS/RDS final do TCC) têm aceites independentes posteriores.
+- commit/SHA do frontend e da API;
+- resultado dos workflows CI e Quality Gate;
+- deployment Vercel do `laje-tcc`;
+- execução do workflow `Deploy AWS` e tag imutável da imagem;
+- health da API, health do PostgreSQL, CORS e smoke E2E;
+- validação funcional do fluxo público e administrativo na versão publicada.
+
+O nome `staging` no ECS, no RDS e em variáveis Terraform não exige um segundo RDS para a entrega. Registre as evidências do commit, deployment, health checks e fluxo funcional da versão apresentada.
 
 ## Referências
 
-- [Staging e validação AWS](./staging-aws.md)
-- [Arquitetura e decisões de infraestrutura](./architecture.md)
-- [Terraform AWS](../infra/aws/terraform/README.md)
-- [Jira LAJE-33](https://joaoduartte.atlassian.net/browse/LAJE-33)
-- [Jira LAJE-142](https://joaoduartte.atlassian.net/browse/LAJE-142)
-- [Jira LAJE-139](https://joaoduartte.atlassian.net/browse/LAJE-139)
-
-A documentação pública final deve também ser refletida na Wiki do projeto antes da entrega do TCC.
+- [Arquitetura do LAJE TCC](./architecture.md)
+- [Runbook AWS](./staging-aws.md)
+- [Terraform](../infra/aws/terraform/README.md)
+- [CI](../.github/workflows/ci.yml)
+- [Deploy AWS](../.github/workflows/deploy-aws.yml)

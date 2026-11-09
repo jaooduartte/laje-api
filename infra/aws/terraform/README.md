@@ -1,139 +1,67 @@
-# LAJE AWS database infrastructure
+# Infraestrutura AWS do LAJE TCC
 
-This directory contains the Terraform baseline for the AWS database environments defined by LAJE-82. The provisioned state remains the LAJE-127 integration/staging environment; LAJE-88 adds the production configuration and cutover controls.
+## Escopo
 
-## Scope
+Este módulo Terraform provisiona os recursos AWS usados pelo frontend `laje-tcc` e pela API `laje-api`, na região `sa-east-1`. O RDS `laje-staging-postgres` é o único banco AWS selecionado para a entrega; o prefixo `staging` permanece nos identificadores Terraform.
 
-The current Terraform creates:
+O estado gerenciado pelo módulo inclui:
 
-- one dedicated VPC in `sa-east-1`;
-- two public subnets reserved for the future Application Load Balancer;
-- two private application subnets reserved for ECS/Fargate;
-- two private database subnets for Amazon RDS;
-- Security Groups implementing `ALB -> ECS -> RDS` least-privilege ingress;
-- an RDS subnet group;
-- a PostgreSQL 17 parameter group with `rds.force_ssl=1`;
-- one private, Single-AZ RDS for PostgreSQL 17 per isolated Terraform state;
-- encrypted gp3 storage and automated backups;
-- PostgreSQL logs exported to CloudWatch Logs;
-- the RDS master password generated and managed by AWS Secrets Manager.
+- VPC e subnets distribuídas em duas zonas de disponibilidade;
+- Security Groups para o tráfego entre ALB, tasks ECS e RDS;
+- Amazon RDS for PostgreSQL 17 com armazenamento criptografado, backups e TLS obrigatório;
+- Amazon ECR com scan-on-push e tags imutáveis;
+- ECS/Fargate para executar a API e o worker;
+- ALB interno e API Gateway HTTP API com VPC Link;
+- CloudWatch Logs e alarmes para recursos monitorados;
+- AWS Secrets Manager e papéis IAM para segredos e acesso dos serviços;
+- Amazon SQS, DLQ e EventBridge Scheduler para prévias assíncronas de chaveamento.
 
-The current Supabase production environment is not modified by this stack.
+## Fluxo de rede
 
-## Staging API runtime — LAJE-136
-
-The module now contains the integration/staging runtime for `laje-api`:
-
-- Amazon ECR with scan-on-push and retention of the three newest images;
-- Amazon ECS/Fargate using one 0.25 vCPU / 512 MiB task while staging is active;
-- internal Application Load Balancer in the application subnets;
-- API Gateway HTTP API as the public HTTPS endpoint, connected through a VPC Link;
-- CloudWatch Logs with short staging retention;
-- RDS credentials injected from the RDS-managed Secrets Manager secret;
-- browser CORS configured through Terraform variables.
-
-To avoid a NAT Gateway, the staging Fargate task runs in the public subnets with a public IP **but does not accept Internet ingress**. Its Security Group permits application traffic only from the ALB. The ALB is internal and receives traffic only from API Gateway through a VPC Link. RDS remains private and accepts PostgreSQL only from the ECS Security Group.
-
-The billable ALB, API Gateway VPC Link/runtime and ECS service are controlled by `staging_api_enabled`. Keep it `false` when staging is not being actively validated. ECR, the ECS cluster, task definition, execution role and short-retention log group may remain because they do not create continuous compute/load-balancer charges.
-
-Outside the original staging-runtime scope:
-
-- production API runtime and final TCC cutover (LAJE-139);
-- any new production SQS/EventBridge/realtime resources not explicitly represented in this Terraform state. LAJE-126 and LAJE-89 have been concluded in Jira; production parity still requires runtime validation.
-
-## Security model
-
-- RDS has `publicly_accessible = false`.
-- Port `5432` is allowed only from the ECS Security Group.
-- PostgreSQL TLS is forced with `rds.force_ssl=1`.
-- No database password is stored in Terraform source or GitHub; RDS manages the master credential in Secrets Manager.
-- Staging uses a separate VPC/database identity from the current Supabase production environment.
-
-Do not add `0.0.0.0/0` access to port `5432` as a shortcut for migrations.
-
-## Prerequisites
-
-- Terraform `>= 1.16.0, < 1.17.0`;
-- authenticated AWS identity with only the permissions required to provision/manage the resources in this stack;
-- AWS region `sa-east-1` enabled for the account.
-
-## Staging usage
-
-Copy the example variables only when overrides are needed:
-
-```bash
-cp terraform.tfvars.example terraform.tfvars
+```text
+Vercel laje-tcc
+  -> HTTPS /api/v1
+  -> API Gateway HTTP API
+  -> VPC Link
+  -> ALB interno
+  -> ECS/Fargate laje-api
+  -> RDS PostgreSQL privado com TLS
 ```
 
-Initialize the remote S3 backend used by this environment:
+O RDS não é público e aceita conexões PostgreSQL somente dos Security Groups previstos. O ALB também é interno. A task Fargate usa subnet pública e IP para comunicação de saída com serviços AWS; o Security Group não permite entrada direta da Internet.
 
-```bash
-terraform init -reconfigure \
-  -backend-config="bucket=laje-terraform-state-549243453554-sa-east-1"
-```
+## Estado consultado
 
-Then validate and review changes before applying:
+Em 09/11/2026, o plano de controle AWS mostrava o serviço ECS `laje-staging-api` com uma tarefa ativa, task definition `:36`, deployment concluído; o RDS `laje-staging-postgres` estava disponível em PostgreSQL 17.9. Consulte o [runbook do ambiente](../../../docs/staging-aws.md) e os health checks da execução de deploy antes de uma demonstração.
 
-```bash
-terraform fmt -check
-terraform validate
-terraform plan
-terraform apply
-```
+O frontend Vercel publicado e a API local conectada pelo túnel SSM usam esse mesmo RDS. A separação de uso local e publicado é lógica e deve preservar os dados históricos usados na demonstração, com contas/fixtures de homologação.
 
-`terraform.tfvars`, state files, plans and local Terraform metadata must not be committed.
+## Deploy pelo workflow
 
-## Production usage
+O workflow `Deploy AWS` executa o Terraform usando GitHub OIDC e o state remoto do ambiente. Na ação `deploy`, ele:
 
-The production **database foundation** can use a distinct VPC, Terraform state, database identity and Secrets Manager credential. It must not reuse the staging backend key or `terraform.tfvars`. **The API runtime in `staging-api.tf` is staging-specific**: applying the existing `staging_api_enabled` variable in a production state is not a valid production API deployment. LAJE-139 must introduce/review a separately named and independently secured production runtime, CI/CD and secrets before any public TCC release. The operational Vercel `laje` and Supabase must never be redirected.
+1. inicializa e valida a configuração Terraform;
+2. prepara a infraestrutura AWS definida neste módulo;
+3. publica ou reutiliza uma imagem imutável no ECR;
+4. aplica as migrations operacionais no RDS selecionado para o TCC;
+5. atualiza o serviço ECS/Fargate;
+6. valida HTTPS, API, conexão PostgreSQL, CORS e smoke E2E.
 
-```bash
-terraform init -reconfigure \
-  -backend-config="bucket=laje-terraform-state-549243453554-sa-east-1" \
-  -backend-config="key=laje/production/terraform.tfstate"
-terraform plan -var-file=production.tfvars
-```
+O deploy é iniciado manualmente na branch `main`. Antes de iniciar, confira que a branch, o SHA da imagem e os parâmetros do ambiente correspondem à versão que será avaliada. Os arquivos `.tfvars`, state local, planos Terraform e valores de credenciais não devem ser commitados.
 
-Create `production.tfvars` from `production.tfvars.example` only after the pre-cutover review has confirmed the remaining AWS credits and the dependencies in LAJE-33, LAJE-37 and LAJE-89. The configuration starts with a private Single-AZ `db.t4g.micro`, 20 GiB gp3, seven automated backup days, deletion protection and final snapshots enabled.
+## Banco de dados
 
-## Database baseline
+O baseline está em `infra/database/baseline/schema.sql`; alterações posteriores devem ser novas migrations em `infra/database/migrations/`. O RDS é privado. A aplicação de baseline ou migrations deve ocorrer pelo caminho de execução autorizado e nunca deve exigir liberar a porta `5432` para a Internet.
 
-The RDS instance is private. The PostgreSQL baseline must therefore be applied from a controlled execution path with network access to the VPC, not by temporarily exposing the database publicly.
+As credenciais do RDS são gerenciadas pelo AWS Secrets Manager. A configuração consultada usa backup automático com retenção de um dia; crie e confirme um snapshot manual antes de mudanças destrutivas e valide uma restauração em instância temporária privada antes de depender dela para recuperação. Não grave senhas, URLs de conexão com senha, tokens ou dados pessoais em arquivos do repositório, documentação ou comentários de PR.
 
-Use `scripts/apply-rds-baseline.sh` from an approved AWS execution context after loading libpq connection variables from the managed secret. It requires `PGHOST`, `PGUSER`, `PGDATABASE`, `PGPASSWORD`, `PGSSLROOTCERT`, `PGSSLMODE=verify-full`, `MIGRATION_EXECUTION_CONTEXT=controlled` and `MIGRATION_ALLOW_DESTINATION_WRITE=true`. The script refuses a destination whose `public` schema already has tables. It applies:
+## Validações de infraestrutura
 
-1. `infra/database/baseline/schema.sql`;
-2. `infra/database/baseline/validate.sql`.
-3. All incremental SQL migrations in `infra/database/migrations/`.
+O workflow Terraform valida formatação e configuração nas mudanças de infraestrutura. Antes de uma revisão de Terraform, use a versão indicada pela configuração do projeto e confira `terraform fmt -check` e `terraform validate`. O plano deve ser revisado antes de qualquer aplicação de infraestrutura.
 
-No database credentials or secret values must be written to documentation, shell history, repository files or pull-request comments.
+## Referências
 
-## Cost controls
-
-The staging defaults intentionally use a small Single-AZ `db.t4g.micro` instance and 20 GiB gp3 storage. Automated backup retention is set to **1 day** in staging because the AWS Free Plan used for this environment rejects the previous 7-day value. The production example requests seven days, deletion protection and a final snapshot. Before `terraform apply`, confirm that the account accepts seven-day retention; if it still uses the Free Plan restriction, review the one-day retention and manual snapshot tradeoff before changing `production.tfvars`. Review the current AWS estimate, active credits and any costs from API, load balancer, network or temporary migration resources.
-
-## Current execution status
-
-LAJE-127 has been provisioned and validated in the AWS staging/integration account in `sa-east-1`.
-
-Verified state:
-
-- current production remains on Supabase and was not modified by this task;
-- AWS staging/integration VPC is provisioned;
-- private Amazon RDS for PostgreSQL 17 is provisioned and reachable only through the intended VPC/Security Group path;
-- the LAJE database baseline was applied from an empty database and `validate.sql` completed successfully;
-- Terraform state is stored in the encrypted, versioned S3 backend with Block Public Access enabled;
-- the final `terraform plan` after provisioning returned no changes, confirming no known drift between configuration, state and live infrastructure;
-- temporary EC2/SSM/IAM resources used only to bootstrap and validate the private RDS were removed after completion;
-- on 04/10/2026, a temporary copy of the production configuration passed `terraform validate`; a production `terraform plan` could not complete because local AWS provider credentials were unavailable, so no production resource was created;
-- future production infrastructure and the final Supabase -> AWS cutover remain for later migration tasks.
-
-The frontend hosting is not changed by LAJE-127. The current Vercel usage remains under the project-specific authorization previously obtained from the professor; this infrastructure module is limited to the AWS staging/backend migration path.
-
-## Deploying or suspending staging
-
-The GitHub Actions workflow `.github/workflows/deploy-aws.yml` uses GitHub OIDC instead of long-lived AWS keys. A deployment first applies the runtime with zero tasks, publishes an immutable image to ECR, then applies one Fargate task and validates both health endpoints.
-
-Use the manual workflow action `deploy` to start/update staging. Use `suspend` after validation to destroy the billable ALB/API Gateway VPC Link/ECS service while preserving the reproducible low-cost foundation.
-
-No NAT Gateway is part of this design.
+- [Arquitetura do LAJE TCC](../../../docs/architecture.md)
+- [Publicação](../../../docs/deployment.md)
+- [Runbook AWS](../../../docs/staging-aws.md)
+- [Workflow de deploy](../../../.github/workflows/deploy-aws.yml)
