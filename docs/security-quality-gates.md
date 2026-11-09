@@ -21,7 +21,7 @@ Cada repositório precisa ter as variáveis `SONAR_ORGANIZATION` e `SONAR_PROJEC
 
 O mínimo global de cobertura da API continua em 75% de linhas. No plano Free, o Quality Gate Sonar usa o gate padrão Sonar way, que exige 80% de cobertura em código novo; essa condição é diferente da meta global do projeto. A cobertura global de 75% não substitui nem altera a condição do Sonar para código novo.
 
-As análises Sonar das PRs #78 e #52 e de `main` nos dois repositórios foram aprovadas. Esta segunda etapa propõe remover somente o CodeQL; até o merge desta PR, ele permanece ativo em `main`. `npm audit`, Dependency Review, testes, lint, typecheck, builds e os mínimos globais de cobertura permanecem ativos. Esta migração não altera branch protection, Vercel, AWS/RDS ou Supabase de produção.
+As análises Sonar das PRs #78 e #52 e de `main` nos dois repositórios foram aprovadas. Após essa validação, o CodeQL foi removido dos workflows ativos pelas PRs #79 (frontend) e #53 (API), já integradas à `main`. Os registros históricos de achados e execuções do CodeQL permanecem neste documento como histórico; não representam uma análise ativa. SonarQube Cloud, `npm audit`, Dependency Review, testes, lint, typecheck, builds e os mínimos globais de cobertura continuam ativos. Esta migração não altera branch protection, Vercel, AWS/RDS ou Supabase de produção.
 
 ## Painéis e evidências para a banca
 
