@@ -7,7 +7,7 @@
 
 ## Contexto
 
-O Portfólio entrega a versão web `laje-tcc`, com frontend React/Vite na Vercel e backend próprio na AWS. A arquitetura precisa refletir os recursos realmente usados e distinguir evidência operacional atual de planos ou auditorias anteriores.
+O Portfólio documenta a versão web `laje-tcc`, com frontend React/Vite na Vercel e backend próprio na AWS. O projeto Vercel `laje` continua sendo a produção operacional permanente da liga com Supabase. A arquitetura precisa refletir os dois deployments e distinguir evidência operacional atual de planos ou auditorias anteriores.
 
 A Vercel é uma exceção aprovada para hospedar o frontend deste projeto. A API, o banco e os workloads operacionais da entrega são executados na AWS em `sa-east-1`.
 
@@ -25,20 +25,21 @@ Navegador
   -> Amazon RDS for PostgreSQL 17
 ```
 
-`laje-staging-postgres` é o único RDS AWS selecionado para a entrega TCC. O prefixo `staging` nos nomes AWS e variáveis Terraform é nomenclatura existente; não exige provisionar nem renomear um segundo RDS. O frontend publicado e o desenvolvimento local conectado pelo túnel SSM usam essa mesma instância, com isolamento lógico por contas e fixtures de homologação.
+`laje-staging-postgres` é o único RDS AWS selecionado para a entrega TCC. O prefixo `staging` nos nomes AWS e variáveis Terraform é nomenclatura existente; não exige provisionar nem renomear um segundo RDS. O frontend publicado e o desenvolvimento local conectado pelo túnel SSM usam essa mesma instância. O ambiente permanente `laje`/Supabase segue separado e sem sincronização automática.
 
 Serviços complementares em uso ou configurados para o ambiente incluem Amazon ECR para imagens imutáveis, AWS Secrets Manager para segredos, CloudWatch para logs e métricas, SQS com DLQ e EventBridge Scheduler para workloads assíncronos.
 
 ## Evidência operacional atual
 
-Na consulta de 09/11/2026:
+Na consulta de somente leitura ao plano de controle AWS em 09/11/2026:
 
 - API Gateway HTTP API `rkckaptyaf` encaminhava a rota `$default` por VPC Link a um ALB interno;
-- ECS/Fargate `laje-staging-api` tinha uma tarefa desejada e em execução, deployment concluído e task definition `:36`;
+- ECS/Fargate `laje-staging-api` tinha uma tarefa desejada e em execução e task definition `:36`;
 - RDS `laje-staging-postgres` PostgreSQL 17.9 estava disponível e privado;
+- o RDS tinha retenção de backup de um dia, configuração Single-AZ e proteção contra exclusão desabilitada;
 - os logs da API estavam no grupo `/laje/staging/api`.
 
-Esse registro é uma fotografia da conta nessa data. A validação de uma publicação deve usar a execução correspondente do workflow `Deploy AWS`, seus health checks e um smoke funcional da versão apresentada.
+Esse registro é uma fotografia do estado dos recursos, não uma validação funcional ou de publicação. Confirme também a execução correspondente do workflow `Deploy AWS`, health checks, smoke funcional e evidências de recuperação da versão apresentada.
 
 ## Rede e segurança
 
@@ -61,16 +62,24 @@ O workflow `Deploy AWS` é manual (`workflow_dispatch`) e limitado à branch `ma
 
 O Terraform define seis alarmes CloudWatch para métricas de SQS/DLQ, idade da fila, CPU e armazenamento do RDS, rotação de credenciais e falhas de entrega do EventBridge. Os alarmes consultados não tinham ação SNS configurada, portanto este ADR não considera notificação por e-mail comprovada. A validação ampliada de observabilidade permanece vinculada à LAJE-40.
 
+## Justificativas e trade-offs preservados
+
+- **Região:** `sa-east-1` é a região configurada e usada pelos recursos documentados. O ADR original não contém comparação quantitativa de latência ou custo entre regiões; este documento não atribui uma medição que não foi feita.
+- **ECS/Fargate:** o runtime gerenciado evita administrar hosts EC2 e não mantém capacidade de instância ociosa quando o serviço está escalado a zero. Em contrapartida, ALB, VPC Link, API Gateway e recursos persistentes podem continuar gerando custo.
+- **RDS PostgreSQL em vez de Aurora:** o PostgreSQL padrão atende à compatibilidade do schema e reduz complexidade e custo para o porte registrado no projeto. A configuração Single-AZ reduz custo e não oferece failover automático; retenção de backup de um dia e ausência de proteção contra exclusão também limitam a recuperação.
+- **Um único RDS AWS para o TCC:** evita manter outro banco permanente e conserva a nomenclatura dos recursos existentes. O compartilhamento físico entre uso publicado e desenvolvimento exige separar os dados de teste. A base `laje_priority_flows` usada por testes não foi confirmada na instância, e os usuários sintéticos não são contas de homologação disponíveis.
+- **Custo:** `aws:on` e `aws:off` controlam a tarefa ECS e o RDS, sem remover recursos. Não há estimativa mensal vigente neste ADR; valide preços e consumo atuais antes de estabelecer um valor.
+
 ## Decisões anteriores e atualização
 
-A decisão original descrevia uma arquitetura futura com recursos separados para integração e produção. A revisão da LAJE-37 substitui essas premissas pelo ambiente TCC verificado: a instância `laje-staging-postgres` é o único RDS selecionado para essa entrega, e o runtime atualmente nomeado como staging atende ao frontend `laje-tcc`.
+A decisão original descrevia uma arquitetura futura com recursos AWS separados para integração e produção. A revisão da LAJE-37 documenta a alternativa implementada para o TCC: `laje-staging-postgres` é o único RDS selecionado para essa entrega, e o runtime atualmente nomeado como staging atende `laje-tcc`. Essa decisão não migra a operação permanente `laje` do Supabase nem declara concluído o cutover AWS de produção descrito no registro histórico NO-GO.
 
 A auditoria de 15/10/2026 registrada no documento de release permanece como evidência histórica daquela data. Ela não define o estado atual nem exige uma infraestrutura paralela.
 
 ## Consequências
 
 - Frontend, API e persistência do TCC têm um caminho de execução documentado e verificável.
-- O mesmo RDS é compartilhado pelo frontend publicado e pelo desenvolvimento local via túnel SSM; testes devem usar contas/fixtures identificáveis e preservar dados da demonstração.
+- O mesmo RDS físico é compartilhado pelo frontend publicado e pelo desenvolvimento local via túnel SSM. Não há conta ou dataset de teste validado na AWS; testes de fluxo com escrita só podem usar uma base descartável/resetável `laje_priority_flows` depois de confirmada sua separação da base de demonstração.
 - A instância atual tem retenção automática de backup curta, Single-AZ e sem proteção contra exclusão, condições que devem ser consideradas em mudanças de banco.
 - Status de tarefas, documentação, configuração Terraform e imagens não substituem evidência do deployment e dos fluxos efetivamente apresentados.
 

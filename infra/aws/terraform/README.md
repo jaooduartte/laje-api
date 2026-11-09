@@ -32,9 +32,9 @@ O RDS não é público e aceita conexões PostgreSQL somente dos Security Groups
 
 ## Estado consultado
 
-Em 09/11/2026, o plano de controle AWS mostrava o serviço ECS `laje-staging-api` com uma tarefa ativa, task definition `:36`, deployment concluído; o RDS `laje-staging-postgres` estava disponível em PostgreSQL 17.9. Consulte o [runbook do ambiente](../../../docs/staging-aws.md) e os health checks da execução de deploy antes de uma demonstração.
+Consulta de somente leitura ao plano de controle AWS em 09/11/2026 mostrou o serviço ECS `laje-staging-api` com uma tarefa ativa, task definition `:36`, e o RDS `laje-staging-postgres` disponível em PostgreSQL 17.9. Isso não comprova health checks ou fluxos da aplicação; consulte o [runbook do ambiente](../../../docs/staging-aws.md) e a execução de deploy antes de uma demonstração.
 
-O frontend Vercel publicado e a API local conectada pelo túnel SSM usam esse mesmo RDS. A separação de uso local e publicado é lógica e deve preservar os dados históricos usados na demonstração, com contas/fixtures de homologação.
+O frontend Vercel `laje-tcc` e a API local conectada pelo túnel SSM usam esse mesmo RDS. Os testes de fluxo exigem uma URL `DATABASE_URL` que contenha `laje_priority_flows`, mas a base não foi confirmada na AWS e seus usuários sintéticos não são contas de homologação no serviço publicado. Não execute testes de escrita contra os dados de demonstração; os detalhes estão no [runbook](../../../docs/staging-aws.md#isolamento-dos-testes-no-rds-compartilhado).
 
 ## Deploy pelo workflow
 

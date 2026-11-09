@@ -2,9 +2,9 @@
 
 ## Escopo atual
 
-Este documento registra a arquitetura e a publicação da versão web do TCC. O frontend Vercel `laje-tcc` usa a `laje-api` na AWS e o único RDS PostgreSQL selecionado para a entrega, `laje-staging-postgres`. Os nomes AWS conservam o prefixo `staging`; eles não indicam que exista ou seja necessário um segundo banco para a publicação.
+Este documento registra a arquitetura e a publicação da versão web do TCC. O frontend Vercel `laje-tcc` usa a `laje-api` na AWS e o único RDS PostgreSQL selecionado para a entrega, `laje-staging-postgres`. Os nomes AWS conservam o prefixo `staging`; eles não indicam que exista ou seja necessário um segundo banco para a publicação. O projeto Vercel `laje` permanece na produção operacional da LAJE com Supabase; a seleção de um RDS para o TCC não muda esse ambiente.
 
-O frontend publicado e o desenvolvimento local da API pelo túnel SSM usam a mesma instância. O isolamento entre esses usos é lógico e deve utilizar contas e fixtures de homologação claramente identificáveis, preservando os dados necessários à demonstração. Um PostgreSQL local não é requisito para o fluxo documentado.
+O frontend publicado e o desenvolvimento local da API pelo túnel SSM usam a mesma instância RDS. A revisão encontrou fixtures de fluxo que exigem uma URL de conexão contendo `laje_priority_flows`, mas não confirmou a existência dessa base na AWS. As contas sintéticas dos testes não são provisionadas no ambiente publicado e não há prova de que contas administrativas isolem registros de demonstração. Não use a base da demonstração para testes de escrita.
 
 ## Auditoria AWS de 09/11/2026
 
@@ -20,7 +20,9 @@ Esta auditoria é uma fotografia do ambiente naquela data. Confirme o deployment
 
 ## Registro histórico da auditoria de 15/10/2026
 
-A auditoria de 15/10/2026 registrou **NO-GO** para a migração final então planejada, porque o inventário disponível naquele momento mostrava recursos com nomes de staging e não identificava uma instância separada de produção. Essa conclusão é histórica e foi superada pela decisão da LAJE-37 de usar `laje-staging-postgres` como o único RDS selecionado para a entrega TCC. A decisão atual não exige um RDS separado nem a renomeação dos recursos.
+O registro **NO-GO** de 15/10/2026 pertence à proposta de migração da operação permanente `laje` do Supabase para uma infraestrutura AWS de produção separada. A decisão da LAJE-37 de usar `laje-staging-postgres` para o deployment TCC resolve o escopo de hospedagem acadêmica sem criar um segundo RDS; ela não altera o backend Supabase de `laje`, não encerra a avaliação NO-GO daquela migração e não comprova prontidão funcional ou de recuperação do ambiente TCC.
+
+Para declarar a versão TCC pronta para apresentação, valide separadamente a execução de publicação, health checks, smoke funcional dos fluxos apresentados, backups e um ensaio de restauração. A consulta ao estado ECS/RDS, isoladamente, não atende esses critérios. O ensaio de restauração ainda não foi comprovado nesta revisão.
 
 Revisões antigas deste arquivo também descreviam infraestrutura futura e gates de migração que não correspondem à publicação documentada aqui. A evidência da auditoria antiga não deve ser usada como retrato do runtime atual.
 

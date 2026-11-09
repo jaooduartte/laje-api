@@ -2,24 +2,24 @@
 
 ## Escopo
 
-Este runbook descreve o ambiente AWS que atende o frontend `laje-tcc` e a entrega do Portfólio. O runtime, o banco e algumas variáveis mantêm o prefixo `staging`; o RDS `laje-staging-postgres` é o único banco AWS escolhido para a entrega.
+Este runbook descreve o ambiente AWS que atende o frontend `laje-tcc` e a entrega do Portfólio. O projeto Vercel `laje` permanece na operação permanente com Supabase e não é afetado por estes procedimentos. O runtime, o banco e algumas variáveis mantêm o prefixo `staging`; o RDS `laje-staging-postgres` é o único banco AWS escolhido para a entrega.
 
 ## Estado verificado em 09/11/2026
 
-| Recurso              | Estado consultado                                                                                                  |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Região               | `sa-east-1`                                                                                                        |
-| API Gateway HTTP API | `rkckaptyaf`, estágio `$default`, endpoint `https://rkckaptyaf.execute-api.sa-east-1.amazonaws.com`                |
-| Rota pública         | `$default`, integrada como `HTTP_PROXY` pelo VPC Link `jxvnnl`                                                     |
-| ALB                  | `laje-staging-api`, interno                                                                                        |
-| ECS                  | Cluster e serviço `laje-staging-api`; 1 tarefa desejada e em execução; task definition `:36`, deployment concluído |
-| RDS                  | `laje-staging-postgres`, PostgreSQL 17.9, `available`, privado, criptografado e com TLS obrigatório                |
-| Origem CORS          | `https://laje-tcc.vercel.app`                                                                                      |
-| Logs                 | CloudWatch Logs, grupo `/laje/staging/api`                                                                         |
+| Recurso | Estado consultado |
+| --- | --- |
+| Região | `sa-east-1` |
+| API Gateway HTTP API | `rkckaptyaf`, estágio `$default`, endpoint `https://rkckaptyaf.execute-api.sa-east-1.amazonaws.com` |
+| Rota pública | `$default`, integrada como `HTTP_PROXY` pelo VPC Link `jxvnnl` |
+| ALB | `laje-staging-api`, interno |
+| ECS | Serviço `laje-staging-api` ativo, 1 tarefa desejada e em execução, task definition `:36` |
+| RDS | `laje-staging-postgres`, PostgreSQL 17.9, `available`, privado, backup com retenção de um dia, Single-AZ e sem proteção contra exclusão |
+| Origem CORS | `https://laje-tcc.vercel.app` |
+| Logs | CloudWatch Logs, grupo `/laje/staging/api` |
 
 O status acima foi consultado no plano de controle AWS. Para comprovar que uma versão da aplicação está pronta para uso, consulte os health checks e o smoke E2E da execução mais recente de `Deploy AWS`.
 
-O frontend publicado e o desenvolvimento local da API usam a mesma instância RDS. A diferença entre os fluxos está nos endpoints e no acesso: o público passa pela API Gateway e o local pelo túnel SSM. A homologação deve usar contas e fixtures de teste que não alterem os dados históricos da demonstração.
+O frontend publicado e o desenvolvimento local da API usam a mesma instância RDS. A diferença entre os fluxos está nos endpoints e no acesso: o público passa pela API Gateway e o local pelo túnel SSM. A consulta confirma o estado do plano de controle, não a saúde dos endpoints, a execução do workflow ou a validação funcional.
 
 ## Topologia
 
@@ -76,6 +76,14 @@ Em outro terminal, execute `npm run dev` para iniciar a API local. Configure o f
 
 O banco é compartilhado entre desenvolvimento local e frontend publicado do TCC. Use somente contas e registros de homologação identificáveis e preserve os dados históricos da demonstração. Não execute migrations ou operações de escrita remota sem autorização específica.
 
+## Isolamento dos testes no RDS compartilhado
+
+Os testes de fluxo em `tests/flows/priority-flows.test.ts` e `tests/flows/championship-reconfiguration.test.ts` verificam se `DATABASE_URL` contém `laje_priority_flows`. Essa verificação examina o texto da URL; não comprova que o hostname ou a base PostgreSQL sejam isolados da aplicação publicada. Os testes criam registros sintéticos com IDs fixos e contas temporárias, incluindo `laje38-ci` e `laje150-ci`, com e-mails do domínio reservado `example.invalid`.
+
+Essas contas não são provisionadas no serviço AWS. A revisão estática não encontrou limpeza dos registros ao final desses testes. A lista de bancos dentro do RDS não foi consultada; portanto, não está comprovado que exista uma base isolada `laje_priority_flows` na AWS. A base de aplicação usada pela demonstração e os registros que podem ser usados com segurança não foram identificados.
+
+Execute testes de fluxo com escrita somente em uma base descartável ou resetável, após confirmar o `DATABASE_URL`, hostname e nome da base. Não aponte esses testes à base usada pela demonstração ou pelo deployment `laje-tcc`. Até a existência e o isolamento de uma base de teste serem comprovados, limite a validação a checks sem escrita ou ambientes locais efêmeros. Não crie bancos, contas ou fixtures no RDS sem autorização específica.
+
 ## Backup, restauração e rollback
 
 O RDS tem backups automáticos com retenção configurada de um dia. A proteção contra exclusão não estava habilitada no estado consultado em 09/11/2026; confirme o estado atual antes de uma mudança destrutiva.
@@ -91,6 +99,41 @@ Para recuperar dados, restaure o snapshot para uma instância temporária privad
 Para reverter uma publicação sem mudança incompatível de schema, publique novamente a imagem ECR imutável anterior. Se houver escritas posteriores ao snapshot, avalie a perda de dados e a forma de reconciliação antes de qualquer restauração; não substitua o RDS ativo sem plano e aprovação específicos.
 
 O fluxo atual não documenta um ensaio de restauração concluído. Registre a execução, os responsáveis e os resultados antes de tratar o procedimento como validado.
+
+## Suspender e reativar recursos por custo
+
+Os comandos abaixo alteram recursos billable. Antes de executá-los, confirme que a identidade AWS ativa corresponde a `AWS_EXPECTED_ACCOUNT_ID` do `.env`. Os comandos não criam nem removem recursos.
+
+Na raiz de `laje-api`, para ligar o RDS se estiver parado, definir uma tarefa ECS e aguardar os estados prontos:
+
+```bash
+npm run aws:on
+```
+
+Para desligar o serviço ECS e parar o RDS:
+
+```bash
+npm run aws:off
+```
+
+O script valida a conta AWS configurada. `aws:on` inicia o RDS caso necessário, define `desiredCount=1` no serviço ECS e aguarda estabilização. `aws:off` define `desiredCount=0`, aguarda a parada das tasks e depois para o RDS. A API Gateway, o VPC Link, o ALB e outros recursos provisionados permanecem; desligar ECS e RDS não elimina todos os custos AWS. Enquanto o RDS está parado, a AWS continua cobrando armazenamento e backups retidos; consulte a documentação de [parada temporária do RDS](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_StopInstance.html).
+
+Confirme o estado do banco:
+
+```bash
+aws rds describe-db-instances --db-instance-identifier laje-staging-postgres --region sa-east-1 --query 'DBInstances[0].DBInstanceStatus' --output text
+```
+
+Confirme o serviço e as tasks ECS:
+
+```bash
+aws ecs describe-services --cluster laje-staging-api --services laje-staging-api --region sa-east-1 --query 'services[0].{status:status,desired:desiredCount,running:runningCount,pending:pendingCount}' --output table
+aws ecs list-tasks --cluster laje-staging-api --service-name laje-staging-api --region sa-east-1
+```
+
+Depois de ligar, espere RDS `available`, ECS com `desired=1` e `running=1`, e confirme `/api/v1/health` e `/api/v1/health/database`. Esses sinais não comprovam os fluxos de produto; execute e registre o smoke funcional da versão a apresentar. Depois de desligar, confirme RDS `stopped`, ECS `desired=0` e `running=0`, sem tasks retornadas. A AWS pode reiniciar uma instância RDS após sete dias consecutivos parada.
+
+Para desenvolvimento local com `npm run dev:aws`, mantenha o terminal do túnel SSM ativo e execute `npm run dev` em outro terminal para iniciar a API local. Ao terminar, interrompa primeiro a API local e finalize o túnel com `Ctrl+C`. O script fecha o túnel e interrompe somente os recursos que iniciou naquela sessão. Se a sessão SSM terminar inesperadamente ou os recursos já estivessem ativos antes, confira ECS e RDS e use `npm run aws:off` ao fim da janela de uso.
 
 ## Referências
 

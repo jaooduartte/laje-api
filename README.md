@@ -2,6 +2,8 @@
 
 API dedicada da Liga das Atléticas de Joinville (LAJE), responsável por centralizar regras de negócio, autenticação, autorização, persistência e contratos HTTP do ambiente web `laje-tcc`.
 
+O projeto Vercel `laje` continua sendo a produção operacional permanente da LAJE e usa Supabase. Esta API atende o deployment separado `laje-tcc`, do TCC/Portfólio; não altera nem substitui o backend Supabase de `laje`.
+
 ## Arquitetura do ambiente TCC
 
 ```text
@@ -21,7 +23,7 @@ LAJE API (Node.js + Express em Amazon ECS/AWS Fargate)
 Amazon RDS PostgreSQL 17: laje-staging-postgres
 ```
 
-`laje-staging-postgres` é o único RDS AWS selecionado para a entrega TCC. O prefixo `staging` é parte dos nomes existentes e não indica requisito de um segundo banco. O frontend publicado e a API local conectada pelo túnel SSM usam essa mesma instância, com isolamento lógico por contas e fixtures de homologação.
+`laje-staging-postgres` é o único RDS AWS selecionado para a entrega TCC. O prefixo `staging` é parte dos nomes existentes e não indica requisito de um segundo banco. O frontend publicado e a API local conectada pelo túnel SSM usam essa mesma instância. As contas sintéticas dos testes de fluxo são criadas apenas durante testes apontados para o banco `laje_priority_flows`; elas não são contas de homologação provisionadas no RDS publicado.
 
 Arquitetura e evidências atuais estão em [docs/architecture.md](docs/architecture.md); publicação em [docs/deployment.md](docs/deployment.md); operação AWS em [docs/staging-aws.md](docs/staging-aws.md); e decisão formal em [docs/adr/0001-arquitetura-operacional-final.md](docs/adr/0001-arquitetura-operacional-final.md).
 

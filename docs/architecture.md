@@ -2,13 +2,13 @@
 
 ## Escopo e estado
 
-Este documento descreve o ambiente web `laje-tcc`, que compõe a entrega de Portfólio. O frontend React/Vite é publicado na Vercel; a `laje-api`, o único RDS PostgreSQL escolhido para a entrega e a infraestrutura de execução ficam na AWS, na região `sa-east-1`.
+Este documento descreve a arquitetura AWS do ambiente web `laje-tcc`, que compõe a entrega de Portfólio. O projeto Vercel `laje`, usado permanentemente na operação da liga, continua com Supabase e não é atendido por esta API. No TCC, o frontend React/Vite é publicado na Vercel; a `laje-api`, o único RDS PostgreSQL escolhido para a entrega e a infraestrutura de execução ficam na AWS, na região `sa-east-1`.
 
 A Vercel é uma exceção aprovada especificamente para o frontend deste projeto. Os nomes dos recursos e variáveis Terraform mantêm o prefixo `staging`; a instância `laje-staging-postgres` é o único RDS selecionado para a entrega TCC, sem requisito de provisionar outro banco com nome `production`.
 
-Em 09/11/2026, a consulta da AWS mostrou o serviço ECS `laje-staging-api` com uma tarefa desejada e em execução, task definition `:36`, deployment concluído, e o RDS `laje-staging-postgres` disponível. Esse é um retrato do estado da conta naquele momento; consulte health checks e o workflow antes de uma demonstração ou release.
+Consulta de somente leitura ao plano de controle AWS em 09/11/2026 mostrou o serviço ECS `laje-staging-api` com uma tarefa desejada e em execução, task definition `:36`, e o RDS `laje-staging-postgres` disponível. Esse retrato confirma o estado dos recursos naquela data; não confirma os health checks, a última execução do workflow nem a validação funcional antes de uma demonstração ou release.
 
-O desenvolvimento local conectado pelo túnel SSM e a aplicação pública `laje-tcc` usam o mesmo RDS. A separação entre uso local e publicado é feita por configuração, endpoint e dados/contas de homologação; testes devem preservar os dados históricos usados na demonstração.
+O desenvolvimento local conectado pelo túnel SSM e a aplicação pública `laje-tcc` usam o mesmo RDS. A revisão do código encontrou testes de fluxo que exigem um banco denominado `laje_priority_flows` e criam registros e contas sintéticas determinísticas. Não foi confirmada a existência desse banco isolado na instância AWS, e os testes não removem automaticamente todos os registros inseridos. Não há evidência para afirmar que contas administrativas, por si só, isolem dados da demonstração.
 
 ## Diagrama de implantação
 
@@ -105,7 +105,7 @@ O Terraform define o log group `/laje/staging/api`, seis alarmes para métricas 
 
 ## Uso local e publicado
 
-O frontend público usa `https://rkckaptyaf.execute-api.sa-east-1.amazonaws.com/api/v1`. Para desenvolvimento, o frontend pode encaminhar chamadas via Vite e a API local pode acessar o mesmo RDS por túnel SSM. Use uma conta e fixtures de homologação identificáveis, com proteção contra alteração de dados históricos.
+O frontend público `laje-tcc` usa `https://rkckaptyaf.execute-api.sa-east-1.amazonaws.com/api/v1`. Para desenvolvimento, o frontend pode encaminhar chamadas via Vite e a API local pode acessar o mesmo RDS por túnel SSM. Os testes de fluxo em `tests/flows` exigem que `DATABASE_URL` contenha `laje_priority_flows`; criam contas sintéticas como `laje38-ci` e `laje150-ci` e registros com IDs fixos. Esses usuários não estão provisionados como contas de homologação. Como os testes deixam registros no banco e a existência de uma base AWS isolada com esse nome não foi confirmada, não execute esses testes contra a base de demonstração. Detalhes e limites estão no [runbook](./staging-aws.md#isolamento-dos-testes-no-rds-compartilhado).
 
 O prefixo `staging` nos nomes AWS é parte da configuração existente e não cria uma exigência de banco separado para a publicação TCC. Antes da entrega, associe o commit do frontend, a imagem ECR, a execução do workflow, os health checks e a validação manual do fluxo à evidência da versão apresentada.
 

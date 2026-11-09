@@ -4,6 +4,8 @@
 
 Este documento descreve a publicação do frontend `laje-tcc` e da API `laje-api` na AWS para o Portfólio. O RDS `laje-staging-postgres` é o único banco AWS selecionado para essa entrega; os nomes dos recursos conservam a nomenclatura de staging.
 
+O projeto Vercel `laje` permanece como produção operacional independente, com Supabase. A publicação AWS descrita aqui se aplica somente ao projeto Vercel `laje-tcc`; não migra nem altera a operação permanente.
+
 | Componente | Projeto/serviço                        | Endereço atual                                                  |
 | ---------- | -------------------------------------- | --------------------------------------------------------------- |
 | Frontend   | Vercel `laje-tcc`                      | `https://laje-tcc.vercel.app`                                   |
@@ -13,7 +15,7 @@ Este documento descreve a publicação do frontend `laje-tcc` e da API `laje-api
 
 Em 09/11/2026, a AWS reportou o serviço ECS com 1 tarefa em execução, deployment concluído e task definition `:36`; o RDS PostgreSQL 17.9 estava disponível. Confirme o estado nos health checks e na execução mais recente do workflow antes de uma demonstração.
 
-O fluxo GitHub Actions/Terraform publica os recursos AWS usados pelo `laje-tcc`. O frontend Vercel e o desenvolvimento local conectado por túnel SSM usam o mesmo RDS, com isolamento lógico por contas e fixtures de homologação.
+O fluxo GitHub Actions/Terraform publica os recursos AWS usados pelo `laje-tcc`. O frontend Vercel e o desenvolvimento local conectado por túnel SSM usam o mesmo RDS. Os testes de fluxo que escrevem no banco exigem uma base denominada `laje_priority_flows`; não foi confirmada a existência dessa base na AWS. Contas sintéticas dos testes não são credenciais de homologação disponíveis no serviço publicado. Consulte o runbook antes de executar testes com escrita.
 
 ## CI
 

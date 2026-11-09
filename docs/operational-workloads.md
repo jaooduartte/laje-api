@@ -2,7 +2,7 @@
 
 ## Escopo atual para a entrega TCC
 
-Esta documentação descreve os workloads AWS da versão web `laje-tcc`, executados pela `laje-api`. O runtime atual usa o RDS `laje-staging-postgres`, que é o único banco AWS selecionado para a entrega. O prefixo `staging` em nomes de recursos registra a nomenclatura existente; não representa um segundo ambiente de banco necessário à publicação.
+Esta documentação descreve os workloads AWS da versão web `laje-tcc`, executados pela `laje-api`. O projeto Vercel `laje` mantém a produção operacional permanente no Supabase e não usa os workloads descritos aqui. O runtime TCC usa o RDS `laje-staging-postgres`, que é o único banco AWS selecionado para a entrega. O prefixo `staging` em nomes de recursos registra a nomenclatura existente; não representa um segundo banco AWS necessário à publicação.
 
 Os detalhes de fila, scheduler, e-mail e calendário abaixo preservam decisões técnicas e evidências históricas da LAJE-126. A validação temporária realizada em 07/10/2026 não deve ser confundida com o estado atual do deployment; consulte o workflow e os health checks da versão que será apresentada.
 
