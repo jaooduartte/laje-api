@@ -191,7 +191,9 @@ export class AwsSqsClient {
       headers["x-amz-security-token"] = credentials.sessionToken;
     }
 
-    const signedHeaderNames = Object.keys(headers).sort();
+    const signedHeaderNames = Object.keys(headers).sort((left, right) =>
+      left.localeCompare(right, "en-US"),
+    );
     const canonicalHeaders = signedHeaderNames
       .map((name) => `${name}:${headers[name]!.trim()}\n`)
       .join("");
