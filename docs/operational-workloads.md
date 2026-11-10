@@ -1,5 +1,11 @@
 # Workloads operacionais AWS — LAJE-126
 
+## Escopo atual para a entrega TCC
+
+Esta documentação descreve os workloads AWS da versão web `laje-tcc`, executados pela `laje-api`. O projeto Vercel `laje` mantém a produção operacional permanente no Supabase e não usa os workloads descritos aqui. O runtime TCC usa o RDS `laje-staging-postgres`, que é o único banco AWS selecionado para a entrega. O prefixo `staging` em nomes de recursos registra a nomenclatura existente; não representa um segundo banco AWS necessário à publicação.
+
+Os detalhes de fila, scheduler, e-mail e calendário abaixo preservam decisões técnicas e evidências históricas da LAJE-126. A validação temporária realizada em 07/10/2026 não deve ser confundida com o estado atual do deployment; consulte o workflow e os health checks da versão que será apresentada.
+
 ## Objetivo
 
 Remover do estado-alvo do LAJE as dependências operacionais de `pgmq`, `pg_cron`, Supabase Vault e Edge Functions, mantendo o frontend em Vercel pela exceção específica já aprovada para o projeto e transferindo backend, banco, filas, agendamentos, segredos e observabilidade para a arquitetura controlada na AWS.
@@ -18,7 +24,7 @@ O ambiente Supabase legado possui:
 | Supabase service role / segredos de função           | Acesso privilegiado              | IAM + AWS Secrets Manager            |
 | Logs da Edge Function                                | Diagnóstico                      | CloudWatch Logs/Metrics/Alarms       |
 
-Os componentes legados permanecem intactos durante a coexistência. Eles só podem ser desligados/removidos no cutover controlado da LAJE-139.
+O inventário registra a origem técnica da portabilidade dos workloads. A publicação documentada para o TCC usa os contratos AWS da `laje-api`.
 
 ## Prévia assíncrona de chaveamento
 
@@ -158,11 +164,11 @@ A migração foi ajustada para não transformar a coexistência em duplicação 
 - payloads de prévia acima de 2 MiB são recusados antes de escrever no PostgreSQL;
 - estado transitório consumido/expirado é apagado em batches pequenos pelo maintenance.
 
-Esses limites são guardrails operacionais, não cotas do provedor. Antes do cutover final, devem ser recalibrados a partir das métricas reais do Supabase e da capacidade provisionada do RDS.
+Esses limites são guardrails operacionais, não cotas do provedor. Qualquer revisão deve ser baseada nas métricas atuais e na capacidade provisionada do RDS.
 
-## Evidência de staging — 07/10/2026
+## Evidência histórica de validação — 07/10/2026
 
-A branch `LAJE-126` foi implantada temporariamente no staging AWS para validar a portabilidade do motor exato v8 e os workloads operacionais antes do corte de tráfego.
+A branch `LAJE-126` foi implantada temporariamente nos recursos AWS então nomeados como staging para validar a portabilidade do motor exato v8 e os workloads operacionais. Os resultados abaixo descrevem somente aquela janela.
 
 Validações concluídas:
 
@@ -183,29 +189,15 @@ Validações concluídas:
 - o RDS manteve aproximadamente 18,28 GB de espaço livre durante a janela de validação;
 - CI, PostgreSQL Validation, Docker Image, Terraform e CI do frontend AWS-only passaram;
 - os guardrails de storage foram testados no CI e bloquearam a sincronização antes de qualquer escrita destrutiva quando configurados com limites deliberadamente insuficientes;
-- task ECS/Fargate e Scheduler foram suspensos após o smoke para evitar custo e carga desnecessária;
 - o trust OIDC temporário da branch `LAJE-126` foi removido depois da validação.
 
-A produção Supabase permaneceu intacta durante o ensaio. O sync continua restrito ao schema `public`, sem replicação contínua nem cópia do schema transitório `championship_bracket_preview_private`.
+O sync descrito no ensaio era restrito ao schema `public`, sem replicação contínua nem cópia do schema transitório `championship_bracket_preview_private`.
 
-O envio Brevo permanece propositalmente desabilitado no staging até existir remetente verificado e secret `BREVO_API_KEY` provisionado no Secrets Manager. Isso não bloqueia a migração de código, mas uma entrega transacional real deve ser evidenciada antes da LAJE-139.
+Na configuração histórica dessa validação, o envio Brevo estava desabilitado até existir remetente verificado e secret `BREVO_API_KEY` provisionado no Secrets Manager. A entrega transacional atual deve ser verificada no runtime e demonstrada antes de afirmar que o e-mail está operacional.
 
-## Coexistência e cutover
+## Operação na versão TCC
 
-Antes da LAJE-139:
-
-- produção legada continua usando Supabase;
-- `laje-tcc` usa os contratos AWS;
-- Edge Functions/pgmq/pg_cron legados não são removidos;
-- nenhuma fila AWS recebe tráfego produtivo definitivo.
-
-No cutover:
-
-1. confirmar LAJE-126 e LAJE-89 concluídas;
-2. executar paridade final e write freeze da LAJE-139;
-3. apontar o frontend final para a API AWS;
-4. validar filas, calendário e e-mails;
-5. só então desativar jobs/funções equivalentes no Supabase.
+O frontend `laje-tcc` consome a `laje-api` pela API Gateway, VPC Link, ALB interno e ECS/Fargate. A API acessa o RDS selecionado para a entrega; os workloads assíncronos usam SQS/DLQ e EventBridge conforme a configuração versionada. Confira os health checks, alarmes definidos e smoke da publicação correspondente antes de usar a execução como evidência.
 
 ## Relação com o Portfólio
 
@@ -218,4 +210,4 @@ A solução reforça os requisitos de Web Apps do projeto:
 - segredos fora do repositório;
 - evidência de Pull Request e revisão por pares.
 
-A Vercel permanece apenas como frontend conforme autorização externa específica do projeto.
+A Vercel hospeda o frontend `laje-tcc` conforme a exceção aprovada para este projeto.

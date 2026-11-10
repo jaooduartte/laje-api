@@ -1,64 +1,76 @@
-# LAJE-139 — Release final do TCC (`laje-tcc`) na AWS/RDS
+# LAJE-139 — Publicação do ambiente TCC `laje-tcc`
 
-> **Situação auditada em 15/10/2026: NO-GO para migração final.** Este runbook não autoriza novas despesas, congelamento da origem, migração final ou alteração de produção. O projeto operacional Vercel `laje` permanece permanentemente no Supabase. O destino da LAJE-139 é exclusivamente o projeto **`laje-tcc`**.
+## Escopo atual
 
-## Ambientes e limites de escopo
+Este documento registra a arquitetura e a publicação da versão web do TCC. O frontend Vercel `laje-tcc` usa a `laje-api` na AWS e o único RDS PostgreSQL selecionado para a entrega, `laje-staging-postgres`. Os nomes AWS conservam o prefixo `staging`; eles não indicam que exista ou seja necessário um segundo banco para a publicação. O projeto Vercel `laje` permanece na produção operacional da LAJE com Supabase; a seleção de um RDS para o TCC não muda esse ambiente.
 
-<!-- prettier-ignore -->
-| Ambiente | Frontend Vercel | Backend e dados | Decisão |
-| --- | --- | --- | --- |
-| Operacional permanente | `laje` | Supabase | **Nunca** alterar env, credenciais, rotas, tráfego ou dados nesta tarefa, salvo pausa excepcional de escrita expressamente autorizada para produzir um checkpoint consistente. |
-| Integração | `laje-tcc` | API AWS em ECS/Fargate + RDS `laje-staging-postgres` | Apenas para testes e ensaios. Não serve como banco de produção do TCC. |
-| Release TCC | `laje-tcc` | API **produtiva independente** na AWS + RDS PostgreSQL 17 **produtivo** | Publicar somente após todos os gates GO. |
+O frontend publicado e o desenvolvimento local da API pelo túnel SSM usam a mesma instância RDS. A revisão encontrou fixtures de fluxo que exigem uma URL de conexão contendo `laje_priority_flows`, mas não confirmou a existência dessa base na AWS. As contas sintéticas dos testes não são provisionadas no ambiente publicado e não há prova de que contas administrativas isolem registros de demonstração. Não use a base da demonstração para testes de escrita.
 
-O repositório frontend é compartilhado, mas cada projeto Vercel tem variáveis próprias. Em `laje-tcc`, usar `VITE_BACKEND_PROVIDER=aws` e `VITE_API_URL=https://<api-producao>/api/v1`. As variáveis `VITE_*` são públicas e são incorporadas ao bundle em **build time**. Alterar variáveis exige **novo build/deploy** somente no projeto `laje-tcc`. Não fazer fallback de `laje-tcc` para Supabase.
+## Auditoria AWS de 09/11/2026
 
-### Auditoria AWS/Vercel de 15/10/2026
+Na consulta da conta AWS em `sa-east-1`:
 
-- Predecessoras da LAJE-139 **concluídas no Jira**: LAJE-33, LAJE-136, LAJE-89, LAJE-126 e LAJE-141. Conclusão de tarefa não substitui novo smoke E2E do release.
-- AWS `sa-east-1`: RDS `laje-staging-postgres` PostgreSQL 17.9, `db.t4g.micro`, 20 GiB, **privado**, criptografado, 1 dia de backup; **nenhum RDS de produção** encontrado no inventário consultado.
-- ECS `laje-staging-api`: serviço ativo, `desired=1`, `running=1`, task definition revisão `:31`; ALB interno e ECR de staging presentes.
-- API Gateway atualmente utilizado no staging: `rkckaptyaf`. Outro API Gateway `96bmsmgbt0` existe sem tráfego confirmado; examinar o Terraform state antes de eventual limpeza, sem exclusão manual improvisada.
-- Vercel: ambos `laje` e `laje-tcc` possuem deployment `READY`; `VITE_API_URL` de `laje-tcc` aponta atualmente para o endpoint **de staging**, não para um release definitivo.
-- Cost Explorer consultado para os 15 dias encerrados em 15/10/2026 não apresentou valores de cobrança acima de US$ 0,001 por serviço/dia nos resultados retornados. **Isso não demonstra custo futuro zero**: validar elegibilidade a créditos, período de apuração, limites e preços antes de aprovar infraestrutura permanente.
-- Como o ECS e o ALB estão ativos, existe exposição potencial a cobranças recorrentes; usar o workflow manual `deploy-aws.yml` com `action=suspend` após concluir os testes de staging, observando os recursos que ele preserva.
+- API Gateway HTTP API `rkckaptyaf` encaminhava a rota `$default` por VPC Link a um ALB interno;
+- o serviço ECS/Fargate `laje-staging-api` estava com uma tarefa desejada e em execução, deployment concluído e task definition `:36`;
+- o RDS `laje-staging-postgres` PostgreSQL 17.9 estava disponível, privado, criptografado e em Single-AZ;
+- os logs da API eram enviados para `/laje/staging/api`;
+- o frontend publicado usava a origem CORS `https://laje-tcc.vercel.app`.
 
-## Gate 0 — Aprovações e testes prévios
+Esta auditoria é uma fotografia do ambiente naquela data. Confirme o deployment, os health checks e o fluxo funcional da versão que será apresentada.
 
-1. Registrar no Jira aprovador, responsáveis pela aplicação e banco, janela de manutenção, duração máxima do congelamento de escrita, plano de comunicação e limites orçamentários.
-2. Revisar CI, segurança, cobertura e peer review de `laje` e `laje-api`. Executar smoke dos fluxos de autenticação/primeiro acesso, campeonatos, jogos ao vivo/realtime e reconexão, classificação, chaves, calendário/ICS, reservas/e-mails e workloads SQS/EventBridge. Registrar a execução com logs **sem dados pessoais**.
-3. Verificar por consulta independente que o projeto `laje-tcc` não referencia Supabase como backend principal e que `laje` **não** referencia a API AWS.
-4. Confirmar e **testar** o procedimento de congelamento de escritas no Supabase de origem: interface, APIs externas, jobs, triggers, Edge Functions e todas as demais fontes. A origem operacional continua existindo; o freeze é **temporário e excepcional**, somente com autorização expressa.
-5. Se não for possível garantir freeze e consistência sem prejudicar `laje`, **NO-GO**. Revisar/autorizar formalmente uma técnica alternativa de captura consistente antes de modificar os scripts; não contornar `MIGRATION_SYNC_MODE=final` nem `MIGRATION_PARITY_MODE=final`.
+## Registro histórico da auditoria de 15/10/2026
 
-## Gate 1 — Produção AWS segregada e orçamento
+A auditoria de 15/10/2026 registrou NO-GO para o plano então vigente de publicar o `laje-tcc` em infraestrutura AWS produtiva separada do staging, mantendo o `laje` operacional no Supabase. Posteriormente, foi aprovada a utilização do RDS `laje-staging-postgres` como banco único da entrega acadêmica. Essa decisão elimina a necessidade de outra instância RDS para o escopo atual, mas não substitui validações de funcionamento, backup, recuperação e disponibilidade.
 
-1. Revisar `infra/aws/terraform/production.tfvars.example`; executar `terraform validate` e **plan isolado** com backend `laje/production/terraform.tfstate`, role IAM de produção e sem alterar o state de staging. Revisar plano, preço, créditos e necessidade de recursos antes de `apply`.
-2. O módulo existente foi concebido inicialmente para o runtime **staging** (`staging_api_enabled`). Não presumir que habilitá-lo com `environment=production` entregue uma API prod segregada. Implementar e revisar recursos/roles/workflows exclusivos de produção (ECS, ECR, API Gateway + VPC Link + ALB, log group, alarmes e secrets), evitando NAT Gateway quando houver desenho seguro mais econômico.
-3. Provisionar RDS produtivo **somente perto da janela aprovada**. Exigir TLS, `publicly_accessible=false`, SG restrito, criptografia, backup, deletion protection e snapshot identificável. Se a conta AWS limitar retention a 1 dia, registrar e aprovar mitigação **antes** da criação.
-4. Validar execução de migrations versionadas a partir da rede privada, saúde da API e conectividade. Não editar baseline nem migrations já aplicadas. Nenhuma credencial em Git, frontend, logs ou tickets.
-5. Preservar plano de rollback de infraestrutura e dados. Testar restore de backup sem usar o banco de staging como destino produtivo.
+Para declarar a versão TCC pronta para apresentação, valide separadamente a execução de publicação, health checks, smoke funcional dos fluxos apresentados, backups e um ensaio de restauração. A consulta ao estado ECS/RDS, isoladamente, não atende esses critérios. O ensaio de restauração ainda não foi comprovado nesta revisão.
 
-## Gate 2 — Checkpoint consistente e sincronização final
+Revisões antigas deste arquivo também descreviam infraestrutura futura e gates de migração que não correspondem à publicação documentada aqui. A evidência da auditoria antiga não deve ser usada como retrato do runtime atual.
 
-1. Criar backup consistente da origem e snapshot manual do RDS de destino antes da escrita de migração; identificar restauração, retenção e responsável.
-2. Aplicar baseline e todas as migrations da API de forma versionada. Executar rehearsal recente para antecipar incompatibilidades.
-3. Na janela autorizada, comprovar tecnicamente a **ausência de escritas na origem**. Registrar início (UTC com timezone), método de bloqueio, responsável e múltiplas consultas de confirmação; timestamp ou variável de ambiente **não é prova** de freeze.
-4. Capturar **após o freeze** a contagem de `reservation_requests` e demais totais críticos. Não reutilizar valores históricos do staging.
-5. No executor privado e controlado, usar `MIGRATION_EXECUTION_CONTEXT=controlled`, `MIGRATION_ALLOW_DESTINATION_WRITE=true`, `MIGRATION_TARGET_FRONTEND=laje-tcc`, `MIGRATION_WRITES_PAUSED_AT=<ISO8601-com-fuso>`, `MIGRATION_EXPECTED_RESERVATION_REQUEST_COUNT=<inteiro>` e `MIGRATION_SYNC_MODE=final`. A variável de destino é um **gate declarativo**, não comprova qual projeto Vercel foi configurado: conferir o projeto de forma independente.
-6. Executar `npm run migration:sync-data` e, depois, `MIGRATION_PARITY_MODE=final npm run migration:verify-parity`, mantendo a origem congelada. Divergência de tabelas, estrutura, enums, checksums, chaves, contagens ou reservas: **NO-GO**.
-7. Revalidar que o backup é recuperável, o banco produtivo está privado e a API aponta para o **RDS de produção** (não staging). Autenticação Supabase Auth não é importada automaticamente: executar primeiro acesso administrativo de modo controlado.
+## Configuração do frontend
 
-## Gate 3 — Publicação e estabilização
+O projeto Vercel `laje-tcc` deve ser compilado com:
 
-1. Manter `laje` operacional apontando **sempre** ao Supabase. Alterar apenas as envs **Production** do projeto Vercel `laje-tcc` e gerar novo deployment. Confirmar pelo bundle e por testes reais que a URL da API final está em uso.
-2. Executar smoke E2E HTTPS/TLS/CORS, health de banco, autorização, leitura e escrita de negócios, realtime/reconexão, e-mails, filas/DLQ e integrações. Registrar evidências e versão imutável da API.
-3. Após GO registrado, liberar o release do TCC. A cópia inicial de dados do TCC representa um **checkpoint**, não sincronização contínua com `laje`. Registrar claramente que alterações posteriores nos dois ambientes poderão divergir.
-4. **Rollback antes da primeira escrita no RDS:** reverter/suspender somente `laje-tcc` e sua API; não direcionar `laje` à AWS. **Depois de escritas no RDS:** não sobrescrever/restaurar cegamente os dados do TCC; reconciliar ou restaurar mediante plano aprovado. A aplicação operacional Supabase não deve ser tratada como réplica automática do novo banco.
-5. Definir janela de observação com métricas e alarmes para ECS, API Gateway, RDS, SQS/DLQ, scheduler, segurança, latência, erros e custos. Somente depois do aceite remover recursos temporários identificados no Terraform state, com backup e aprovação.
+```text
+VITE_BACKEND_PROVIDER=aws
+VITE_API_URL=https://rkckaptyaf.execute-api.sa-east-1.amazonaws.com/api/v1
+```
 
-## Critérios de encerramento e evidências da LAJE-139
+`VITE_*` é incorporado ao bundle durante o build e é público. Qualquer alteração exige um novo deployment do projeto `laje-tcc`. Não coloque segredos ou credenciais nessas variáveis.
 
-Registrar no Jira: PRs/reviews/CI de ambos os repositórios; Terraform plan/apply sem drift de staging; orçamento autorizado; AWS e Vercel IDs (sem secrets); snapshot e backup restauráveis; freeze temporário **autorizado e comprovado**; contagens capturadas durante a janela; `sync-data` e `verify-parity` em modo `final`; smoke do frontend `laje-tcc` na API produtiva/RDS produtivo; rollback testado; custos pré e pós-publicação; comprovação de que o projeto operacional `laje` permaneceu em Supabase.
+## Desenvolvimento local
 
-**NO-GO enquanto não houver:** RDS/API produtivos, política de freeze aprovada, dados/backup/checkpoint válidos, paridade final, smoke E2E e período de rollback definidos. Nenhuma dessas condições pode ser marcada como concluída apenas com testes de staging.
+Para usar a API AWS localmente, o comando existente `npm run dev:aws` abre um túnel SSM para o RDS privado em `127.0.0.1:15432`. Em outro terminal, `npm run dev` inicia a API local. O frontend local pode usar o proxy Vite para encaminhar chamadas à API local ou ao endpoint público.
+
+O túnel e o runtime local acessam o mesmo RDS usado pela versão publicada. Use dados de teste identificáveis, evite operações destrutivas e preserve os dados históricos da demonstração.
+
+## Processo de publicação
+
+1. Identifique o commit do frontend e da API que compõem a versão avaliada.
+2. Confirme no projeto Vercel `laje-tcc` as variáveis AWS acima e o deployment concluído.
+3. Acione manualmente o workflow `Deploy AWS` da `laje-api`, na branch `main`, para o commit selecionado.
+4. Confirme a imagem imutável publicada no ECR, a conclusão do deployment ECS e a task ativa.
+5. Valide HTTPS, `/api/v1/health`, `/api/v1/health/database`, CORS e smoke dos fluxos funcionais apresentados.
+6. Registre os SHAs, o deployment Vercel, a execução do workflow AWS e os resultados dos health checks e smoke.
+
+O workflow valida Terraform, publica ou reutiliza a imagem identificada pelo commit, aplica migrations operacionais no RDS selecionado para o TCC, atualiza o serviço ECS e executa suas verificações. Uma execução bem-sucedida não substitui a validação manual dos fluxos de produto.
+
+## Banco, backup e rollback
+
+O RDS consultado em 09/11/2026 tinha backup automático com retenção de um dia, criptografia, acesso privado e configuração Single-AZ. A proteção contra exclusão não estava habilitada. Confirme os valores atuais antes de uma mudança que possa afetar dados.
+
+Antes de uma alteração destrutiva, capture um snapshot manual com identificador, data, motivo e versão da API. Para uma recuperação, restaure primeiro para uma instância temporária privada e valide schema, migrations e integridade dos dados antes de considerar uma troca controlada de endpoint. Não foi realizado um ensaio de restauração nesta atualização documental.
+
+Para reverter somente uma publicação da API, sem incompatibilidade de schema, publique a imagem ECR imutável anterior. Se houver mudança de schema ou escrita posterior ao snapshot, prepare e revise um plano de recuperação de dados antes de alterar o RDS ativo.
+
+## Observabilidade
+
+O Terraform define seis alarmes CloudWatch para SQS/DLQ, idade da fila, CPU e espaço livre do RDS, rotação de credenciais e falha de entrega do EventBridge. A configuração consultada não apresentava ações SNS nos alarmes; notificações por e-mail não são consideradas comprovadas. A LAJE-40 acompanha a validação ampliada de observabilidade.
+
+## Evidências relacionadas
+
+- **LAJE-149:** consulte a execução e os artefatos associados para evidências de homologação dos fluxos AWS; o status da tarefa sozinho não comprova o runtime atual.
+- **LAJE-37:** alinhamento da RFC, Wiki, arquitetura, operação e decisão ao ambiente TCC atual.
+- [ADR da arquitetura operacional](../adr/0001-arquitetura-operacional-final.md)
+- [Arquitetura da API](../architecture.md)
+- [Publicação](../deployment.md)
+- [Runbook AWS](../staging-aws.md)

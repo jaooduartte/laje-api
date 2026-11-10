@@ -1,41 +1,45 @@
 # LAJE API
 
-API dedicada da Liga das Atléticas de Joinville (LAJE), responsável por centralizar regras de negócio, autenticação, autorização, persistência e contratos HTTP entre o frontend e a infraestrutura PostgreSQL.
+API dedicada da Liga das Atléticas de Joinville (LAJE), responsável por centralizar regras de negócio, autenticação, autorização, persistência e contratos HTTP do ambiente web `laje-tcc`.
 
-> **Decisão de arquitetura (14/10/2026):** o projeto Vercel `laje` continua usando Supabase permanentemente. A entrega do Portfólio/TCC é um frontend separado, `laje-tcc`, conectado à `laje-api` AWS e Amazon RDS. O backend do TCC não substitui nem modifica a produção operacional `laje`.
+O projeto Vercel `laje` continua sendo a produção operacional permanente da LAJE e usa Supabase. Esta API atende o deployment separado `laje-tcc`, do TCC/Portfólio; não altera nem substitui o backend Supabase de `laje`.
 
-## Arquitetura alvo
-
-Estado-alvo definido na LAJE-82:
+## Arquitetura do ambiente TCC
 
 ```text
-Frontend React/Vite (Vercel — exceção aprovada para o projeto)
+Frontend React/Vite (Vercel: laje-tcc)
         |
         | HTTPS / REST
         v
-Application Load Balancer (AWS)
+API Gateway HTTP API
+        |
+        v
+VPC Link -> ALB interno
         |
         v
 LAJE API (Node.js + Express em Amazon ECS/AWS Fargate)
         |
         v
-Amazon RDS for PostgreSQL 17
+Amazon RDS PostgreSQL 17: laje-staging-postgres
 ```
 
-A arquitetura detalhada, incluindo ambientes, rede, TLS/CORS, secrets, observabilidade e decisões de custo, está em [docs/architecture.md](docs/architecture.md). O registro formal da decisão está em [docs/adr/0001-arquitetura-operacional-final.md](docs/adr/0001-arquitetura-operacional-final.md).
+`laje-staging-postgres` é o único RDS AWS selecionado para a entrega TCC. O prefixo `staging` é parte dos nomes existentes e não indica requisito de um segundo banco. O frontend publicado e a API local conectada pelo túnel SSM usam essa mesma instância. As contas sintéticas dos testes de fluxo são criadas apenas durante testes apontados para o banco `laje_priority_flows`; elas não são contas de homologação provisionadas no RDS publicado.
 
-A Vercel permanece somente como hospedagem do frontend por uma exceção específica aprovada externamente para o projeto. Backend, banco, regras de negócio e serviços operacionais do estado final ficam sob a arquitetura AWS controlada pelo projeto.
+Arquitetura e evidências atuais estão em [docs/architecture.md](docs/architecture.md); publicação em [docs/deployment.md](docs/deployment.md); operação AWS em [docs/staging-aws.md](docs/staging-aws.md); e decisão formal em [docs/adr/0001-arquitetura-operacional-final.md](docs/adr/0001-arquitetura-operacional-final.md).
 
-## Estados operacionais da migração
+## Ambiente documentado
 
 <!-- prettier-ignore -->
-| Estado | Frontend | Backend principal | Banco principal | Finalidade |
-| --- | --- | --- | --- | --- |
-| Produção operacional permanente | Vercel, projeto `laje` | Supabase | PostgreSQL do Supabase | Manter a operação legada sem cutover para AWS |
-| TCC integration / staging | Vercel, projeto `laje-tcc` (mesmo repositório Git) | `laje-api` em AWS | Amazon RDS PostgreSQL 17 | Validar API, migrations, contratos, CORS, TLS, CI/CD e dados |
-| Release final do TCC | Vercel, projeto `laje-tcc` | `laje-api` em AWS | Amazon RDS PostgreSQL 17 | Publicar o Portfólio sem migrar o projeto `laje` |
+| Componente | Configuração |
+| --- | --- |
+| Frontend | Projeto Vercel `laje-tcc`, React/Vite |
+| API pública | API Gateway HTTP API → VPC Link → ALB interno → ECS/Fargate |
+| API | `laje-api` em Node.js + Express |
+| Banco | Único RDS selecionado para o TCC: `laje-staging-postgres`, PostgreSQL 17, privado |
+| Região | AWS `sa-east-1` |
+| Desenvolvimento local | API local pelo túnel SSM para o mesmo RDS; CI usa PostgreSQL efêmero |
 
-No frontend, `VITE_API_URL` seleciona a API correspondente ao ambiente. No backend, desenvolvimento/CI podem usar `DATABASE_URL`; no ECS staging, host, banco, usuário e senha são injetados separadamente em runtime para que o usuário/senha permaneçam no Secrets Manager e a própria aplicação componha a URL PostgreSQL com escaping seguro. A troca de ambiente ocorre por configuração, sem alteração de código e sem versionar credenciais.
+No frontend, `VITE_API_URL` aponta para a API do TCC. No backend local, use `.env` e o túnel SSM; no ECS, os parâmetros e segredos são injetados em runtime pelo Secrets Manager. Não versione credenciais reais.
 
 ## Stack
 
@@ -58,11 +62,10 @@ No frontend, `VITE_API_URL` seleciona a API correspondente ao ambiente. No backe
 - Git;
 - Node.js 22 ou superior;
 - npm;
-- AWS CLI e Session Manager Plugin para usar o RDS de staging pelo túnel SSM;
-- sessão AWS válida com permissão para consultar e iniciar/parar o RDS e o serviço ECS de staging;
-- acesso a uma instância PostgreSQL 17 compatível com o ambiente que será validado.
+- AWS CLI, Session Manager Plugin e sessão AWS com as permissões necessárias para executar o fluxo local via SSM;
+- acesso ao RDS privado `laje-staging-postgres` pelo fluxo local documentado.
 
-Não existe requisito de manter um PostgreSQL local permanente nem um `docker-compose` de banco. Em CI, o PostgreSQL 17 é criado de forma efêmera. Para desenvolvimento, use uma instância PostgreSQL 17 controlada por você ou um ambiente autorizado. O RDS de staging é privado e não deve ser tornado público para facilitar execução local.
+Não existe requisito de manter um PostgreSQL local permanente nem um `docker-compose` de banco. Em CI, o PostgreSQL 17 é efêmero. O desenvolvimento local da API usa o RDS privado pelo túnel SSM; o banco não deve ser tornado público para facilitar a execução.
 
 ## Instalação
 
@@ -82,7 +85,7 @@ DATABASE_URL=postgresql://<usuario>:<senha>@<host>:5432/<database>?sslmode=<modo
 CORS_ORIGINS=http://localhost:8080
 ```
 
-`DATABASE_URL` continua sendo a forma recomendada para desenvolvimento e CI. Em runtime AWS, ela pode ser substituída por `DATABASE_HOST`, `DATABASE_NAME`, `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_PORT` e `DATABASE_SSLMODE`; todos os quatro primeiros componentes obrigatórios devem estar presentes. O staging injeta usuário/senha diretamente do Secrets Manager. Credenciais reais, tokens e valores do AWS Secrets Manager nunca devem ser adicionados ao repositório, ao README ou à imagem Docker.
+`DATABASE_URL` continua sendo a forma recomendada para desenvolvimento e CI. Em runtime AWS, ela pode ser substituída por `DATABASE_HOST`, `DATABASE_NAME`, `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_PORT` e `DATABASE_SSLMODE`; os componentes obrigatórios devem estar presentes. O ECS injeta usuário e senha diretamente do Secrets Manager. Credenciais reais, tokens e valores do AWS Secrets Manager nunca devem ser adicionados ao repositório, ao README ou à imagem Docker.
 
 Para um PostgreSQL de desenvolvimento sem TLS, o ambiente controlado pode utilizar `sslmode=disable`. Em AWS/RDS, a conexão deve usar TLS; consulte [docs/database-access.md](docs/database-access.md).
 
@@ -104,7 +107,7 @@ psql "$DATABASE_URL" \
   --file infra/database/baseline/validate.sql
 ```
 
-O baseline não contém dados produtivos, Supabase Auth, Storage, Realtime, policies RLS específicas da plataforma, Edge Functions ou jobs operacionais. Detalhes estão em [docs/migration/database-baseline.md](docs/migration/database-baseline.md).
+O baseline contém a estrutura PostgreSQL necessária à API, sem dados do ambiente. Detalhes estão em [docs/migration/database-baseline.md](docs/migration/database-baseline.md).
 
 ## Executar a API compilada
 
@@ -115,7 +118,7 @@ npm run build
 npm start
 ```
 
-## Executar a API local com o RDS de staging
+## Executar a API local com o RDS selecionado para o TCC
 
 Configure a conexão PostgreSQL no `.env` para usar o host `127.0.0.1`, a porta `15432` e TLS. Você pode usar `DATABASE_URL` ou as variáveis `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_NAME`, `DATABASE_USER`, `DATABASE_PASSWORD` e `DATABASE_SSLMODE`.
 
@@ -123,13 +126,13 @@ Configure a conexão PostgreSQL no `.env` para usar o host `127.0.0.1`, a porta 
 npm run dev:aws
 ```
 
-O `npm run dev:aws` confere a conta AWS configurada, inicia os recursos que estiverem parados e abre o túnel SSM em `127.0.0.1:15432`. Recursos que já estavam ativos são preservados quando a sessão termina. Mantenha esse processo em execução. Em outro terminal, execute:
+O `npm run dev:aws` confere a conta AWS configurada, inicia os recursos necessários ao fluxo local e abre o túnel SSM em `127.0.0.1:15432`. Mantenha esse processo em execução. Em outro terminal, execute:
 
 ```bash
 npm run dev
 ```
 
-Ao terminar, pare `npm run dev` e pressione `Ctrl+C` no terminal de `npm run dev:aws`. Isso encerra o túnel e para apenas os recursos que essa sessão iniciou. Falhas de inicialização, encerramento do processo SSM, `SIGINT`, `SIGTERM` e `SIGHUP` também disparam o cleanup. `npm run aws:off` continua disponível para parar explicitamente todos os recursos. `npm run aws:on` inicia somente os recursos, sem abrir o túnel. O serviço ECS permanece provisionado com desired count zero quando desligado; o ALB e o API Gateway continuam ativos e podem manter custos. A AWS reinicia automaticamente uma instância RDS que permaneça parada por sete dias consecutivos.
+Ao terminar, pare `npm run dev` e encerre o processo de `npm run dev:aws` com `Ctrl+C` para fechar a sessão local.
 
 No startup, a aplicação local valida a conexão PostgreSQL antes de abrir a porta HTTP. Se `DATABASE_URL` estiver ausente ou o banco estiver inacessível, a inicialização deve falhar em vez de disponibilizar uma API parcialmente funcional.
 
@@ -168,9 +171,7 @@ A documentação não é montada automaticamente em `test` nem em `production`. 
 | `npm run dev` | Executa o servidor TypeScript em modo watch |
 | `npm run build` | Compila TypeScript para `dist/` |
 | `npm start` | Inicia a API compilada em `dist/server.js` |
-| `npm run dev:aws` | Inicia recursos AWS parados e abre o túnel SSM local |
-| `npm run aws:on` | Inicia RDS/ECS e aguarda disponibilidade, sem abrir o túnel |
-| `npm run aws:off` | Define ECS com zero tarefas e para o RDS |
+| `npm run dev:aws` | Inicia os recursos necessários e abre o túnel SSM local |
 | `npm run typecheck` | Valida tipos sem emitir arquivos |
 | `npm run lint` | Executa ESLint com zero warnings permitidos |
 | `npm run format:check` | Valida formatação com Prettier |
@@ -233,18 +234,18 @@ infra/
 
 ## Documentação técnica e de migração
 
-A migração deve ser tratada como uma sequência rastreável, não como um dump direto do Supabase para produção:
+Os documentos técnicos descrevem os contratos atuais da API, a estrutura PostgreSQL e o histórico de evolução até o ambiente TCC:
 
 - [Convenções HTTP](docs/api-conventions.md): formato de contratos, status codes, paginação, filtros, versionamento e autenticação futura;
-- [Inventário do Supabase](docs/migration/supabase-inventory.md): fotografia dos objetos e dependências do backend atual;
+- [Inventário de migração](docs/migration/supabase-inventory.md): referência histórica para a evolução do schema;
 - [Baseline PostgreSQL](docs/migration/database-baseline.md): estrutura reproduzível para PostgreSQL 17;
 - [Estratégia de migração](docs/migration/migration-strategy.md): fases, coexistência, cutover e responsabilidades;
 - [Acesso PostgreSQL](docs/database-access.md): contratos da camada de persistência e requisitos de conexão;
 - [Healthchecks](docs/healthchecks.md): semântica dos endpoints operacionais;
-- [Staging AWS](docs/staging-aws.md): topologia, operação e evidências E2E da LAJE-136;
-- [CI/CD e deploy](docs/deployment.md): pipelines separados, staging manual, variáveis, segurança e critérios para produção;
+- [Ambiente AWS do TCC](docs/staging-aws.md): topologia, operação e evidências E2E;
+- [CI/CD e deploy](docs/deployment.md): publicação manual, variáveis, segurança e validações;
 - [Workloads operacionais AWS](docs/operational-workloads.md): SQS/DLQ, EventBridge, e-mail, calendário e observabilidade da LAJE-126;
-- [Arquitetura operacional](docs/architecture.md): estado-alvo Vercel + AWS + RDS;
+- [Arquitetura operacional](docs/architecture.md): arquitetura implantada Vercel + AWS + RDS;
 - [ADR da arquitetura](docs/adr/0001-arquitetura-operacional-final.md): decisão formal e trade-offs.
 
 Tarefas principais relacionadas no Jira:
@@ -258,9 +259,9 @@ Tarefas principais relacionadas no Jira:
 - `LAJE-89`: substituição do realtime;
 - `LAJE-115`: OpenAPI e convenções HTTP;
 - `LAJE-126`: jobs, filas, cron e Edge Functions na AWS;
-- `LAJE-127`: ambiente AWS/RDS de integration/staging;
+- `LAJE-127`: criação do RDS PostgreSQL que compõe o ambiente AWS atual;
 - `LAJE-131`: containerização para execução/deploy AWS;
-- `LAJE-136`: publicação e validação E2E do staging AWS;
+- `LAJE-136`: publicação e validação E2E dos workloads AWS;
 - `LAJE-33`: CI/CD final entre frontend Vercel e backend AWS;
 - `LAJE-142`: habilitação futura do deploy automático após merge em `main`, adiada para o momento do cutover;
 - `LAJE-37`: documentação do deploy final.
@@ -271,10 +272,10 @@ Tarefas principais relacionadas no Jira:
 - manter o RDS privado;
 - usar AWS Secrets Manager/IAM para secrets e permissões no ambiente AWS;
 - não alterar retroativamente o baseline consolidado: mudanças futuras de schema devem ser novas migrations em `infra/database/migrations/`;
-- não executar cutover nem alterar a produção Supabase do projeto `laje`: seu uso é permanente e independente do ambiente TCC; migração de dados para RDS deve seguir plano de validação, consistência e rollback próprios;
+- não executar migrations, alterações remotas de dados ou mudanças de infraestrutura sem autorização específica;
 - não reintroduzir acesso direto do frontend ao banco no estado final;
 - não publicar exemplos OpenAPI contendo tokens, credenciais ou dados pessoais reais.
 
 ## Situação atual
 
-A base técnica da `laje-api` já possui runtime Express, configuração validada, camada PostgreSQL, healthchecks, quality gate, baseline PostgreSQL 17, arquitetura AWS documentada, containerização e base OpenAPI 3.1 com convenções HTTP. Os contratos dos fluxos de negócio e os módulos funcionais continuam sendo migrados nas tarefas subsequentes.
+A `laje-api` tem runtime Express, acesso PostgreSQL, healthchecks, módulos de autenticação, campeonatos, jogos, classificação, chaveamento, eventos, auditoria e workloads operacionais, além de baseline PostgreSQL 17, OpenAPI 3.1, CI e deploy AWS manual. A cobertura de cada fluxo do frontend deve ser conferida nos contratos `/api/v1` e no código; o README do frontend registra operações administrativas que ainda não foram encaminhadas pela API.
