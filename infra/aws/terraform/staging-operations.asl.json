@@ -1,0 +1,539 @@
+{
+  "StartAt": "AcquireLock",
+  "TimeoutSeconds": 21600,
+  "States": {
+    "AcquireLock": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${staging_operations_lambda_arn}",
+        "Payload": {
+          "action": "acquireLock",
+          "operationId.$": "$$.Execution.Id"
+        }
+      },
+      "ResultPath": null,
+      "Retry": [
+        {
+          "ErrorEquals": ["OperationLockUnavailable"],
+          "IntervalSeconds": 60,
+          "BackoffRate": 1,
+          "MaxAttempts": 60
+        },
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "BackoffRate": 2,
+          "MaxAttempts": 3
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.failure",
+          "Next": "LockUnavailable"
+        }
+      ],
+      "Next": "SelectAction"
+    },
+    "SelectAction": {
+      "Type": "Choice",
+      "Choices": [
+        { "Variable": "$.action", "StringEquals": "start", "Next": "ClearDrainBeforeStart" },
+        { "Variable": "$.action", "StringEquals": "stop", "Next": "CheckOverride" }
+      ],
+      "Default": "InvalidAction"
+    },
+    "ClearDrainBeforeStart": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${staging_operations_lambda_arn}",
+        "Payload": { "action": "clearDrain", "operationId.$": "$$.Execution.Id" }
+      },
+      "ResultPath": null,
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.failure", "Next": "CleanupFailure" }
+      ],
+      "Next": "ReadRdsForStart"
+    },
+    "ReadRdsForStart": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${staging_operations_lambda_arn}",
+        "Payload": { "action": "getRdsStatus" }
+      },
+      "ResultSelector": { "status.$": "$.Payload.status" },
+      "ResultPath": "$.rds",
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.failure", "Next": "CleanupFailure" }
+      ],
+      "Next": "ChooseRdsStartAction"
+    },
+    "ChooseRdsStartAction": {
+      "Type": "Choice",
+      "Choices": [
+        { "Variable": "$.rds.status", "StringEquals": "available", "Next": "SetEcsDesiredOne" },
+        { "Variable": "$.rds.status", "StringEquals": "stopped", "Next": "StartRds" },
+        { "Variable": "$.rds.status", "StringEquals": "starting", "Next": "WaitForRdsStart" },
+        {
+          "Variable": "$.rds.status",
+          "StringEquals": "stopping",
+          "Next": "WaitForRdsStoppedBeforeStart"
+        }
+      ],
+      "Default": "InvalidRdsStartState"
+    },
+    "StartRds": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${staging_operations_lambda_arn}",
+        "Payload": { "action": "startRds" }
+      },
+      "ResultPath": null,
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.failure", "Next": "CleanupFailure" }
+      ],
+      "Next": "WaitForRdsStart"
+    },
+    "WaitForRdsStoppedBeforeStart": {
+      "Type": "Wait",
+      "Seconds": 60,
+      "Next": "RenewLockBeforeRdsStartCheck"
+    },
+    "WaitForRdsStart": {
+      "Type": "Wait",
+      "Seconds": 60,
+      "Next": "RenewLockBeforeRdsStartCheck"
+    },
+    "RenewLockBeforeRdsStartCheck": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${staging_operations_lambda_arn}",
+        "Payload": { "action": "renewLock", "operationId.$": "$$.Execution.Id" }
+      },
+      "ResultPath": null,
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.failure", "Next": "CleanupFailure" }
+      ],
+      "Next": "ReadRdsForStart"
+    },
+    "SetEcsDesiredOne": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${staging_operations_lambda_arn}",
+        "Payload": { "action": "setEcsDesiredCount", "desiredCount": 1 }
+      },
+      "ResultPath": null,
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.failure", "Next": "CleanupFailure" }
+      ],
+      "Next": "ReadEcsForStart"
+    },
+    "ReadEcsForStart": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${staging_operations_lambda_arn}",
+        "Payload": { "action": "getEcsStatus" }
+      },
+      "ResultSelector": { "stable.$": "$.Payload.stable" },
+      "ResultPath": "$.ecs",
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.failure", "Next": "CleanupFailure" }
+      ],
+      "Next": "ChooseEcsStartAction"
+    },
+    "ChooseEcsStartAction": {
+      "Type": "Choice",
+      "Choices": [{ "Variable": "$.ecs.stable", "BooleanEquals": true, "Next": "ProbeHealth" }],
+      "Default": "WaitForEcsStart"
+    },
+    "WaitForEcsStart": {
+      "Type": "Wait",
+      "Seconds": 30,
+      "Next": "RenewLockBeforeEcsStartCheck"
+    },
+    "RenewLockBeforeEcsStartCheck": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${staging_operations_lambda_arn}",
+        "Payload": { "action": "renewLock", "operationId.$": "$$.Execution.Id" }
+      },
+      "ResultPath": null,
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.failure", "Next": "CleanupFailure" }
+      ],
+      "Next": "ReadEcsForStart"
+    },
+    "ProbeHealth": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${staging_operations_lambda_arn}",
+        "Payload": { "action": "probeHealth" }
+      },
+      "ResultSelector": {
+        "readyAt.$": "$.Payload.readyAt",
+        "checks.$": "$.Payload.checks"
+      },
+      "ResultPath": "$.health",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "States.TaskFailed"
+          ],
+          "IntervalSeconds": 30,
+          "BackoffRate": 2,
+          "MaxAttempts": 4,
+          "MaxDelaySeconds": 300
+        }
+      ],
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.failure", "Next": "CleanupFailure" }
+      ],
+      "Next": "ReleaseLockAfterStart"
+    },
+    "ReleaseLockAfterStart": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${staging_operations_lambda_arn}",
+        "Payload": { "action": "releaseLock", "operationId.$": "$$.Execution.Id" }
+      },
+      "ResultPath": null,
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.failure", "Next": "CleanupFailure" }
+      ],
+      "Next": "StartSucceeded"
+    },
+    "StartSucceeded": { "Type": "Succeed" },
+    "CheckOverride": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${staging_operations_lambda_arn}",
+        "Payload": { "action": "checkOverride" }
+      },
+      "ResultSelector": { "active.$": "$.Payload.active" },
+      "ResultPath": "$.override",
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.failure", "Next": "CleanupFailure" }
+      ],
+      "Next": "ChooseOverrideAction"
+    },
+    "ChooseOverrideAction": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.override.active",
+          "BooleanEquals": true,
+          "Next": "ReleaseLockAfterOverride"
+        }
+      ],
+      "Default": "ListRunningTasks"
+    },
+    "ReleaseLockAfterOverride": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${staging_operations_lambda_arn}",
+        "Payload": { "action": "releaseLock", "operationId.$": "$$.Execution.Id" }
+      },
+      "ResultPath": null,
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.failure", "Next": "CleanupFailure" }
+      ],
+      "Next": "StopSkippedByOverride"
+    },
+    "StopSkippedByOverride": { "Type": "Succeed" },
+    "ListRunningTasks": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${staging_operations_lambda_arn}",
+        "Payload": { "action": "listRunningTasks" }
+      },
+      "ResultSelector": {
+        "taskArns.$": "$.Payload.taskArns",
+        "hasTasks.$": "$.Payload.hasTasks"
+      },
+      "ResultPath": "$.running",
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.failure", "Next": "CleanupFailure" }
+      ],
+      "Next": "ChooseDrainAction"
+    },
+    "ChooseDrainAction": {
+      "Type": "Choice",
+      "Choices": [
+        { "Variable": "$.running.hasTasks", "BooleanEquals": true, "Next": "RequestWorkerDrain" }
+      ],
+      "Default": "SetEcsDesiredZero"
+    },
+    "RequestWorkerDrain": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${staging_operations_lambda_arn}",
+        "Payload": { "action": "requestDrain", "operationId.$": "$$.Execution.Id" }
+      },
+      "ResultPath": null,
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.failure", "Next": "CleanupFailure" }
+      ],
+      "Next": "WaitForWorkerDrain"
+    },
+    "WaitForWorkerDrain": {
+      "Type": "Wait",
+      "Seconds": 30,
+      "Next": "RenewLockBeforeDrainCheck"
+    },
+    "RenewLockBeforeDrainCheck": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${staging_operations_lambda_arn}",
+        "Payload": { "action": "renewLock", "operationId.$": "$$.Execution.Id" }
+      },
+      "ResultPath": null,
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.failure", "Next": "CleanupFailure" }
+      ],
+      "Next": "ReadWorkerDrain"
+    },
+    "ReadWorkerDrain": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${staging_operations_lambda_arn}",
+        "Payload": { "action": "getDrain", "operationId.$": "$$.Execution.Id" }
+      },
+      "ResultSelector": {
+        "state.$": "$.Payload.state",
+        "timedOut.$": "$.Payload.timedOut"
+      },
+      "ResultPath": "$.drain",
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.failure", "Next": "CleanupFailure" }
+      ],
+      "Next": "ChooseDrainOutcome"
+    },
+    "ChooseDrainOutcome": {
+      "Type": "Choice",
+      "Choices": [
+        { "Variable": "$.drain.state", "StringEquals": "DRAINED", "Next": "SetEcsDesiredZero" },
+        { "Variable": "$.drain.timedOut", "BooleanEquals": true, "Next": "WorkerDrainTimedOut" }
+      ],
+      "Default": "WaitForWorkerDrain"
+    },
+    "WorkerDrainTimedOut": {
+      "Type": "Pass",
+      "Result": {
+        "Error": "WorkerDrainTimeout",
+        "Cause": "The SQS worker did not confirm that active work had finished. ECS and RDS were left running."
+      },
+      "ResultPath": "$.failure",
+      "Next": "CleanupFailure"
+    },
+    "SetEcsDesiredZero": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${staging_operations_lambda_arn}",
+        "Payload": { "action": "setEcsDesiredCount", "desiredCount": 0 }
+      },
+      "ResultPath": null,
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.failure", "Next": "CleanupFailure" }
+      ],
+      "Next": "ReadEcsForStop"
+    },
+    "ReadEcsForStop": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${staging_operations_lambda_arn}",
+        "Payload": { "action": "getEcsStatus" }
+      },
+      "ResultSelector": { "stable.$": "$.Payload.stable" },
+      "ResultPath": "$.ecs",
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.failure", "Next": "CleanupFailure" }
+      ],
+      "Next": "ChooseEcsStopAction"
+    },
+    "ChooseEcsStopAction": {
+      "Type": "Choice",
+      "Choices": [
+        { "Variable": "$.ecs.stable", "BooleanEquals": true, "Next": "VerifyStoppedTasks" }
+      ],
+      "Default": "WaitForEcsStop"
+    },
+    "WaitForEcsStop": {
+      "Type": "Wait",
+      "Seconds": 30,
+      "Next": "RenewLockBeforeEcsStopCheck"
+    },
+    "RenewLockBeforeEcsStopCheck": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${staging_operations_lambda_arn}",
+        "Payload": { "action": "renewLock", "operationId.$": "$$.Execution.Id" }
+      },
+      "ResultPath": null,
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.failure", "Next": "CleanupFailure" }
+      ],
+      "Next": "ReadEcsForStop"
+    },
+    "VerifyStoppedTasks": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${staging_operations_lambda_arn}",
+        "Payload": {
+          "action": "verifyStoppedTasks",
+          "taskArns.$": "$.running.taskArns"
+        }
+      },
+      "ResultPath": null,
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.failure", "Next": "CleanupFailure" }
+      ],
+      "Next": "ReadRdsForStop"
+    },
+    "ReadRdsForStop": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${staging_operations_lambda_arn}",
+        "Payload": { "action": "getRdsStatus" }
+      },
+      "ResultSelector": { "status.$": "$.Payload.status" },
+      "ResultPath": "$.rds",
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.failure", "Next": "CleanupFailure" }
+      ],
+      "Next": "ChooseRdsStopAction"
+    },
+    "ChooseRdsStopAction": {
+      "Type": "Choice",
+      "Choices": [
+        { "Variable": "$.rds.status", "StringEquals": "stopped", "Next": "ReleaseLockAfterStop" },
+        { "Variable": "$.rds.status", "StringEquals": "available", "Next": "StopRds" },
+        { "Variable": "$.rds.status", "StringEquals": "stopping", "Next": "WaitForRdsStop" },
+        { "Variable": "$.rds.status", "StringEquals": "starting", "Next": "WaitForRdsStop" }
+      ],
+      "Default": "InvalidRdsStopState"
+    },
+    "StopRds": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${staging_operations_lambda_arn}",
+        "Payload": { "action": "stopRds" }
+      },
+      "ResultPath": null,
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.failure", "Next": "CleanupFailure" }
+      ],
+      "Next": "WaitForRdsStop"
+    },
+    "WaitForRdsStop": {
+      "Type": "Wait",
+      "Seconds": 60,
+      "Next": "RenewLockBeforeRdsStopCheck"
+    },
+    "RenewLockBeforeRdsStopCheck": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${staging_operations_lambda_arn}",
+        "Payload": { "action": "renewLock", "operationId.$": "$$.Execution.Id" }
+      },
+      "ResultPath": null,
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.failure", "Next": "CleanupFailure" }
+      ],
+      "Next": "ReadRdsForStop"
+    },
+    "ReleaseLockAfterStop": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${staging_operations_lambda_arn}",
+        "Payload": { "action": "releaseLock", "operationId.$": "$$.Execution.Id" }
+      },
+      "ResultPath": null,
+      "Catch": [
+        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.failure", "Next": "CleanupFailure" }
+      ],
+      "Next": "StopSucceeded"
+    },
+    "StopSucceeded": { "Type": "Succeed" },
+    "InvalidRdsStartState": {
+      "Type": "Pass",
+      "Result": {
+        "Error": "InvalidRdsStartState",
+        "Cause": "The staging RDS state is not safe for a scheduled start."
+      },
+      "ResultPath": "$.failure",
+      "Next": "CleanupFailure"
+    },
+    "InvalidRdsStopState": {
+      "Type": "Pass",
+      "Result": {
+        "Error": "InvalidRdsStopState",
+        "Cause": "The staging RDS state is not safe for a scheduled stop."
+      },
+      "ResultPath": "$.failure",
+      "Next": "CleanupFailure"
+    },
+    "InvalidAction": {
+      "Type": "Pass",
+      "Result": { "Error": "InvalidAction", "Cause": "Expected action start or stop." },
+      "ResultPath": "$.failure",
+      "Next": "CleanupFailure"
+    },
+    "CleanupFailure": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${staging_operations_lambda_arn}",
+        "Payload": { "action": "cleanup", "operationId.$": "$$.Execution.Id" }
+      },
+      "ResultPath": null,
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Next": "FailureCleanupFailed" }],
+      "Next": "FailOperation"
+    },
+    "FailOperation": {
+      "Type": "Fail",
+      "ErrorPath": "$.failure.Error",
+      "CausePath": "$.failure.Cause"
+    },
+    "LockUnavailable": {
+      "Type": "Fail",
+      "Error": "OperationLockUnavailable",
+      "Cause": "A staging operation already holds the shared lifecycle lock."
+    },
+    "FailureCleanupFailed": {
+      "Type": "Fail",
+      "Error": "OperationCleanupFailed",
+      "Cause": "The lifecycle lock or worker drain state could not be cleared. Its DynamoDB lease will expire."
+    }
+  }
+}

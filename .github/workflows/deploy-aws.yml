@@ -25,6 +25,8 @@ env:
   TF_DIR: infra/aws/terraform
   TF_STATE_BUCKET: laje-terraform-state-549243453554-sa-east-1
   AWS_DEPLOY_ROLE_ARN: arn:aws:iam::549243453554:role/laje-github-actions-staging-deploy
+  AWS_ECS_SERVICE: laje-staging-api
+  AWS_OPERATION_LOCK_TABLE: ${{ vars.STAGING_OPERATION_LOCK_TABLE }}
   CORS_ORIGINS: https://laje-tcc.vercel.app
   # Operational settings only. The Brevo credential itself remains in AWS Secrets Manager.
   TF_VAR_staging_mail_enabled: ${{ vars.STAGING_MAIL_ENABLED || 'false' }}
@@ -34,6 +36,11 @@ env:
   TF_VAR_staging_co_events_email: ${{ vars.STAGING_CO_EVENTS_EMAIL }}
   TF_VAR_staging_co_presidency_email: ${{ vars.STAGING_CO_PRESIDENCY_EMAIL }}
   TF_VAR_staging_app_url: ${{ vars.STAGING_APP_URL || 'https://laje-tcc.vercel.app' }}
+  TF_VAR_staging_automation_schedules_enabled: ${{ vars.STAGING_AUTOMATION_SCHEDULES_ENABLED || 'false' }}
+  TF_VAR_staging_automation_alert_email: ${{ vars.STAGING_AUTOMATION_ALERT_EMAIL || '' }}
+  TF_VAR_staging_automation_alert_email_confirmed: ${{ vars.STAGING_AUTOMATION_ALERT_EMAIL_CONFIRMED || 'false' }}
+  TF_VAR_staging_api_cloud_map_enabled: ${{ vars.STAGING_API_CLOUD_MAP_ENABLED || 'false' }}
+  TF_VAR_staging_api_use_cloud_map: ${{ vars.STAGING_API_USE_CLOUD_MAP || 'false' }}
 
 jobs:
   staging:
@@ -47,6 +54,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Configure AWS credentials with GitHub OIDC
+        id: aws_credentials
         uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
@@ -63,6 +71,13 @@ jobs:
         run: |
           terraform init -reconfigure -input=false \
             -backend-config="bucket=${TF_STATE_BUCKET}"
+
+      - name: Acquire staging lifecycle operation lock
+        id: operation_lock
+        run: |
+          holder="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          node scripts/aws-operation-lock.mjs acquire "${holder}"
+          echo "holder=${holder}" >> "${GITHUB_OUTPUT}"
 
       - name: Validate Terraform
         working-directory: ${{ env.TF_DIR }}
@@ -101,6 +116,23 @@ jobs:
             done
             if [[ "${TF_VAR_staging_brevo_api_key_secret_arn}" != arn:aws:secretsmanager:${AWS_REGION}:* ]]; then
               echo "Brevo secret ARN region does not match AWS_REGION." >&2
+              exit 1
+            fi
+          fi
+
+          case "${TF_VAR_staging_automation_schedules_enabled}" in
+            true|false) ;;
+            *) echo "STAGING_AUTOMATION_SCHEDULES_ENABLED must be true or false." >&2; exit 1 ;;
+          esac
+
+          case "${TF_VAR_staging_automation_alert_email_confirmed}" in
+            true|false) ;;
+            *) echo "STAGING_AUTOMATION_ALERT_EMAIL_CONFIRMED must be true or false." >&2; exit 1 ;;
+          esac
+
+          if [[ "${TF_VAR_staging_automation_schedules_enabled}" == "true" ]]; then
+            if [[ -z "${TF_VAR_staging_automation_alert_email}" || "${TF_VAR_staging_automation_alert_email_confirmed}" != "true" ]]; then
+              echo "Daily staging schedules require a confirmed SNS alert email." >&2
               exit 1
             fi
           fi
@@ -234,3 +266,9 @@ jobs:
           echo '~~~text' >> "${GITHUB_STEP_SUMMARY}"
           echo "${smoke_output}" >> "${GITHUB_STEP_SUMMARY}"
           echo '~~~' >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Release staging lifecycle operation lock
+        if: always() && steps.operation_lock.outputs.holder != ''
+        env:
+          OPERATION_HOLDER: ${{ steps.operation_lock.outputs.holder }}
+        run: node scripts/aws-operation-lock.mjs release "${OPERATION_HOLDER}"

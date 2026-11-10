@@ -1,6 +1,7 @@
 import { app } from "./app.js";
 import { appConfig } from "./config/app.config.js";
 import { database } from "./database/index.js";
+import { shutdownApiRuntime } from "./server-shutdown.js";
 import {
   startBracketPreviewWorker,
   stopBracketPreviewWorker,
@@ -23,16 +24,17 @@ async function startServer(): Promise<void> {
     shuttingDown = true;
 
     console.log(`Received ${signal}. Closing HTTP server and PostgreSQL connections.`);
-    stopBracketPreviewWorker();
-
-    await new Promise<void>((resolve, reject) => {
-      server.close((error) => {
-        if (error) reject(error);
-        else resolve();
-      });
-    });
-
-    await database.close();
+    await shutdownApiRuntime(
+      () =>
+        new Promise<void>((resolve, reject) => {
+          server.close((error) => {
+            if (error) reject(error);
+            else resolve();
+          });
+        }),
+      stopBracketPreviewWorker,
+      () => database.close(),
+    );
   };
 
   for (const signal of ["SIGINT", "SIGTERM"] as const) {

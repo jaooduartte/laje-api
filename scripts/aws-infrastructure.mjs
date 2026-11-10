@@ -1,5 +1,7 @@
 import { execFile } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { promisify } from "node:util";
+import { assertAwsOperationLockHealthy, withAwsOperationLock } from "./aws-operation-lock.mjs";
 
 const execFileAsync = promisify(execFile);
 const awsRegion = process.env.AWS_REGION || "sa-east-1";
@@ -15,6 +17,7 @@ function requiredEnvironmentValue(name) {
 }
 
 async function runAws(argumentsList, description, outputJson = false) {
+  assertAwsOperationLockHealthy();
   const options = ["--region", awsRegion, "--no-cli-pager"];
   if (outputJson) options.push("--output", "json");
 
@@ -26,6 +29,257 @@ async function runAws(argumentsList, description, outputJson = false) {
   } catch (error) {
     const details = error.stderr?.toString().trim() || error.message;
     throw new Error("AWS CLI falhou ao " + description + ".\n" + details, { cause: error });
+  }
+}
+
+async function getManualOverride(tableName) {
+  if (!tableName) return null;
+  const response = await runAws(
+    [
+      "dynamodb",
+      "get-item",
+      "--table-name",
+      tableName,
+      "--key",
+      JSON.stringify({ LockId: { S: "manual-override" } }),
+      "--consistent-read",
+    ],
+    "consultar o override manual de operação",
+    true,
+  );
+  const item = response.Item;
+  if (Number(item?.ExpiresAt?.N ?? 0) <= Math.floor(Date.now() / 1_000)) return null;
+  return item ?? null;
+}
+
+async function setManualOverride(tableName, holder, previousOverride) {
+  if (!tableName) return { tableName: null, holder, previousOverride };
+  const expiresAt = Math.floor(Date.now() / 1_000) + 12 * 60 * 60;
+  await runAws(
+    [
+      "dynamodb",
+      "put-item",
+      "--table-name",
+      tableName,
+      "--item",
+      JSON.stringify({
+        LockId: { S: "manual-override" },
+        Holder: { S: holder },
+        ExpiresAt: { N: String(expiresAt) },
+      }),
+    ],
+    "ativar o override manual por 12 horas",
+  );
+  return { tableName, holder, previousOverride };
+}
+
+async function restoreManualOverride(override) {
+  if (!override?.tableName || !override.holder) return;
+  const current = await getManualOverride(override.tableName);
+  if (current?.Holder?.S !== override.holder) return;
+
+  const previousExpiresAt = Number(override.previousOverride?.ExpiresAt?.N ?? 0);
+  if (override.previousOverride && previousExpiresAt > Math.floor(Date.now() / 1_000)) {
+    await runAws(
+      [
+        "dynamodb",
+        "put-item",
+        "--table-name",
+        override.tableName,
+        "--item",
+        JSON.stringify(override.previousOverride),
+        "--condition-expression",
+        "Holder = :holder",
+        "--expression-attribute-values",
+        JSON.stringify({ ":holder": { S: override.holder } }),
+      ],
+      "restaurar o override manual anterior",
+    );
+    return;
+  }
+
+  await runAws(
+    [
+      "dynamodb",
+      "delete-item",
+      "--table-name",
+      override.tableName,
+      "--key",
+      JSON.stringify({ LockId: { S: "manual-override" } }),
+      "--condition-expression",
+      "Holder = :holder",
+      "--expression-attribute-values",
+      JSON.stringify({ ":holder": { S: override.holder } }),
+    ],
+    "remover o override manual da sessão local",
+  );
+}
+
+async function clearManualOverride(tableName) {
+  if (!tableName) return;
+  await runAws(
+    [
+      "dynamodb",
+      "delete-item",
+      "--table-name",
+      tableName,
+      "--key",
+      JSON.stringify({ LockId: { S: "manual-override" } }),
+    ],
+    "remover o override manual",
+  );
+}
+
+export async function renewManualOverride(holder) {
+  await withAwsOperationLock(async (lock) => {
+    if (!lock) return;
+    const tableName = lock.tableName;
+    const now = Math.floor(Date.now() / 1_000);
+    await runAws(
+      [
+        "dynamodb",
+        "update-item",
+        "--table-name",
+        tableName,
+        "--key",
+        JSON.stringify({ LockId: { S: "manual-override" } }),
+        "--update-expression",
+        "SET ExpiresAt = :expiresAt",
+        "--condition-expression",
+        "Holder = :holder AND ExpiresAt >= :now",
+        "--expression-attribute-values",
+        JSON.stringify({
+          ":holder": { S: holder },
+          ":now": { N: String(now) },
+          ":expiresAt": { N: String(now + 12 * 60 * 60) },
+        }),
+      ],
+      "renovar o override manual da sessão local",
+    );
+  });
+}
+
+async function requestBracketPreviewWorkerDrain(tableName, operationId) {
+  if (!tableName)
+    throw new Error("A tabela de lock da rotação é necessária para drenar o worker SQS.");
+  const now = Math.floor(Date.now() / 1_000);
+  await runAws(
+    [
+      "dynamodb",
+      "put-item",
+      "--table-name",
+      tableName,
+      "--item",
+      JSON.stringify({
+        LockId: { S: "bracket-preview-worker" },
+        State: { S: "DRAINING" },
+        OperationId: { S: operationId },
+        RequestedAt: { N: String(now) },
+        ExpiresAt: { N: String(now + 1_200) },
+      }),
+    ],
+    "solicitar drenagem do worker SQS",
+  );
+}
+
+async function getBracketPreviewWorkerDrain(tableName, operationId) {
+  const response = await runAws(
+    [
+      "dynamodb",
+      "get-item",
+      "--table-name",
+      tableName,
+      "--key",
+      JSON.stringify({ LockId: { S: "bracket-preview-worker" } }),
+      "--consistent-read",
+    ],
+    "consultar drenagem do worker SQS",
+    true,
+  );
+  const item = response.Item;
+  if (item?.OperationId?.S !== operationId) return { state: "MISSING", timedOut: true };
+  const requestedAt = Number(item.RequestedAt?.N ?? 0);
+  return {
+    state: item.State?.S ?? "MISSING",
+    timedOut: Math.floor(Date.now() / 1_000) - requestedAt >= 600,
+  };
+}
+
+async function clearBracketPreviewWorkerDrain(tableName, operationId) {
+  if (!tableName) return;
+  try {
+    await runAws(
+      [
+        "dynamodb",
+        "delete-item",
+        "--table-name",
+        tableName,
+        "--key",
+        JSON.stringify({ LockId: { S: "bracket-preview-worker" } }),
+        "--condition-expression",
+        "OperationId = :operationId",
+        "--expression-attribute-values",
+        JSON.stringify({ ":operationId": { S: operationId } }),
+      ],
+      "limpar o estado de drenagem do worker SQS",
+    );
+  } catch (error) {
+    if (!error.message.includes("ConditionalCheckFailedException")) throw error;
+  }
+}
+
+async function waitForBracketPreviewWorkerDrain(tableName, operationId) {
+  const deadline = Date.now() + 10 * 60 * 1_000;
+  while (Date.now() < deadline) {
+    const state = await getBracketPreviewWorkerDrain(tableName, operationId);
+    if (state.state === "DRAINED") return;
+    if (state.timedOut) break;
+    await new Promise((resolve) => setTimeout(resolve, 15_000));
+  }
+  await clearBracketPreviewWorkerDrain(tableName, operationId);
+  throw new Error("O worker SQS não confirmou a drenagem; ECS e RDS permaneceram ligados.");
+}
+
+async function listRunningEcsTasks() {
+  const ecsCluster = requiredEnvironmentValue("AWS_ECS_CLUSTER");
+  const ecsService = requiredEnvironmentValue("AWS_ECS_SERVICE");
+  const response = await runAws(
+    [
+      "ecs",
+      "list-tasks",
+      "--cluster",
+      ecsCluster,
+      "--service-name",
+      ecsService,
+      "--desired-status",
+      "RUNNING",
+    ],
+    "localizar tasks ECS para desligamento",
+    true,
+  );
+  return response.taskArns ?? [];
+}
+
+async function verifyGracefulEcsShutdown(taskArns) {
+  if (taskArns.length === 0) return;
+  const ecsCluster = requiredEnvironmentValue("AWS_ECS_CLUSTER");
+  const response = await runAws(
+    ["ecs", "describe-tasks", "--cluster", ecsCluster, "--tasks", ...taskArns],
+    "validar o encerramento gracioso das tasks ECS",
+    true,
+  );
+  if (response.failures?.length || response.tasks?.length !== taskArns.length) {
+    throw new Error("Não foi possível confirmar o encerramento de todas as tasks ECS.");
+  }
+  const unsafeTask = response.tasks.find(
+    (task) =>
+      task.lastStatus !== "STOPPED" ||
+      task.containers?.some((container) => container.exitCode !== 0),
+  );
+  if (unsafeTask) {
+    throw new Error(
+      `A task ECS ${unsafeTask.taskArn ?? "desconhecida"} não encerrou de forma graciosa; o RDS será mantido ligado.`,
+    );
   }
 }
 
@@ -229,11 +483,6 @@ async function updateEcsDesiredCount(desiredCount, service) {
   await waitForEcsServiceToStabilize();
 }
 
-async function setEcsDesiredCount(desiredCount) {
-  const service = await getEcsService();
-  await updateEcsDesiredCount(desiredCount, service);
-}
-
 async function startEcs(resourcesStartedBySession) {
   const service = await getEcsService();
   if (service.desiredCount === 0) {
@@ -248,20 +497,42 @@ async function startEcs(resourcesStartedBySession) {
   await waitForEcsServiceToStabilize();
 }
 
-export async function startAwsInfrastructure() {
-  const resourcesStartedBySession = { ecs: false, rds: false };
+async function clearAnyBracketPreviewWorkerDrain(tableName) {
+  if (!tableName) return;
+  await runAws(
+    [
+      "dynamodb",
+      "delete-item",
+      "--table-name",
+      tableName,
+      "--key",
+      JSON.stringify({ LockId: { S: "bracket-preview-worker" } }),
+    ],
+    "remover sinalização antiga de drenagem do worker SQS",
+  );
+}
+
+async function startAwsInfrastructureUnlocked(lock) {
+  const resourcesStartedBySession = { ecs: false, rds: false, manualOverride: null };
+  const tableName = lock?.tableName ?? null;
+  const manualOverrideHolder = randomUUID();
+  const previousOverride = await getManualOverride(tableName);
+  resourcesStartedBySession.manualOverride = await setManualOverride(
+    tableName,
+    manualOverrideHolder,
+    previousOverride,
+  );
+
   try {
-    await assertExpectedAwsAccount();
+    await clearAnyBracketPreviewWorkerDrain(tableName);
     await startRds(resourcesStartedBySession);
     await startEcs(resourcesStartedBySession);
     console.log("RDS e ECS estão disponíveis para o desenvolvimento local.");
     return resourcesStartedBySession;
   } catch (error) {
-    if (!resourcesStartedBySession.rds && !resourcesStartedBySession.ecs) {
-      throw error;
-    }
     try {
-      await stopAwsInfrastructure(resourcesStartedBySession);
+      await stopAwsInfrastructureUnlocked(resourcesStartedBySession, lock);
+      await restoreManualOverride(resourcesStartedBySession.manualOverride);
     } catch (cleanupError) {
       throw new AggregateError(
         [error, cleanupError],
@@ -273,34 +544,69 @@ export async function startAwsInfrastructure() {
   }
 }
 
-export async function stopAwsInfrastructure(resourcesStartedBySession) {
+async function stopAwsInfrastructureUnlocked(resourcesStartedBySession, lock) {
   const stopAll = resourcesStartedBySession === undefined;
   const shouldStopEcs = stopAll || resourcesStartedBySession.ecs;
   const shouldStopRds = stopAll || resourcesStartedBySession.rds;
-  if (!shouldStopEcs && !shouldStopRds) return;
+  const tableName = lock?.tableName ?? resourcesStartedBySession?.manualOverride?.tableName ?? null;
 
-  await assertExpectedAwsAccount();
-  const cleanupErrors = [];
+  if (stopAll) await clearManualOverride(tableName);
+
+  let service = null;
   if (shouldStopEcs) {
-    try {
-      await setEcsDesiredCount(0);
-    } catch (error) {
-      cleanupErrors.push(error);
+    service = await getEcsService();
+    const runningTaskArns = await listRunningEcsTasks();
+    if (runningTaskArns.length > 0) {
+      const operationId = randomUUID();
+      await requestBracketPreviewWorkerDrain(tableName, operationId);
+      await waitForBracketPreviewWorkerDrain(tableName, operationId);
     }
+
+    await updateEcsDesiredCount(0, service);
+    await verifyGracefulEcsShutdown(runningTaskArns);
   }
+
   if (shouldStopRds) {
-    try {
+    if (!service) {
+      try {
+        service = await getEcsService();
+      } catch (error) {
+        if (!error.message.includes("não foi encontrado")) throw error;
+        service = { desiredCount: 0, runningCount: 0 };
+      }
+    }
+    if (!shouldStopEcs && (service.desiredCount > 0 || service.runningCount > 0)) {
+      console.log("ECS continua ativo; mantendo o RDS para preservar o serviço existente.");
+    } else {
       await stopRds();
-    } catch (error) {
-      cleanupErrors.push(error);
     }
   }
-  if (cleanupErrors.length > 0) {
-    throw new AggregateError(cleanupErrors, "Falha ao desligar os recursos AWS da sessão.");
-  }
+
+  if (!stopAll) await restoreManualOverride(resourcesStartedBySession.manualOverride);
+
   console.log(
     stopAll
       ? "ECS e RDS foram parados."
       : "Os recursos AWS iniciados por esta sessão foram parados.",
+  );
+}
+
+export async function startAwsInfrastructure() {
+  await assertExpectedAwsAccount();
+  requiredEnvironmentValue("AWS_ECS_CLUSTER");
+  requiredEnvironmentValue("AWS_ECS_SERVICE");
+  requiredEnvironmentValue("AWS_RDS_INSTANCE_IDENTIFIER");
+
+  return withAwsOperationLock((lock) => startAwsInfrastructureUnlocked(lock));
+}
+
+export async function stopAwsInfrastructure(resourcesStartedBySession) {
+  await assertExpectedAwsAccount();
+  requiredEnvironmentValue("AWS_ECS_CLUSTER");
+  requiredEnvironmentValue("AWS_ECS_SERVICE");
+  requiredEnvironmentValue("AWS_RDS_INSTANCE_IDENTIFIER");
+
+  return withAwsOperationLock((lock) =>
+    stopAwsInfrastructureUnlocked(resourcesStartedBySession, lock),
   );
 }

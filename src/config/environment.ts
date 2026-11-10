@@ -156,6 +156,7 @@ if (authEnabled) {
 
 const awsRegion = optional("AWS_REGION");
 const bracketPreviewQueueUrl = optional("BRACKET_PREVIEW_QUEUE_URL");
+const bracketPreviewDrainTable = optional("BRACKET_PREVIEW_DRAIN_TABLE");
 const bracketPreviewWorkerEnabled = booleanValue("BRACKET_PREVIEW_WORKER_ENABLED", false);
 const bracketPreviewPollWaitSeconds = optionalInteger(
   "BRACKET_PREVIEW_POLL_WAIT_SECONDS",
@@ -180,6 +181,9 @@ if (awsEnabled && !awsRegion) {
 }
 if (bracketPreviewWorkerEnabled && !bracketPreviewQueueUrl) {
   issues.push("BRACKET_PREVIEW_QUEUE_URL is required when BRACKET_PREVIEW_WORKER_ENABLED=true.");
+}
+if (bracketPreviewWorkerEnabled && !bracketPreviewDrainTable) {
+  issues.push("BRACKET_PREVIEW_DRAIN_TABLE is required when BRACKET_PREVIEW_WORKER_ENABLED=true.");
 }
 
 const mailFrom = optional("MAIL_FROM");
@@ -246,6 +250,7 @@ export const environment = createRedactedConfig(
       region: awsRegion,
       secretsPrefix: optional("AWS_SECRETS_PREFIX"),
       bracketPreviewQueueUrl,
+      bracketPreviewDrainTable,
       bracketPreviewWorkerEnabled,
       bracketPreviewPollWaitSeconds,
       bracketPreviewVisibilityTimeoutSeconds,

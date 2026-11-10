@@ -116,7 +116,9 @@ Para desligar o serviço ECS e parar o RDS:
 npm run aws:off
 ```
 
-O script valida a conta AWS configurada. `aws:on` inicia o RDS caso necessário, define `desiredCount=1` no serviço ECS e aguarda estabilização. `aws:off` define `desiredCount=0`, aguarda a parada das tasks e depois para o RDS. A API Gateway, o VPC Link, o ALB e outros recursos provisionados permanecem; desligar ECS e RDS não elimina todos os custos AWS. Enquanto o RDS está parado, a AWS continua cobrando armazenamento e backups retidos; consulte a documentação de [parada temporária do RDS](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_StopInstance.html).
+O script valida a conta AWS configurada. `aws:on` inicia o RDS caso necessário, define `desiredCount=1` no serviço ECS e aguarda estabilização. Ele grava um override manual de 12 horas para impedir que a agenda noturna desligue uma sessão iniciada manualmente. `dev:aws` renova esse override enquanto o túnel estiver ativo. `aws:off` remove o override, sinaliza o worker SQS para parar de buscar novas mensagens, aguarda o trabalho corrente, reduz o ECS a zero e verifica o encerramento das tasks antes de parar o RDS. Se a drenagem ou o encerramento gracioso não forem confirmados, o RDS permanece ligado. O lock DynamoDB compartilhado serializa esses comandos com a rotação de credenciais, o deploy e as agendas.
+
+A API Gateway, o VPC Link, o ALB e outros recursos provisionados permanecem; desligar ECS e RDS não elimina todos os custos AWS. Enquanto o RDS está parado, a AWS continua cobrando armazenamento e backups retidos; consulte a documentação de [parada temporária do RDS](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_StopInstance.html).
 
 Confirme o estado do banco:
 
@@ -134,6 +136,22 @@ aws ecs list-tasks --cluster laje-staging-api --service-name laje-staging-api --
 Depois de ligar, espere RDS `available`, ECS com `desired=1` e `running=1`, e confirme `/api/v1/health` e `/api/v1/health/database`. Esses sinais não comprovam os fluxos de produto; execute e registre o smoke funcional da versão a apresentar. Depois de desligar, confirme RDS `stopped`, ECS `desired=0` e `running=0`, sem tasks retornadas. A AWS pode reiniciar uma instância RDS após sete dias consecutivos parada.
 
 Para desenvolvimento local com `npm run dev:aws`, mantenha o terminal do túnel SSM ativo e execute `npm run dev` em outro terminal para iniciar a API local. Ao terminar, interrompa primeiro a API local e finalize o túnel com `Ctrl+C`. O script fecha o túnel e interrompe somente os recursos que iniciou naquela sessão. Se a sessão SSM terminar inesperadamente ou os recursos já estivessem ativos antes, confira ECS e RDS e use `npm run aws:off` ao fim da janela de uso.
+
+## LAJE-152: automação de custo e operação
+
+As mudanças desta tarefa ficam no ambiente AWS do TCC. O Vercel `laje`, o caminho Supabase e o contrato da API não são alterados.
+
+O Terraform define agendas EventBridge Scheduler diárias para desligar às 00h e iniciar às 09h no fuso `America/Sao_Paulo`. `staging_automation_schedules_enabled` permanece `false` por padrão. A janela de 00h a 09h representa indisponibilidade planejada. O início às 09h não garante disponibilidade nesse horário: o RDS pode levar tempo para iniciar e a API só é considerada pronta após ECS estável e verificações HTTP bem-sucedidas.
+
+Para habilitar as agendas, a configuração externa deve fornecer `STAGING_AUTOMATION_ALERT_EMAIL` e marcar `STAGING_AUTOMATION_ALERT_EMAIL_CONFIRMED=true` somente depois de aceitar a confirmação enviada pelo SNS. O endereço não fica no repositório. O workflow valida essas condições antes de qualquer aplicação Terraform.
+
+A máquina de estados serializa as operações pelo mesmo item de lock DynamoDB usado pela rotação RDS, pelos comandos locais e pelo workflow de deploy. No desligamento, o worker confirma drenagem, o ECS chega a zero e as tasks encerram com sucesso antes do RDS ser parado. Falha na drenagem, no encerramento do ECS ou em uma etapa anterior ao pedido de parada mantém o RDS ligado e gera notificação SNS. Se houver falha durante a espera após a AWS aceitar o pedido de parada do RDS, o estado pode ser `stopping` ou `stopped`; consulte o plano de controle antes de qualquer nova ação. O DLQ de agendamento também tem alarme CloudWatch.
+
+A inicialização espera o RDS `available`, estabiliza uma task ECS e consulta `/api/v1/health`, `/api/v1/health/database` e `/api/v1/public/settings`. O horário real de prontidão é registrado no CloudWatch. Mensagens ainda não iniciadas permanecem na fila SQS.
+
+Cloud Map é somente uma opção de canário: `staging_api_cloud_map_enabled` e `staging_api_use_cloud_map` permanecem `false`. A rota principal continua no ALB; a rota canário exige AWS IAM. API Gateway, VPC Link e ALB existentes não são removidos, e nenhum corte deve ocorrer antes dos testes e da comparação de custo. Recursos de API Gateway sem rotas e VPC Links adicionais ainda exigem confirmação de propriedade; não devem ser importados ou removidos por esta mudança.
+
+A [LAJE-152](https://joaoduartte.atlassian.net/browse/LAJE-152) registra como referência histórica aproximada de outubro de 2026 RDS US$ 29,68, ALB US$ 21,22 e ECS/Fargate US$ 12,73, antes de créditos e ajustes; esses valores não são o custo líquido atual nem foram atualizados nesta execução pelo Cost Explorer. A comparação financeira deve usar outubro como mês fechado, separar consumo faturável e créditos e projetar 30 e 45 dias e até 16 de dezembro, incluindo Step Functions, Lambda, Scheduler, CloudWatch e Cloud Map. Como as agendas e o canário permanecem desativados nesta entrega, ainda não há economia realizada para reportar. A redução efetiva só pode ser confirmada depois de ciclos controlados e da comparação pós-ativação.
 
 ## Referências
 
