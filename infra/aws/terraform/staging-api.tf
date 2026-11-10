@@ -270,16 +270,34 @@ resource "aws_iam_role_policy" "ecs_task_bracket_preview" {
 
   policy = jsonencode({
     Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "sqs:SendMessage",
+          "sqs:ReceiveMessage",
+          "sqs:DeleteMessage",
+          "sqs:ChangeMessageVisibility",
+          "sqs:GetQueueAttributes"
+        ]
+        Resource = aws_sqs_queue.bracket_preview.arn
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "ecs_task_bracket_preview_drain" {
+  count = var.staging_api_enabled ? 1 : 0
+
+  name = "${local.name_prefix}-bracket-preview-drain"
+  role = aws_iam_role.ecs_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
     Statement = [{
-      Effect = "Allow"
-      Action = [
-        "sqs:SendMessage",
-        "sqs:ReceiveMessage",
-        "sqs:DeleteMessage",
-        "sqs:ChangeMessageVisibility",
-        "sqs:GetQueueAttributes"
-      ]
-      Resource = aws_sqs_queue.bracket_preview.arn
+      Effect   = "Allow"
+      Action   = ["dynamodb:GetItem", "dynamodb:UpdateItem"]
+      Resource = aws_dynamodb_table.rds_rotation_lock[0].arn
     }]
   })
 }
@@ -322,9 +340,10 @@ resource "aws_ecs_task_definition" "api" {
 
   container_definitions = jsonencode([
     {
-      name      = "api"
-      image     = "${aws_ecr_repository.api.repository_url}:${var.staging_api_image_tag}"
-      essential = true
+      name        = "api"
+      image       = "${aws_ecr_repository.api.repository_url}:${var.staging_api_image_tag}"
+      essential   = true
+      stopTimeout = 120
 
       portMappings = [
         {
@@ -349,6 +368,7 @@ resource "aws_ecs_task_definition" "api" {
         { name = "AUTH_REFRESH_EXPIRES_IN_DAYS", value = "30" },
         { name = "AWS_ENABLED", value = "true" },
         { name = "AWS_REGION", value = var.aws_region },
+        { name = "BRACKET_PREVIEW_DRAIN_TABLE", value = var.staging_api_enabled ? aws_dynamodb_table.rds_rotation_lock[0].name : "" },
         { name = "BRACKET_PREVIEW_QUEUE_URL", value = aws_sqs_queue.bracket_preview.url },
         { name = "BRACKET_PREVIEW_WORKER_ENABLED", value = "true" },
         { name = "BRACKET_PREVIEW_POLL_WAIT_SECONDS", value = "20" },
@@ -468,6 +488,42 @@ resource "aws_lb_listener" "api_http" {
   }
 }
 
+resource "aws_service_discovery_private_dns_namespace" "api" {
+  count = var.staging_api_enabled && var.staging_api_cloud_map_enabled ? 1 : 0
+
+  name        = "${local.name_prefix}.local"
+  description = "Private service discovery for the LAJE staging API."
+  vpc         = aws_vpc.this.id
+
+  tags = {
+    Jira = "LAJE-152"
+  }
+}
+
+resource "aws_service_discovery_service" "api" {
+  count = var.staging_api_enabled && var.staging_api_cloud_map_enabled ? 1 : 0
+
+  name = "api"
+
+  dns_config {
+    namespace_id   = aws_service_discovery_private_dns_namespace.api[0].id
+    routing_policy = "MULTIVALUE"
+
+    dns_records {
+      ttl  = 10
+      type = "SRV"
+    }
+  }
+
+  health_check_custom_config {
+    failure_threshold = 1
+  }
+
+  tags = {
+    Jira = "LAJE-152"
+  }
+}
+
 resource "aws_ecs_service" "api" {
   count = var.staging_api_enabled ? 1 : 0
 
@@ -500,11 +556,22 @@ resource "aws_ecs_service" "api" {
     container_port   = var.app_port
   }
 
+  dynamic "service_registries" {
+    for_each = var.staging_api_cloud_map_enabled ? [1] : []
+
+    content {
+      registry_arn   = aws_service_discovery_service.api[0].arn
+      container_name = "api"
+      container_port = var.app_port
+    }
+  }
+
   depends_on = [
     aws_lb_listener.api_http,
     aws_iam_role_policy_attachment.ecs_execution,
     aws_iam_role_policy.ecs_execution_rds_secret,
-    aws_iam_role_policy.ecs_task_bracket_preview
+    aws_iam_role_policy.ecs_task_bracket_preview,
+    aws_iam_role_policy.ecs_task_bracket_preview_drain
   ]
 
   tags = {
@@ -549,11 +616,36 @@ resource "aws_apigatewayv2_integration" "api" {
 
   api_id                 = aws_apigatewayv2_api.api[0].id
   integration_type       = "HTTP_PROXY"
-  integration_uri        = aws_lb_listener.api_http[0].arn
+  integration_uri        = var.staging_api_use_cloud_map ? aws_service_discovery_service.api[0].arn : aws_lb_listener.api_http[0].arn
   integration_method     = "ANY"
   connection_type        = "VPC_LINK"
   connection_id          = aws_apigatewayv2_vpc_link.api[0].id
   payload_format_version = "1.0"
+}
+
+resource "aws_apigatewayv2_integration" "api_cloud_map_canary" {
+  count = var.staging_api_enabled && var.staging_api_cloud_map_enabled ? 1 : 0
+
+  api_id                 = aws_apigatewayv2_api.api[0].id
+  integration_type       = "HTTP_PROXY"
+  integration_uri        = aws_service_discovery_service.api[0].arn
+  integration_method     = "ANY"
+  connection_type        = "VPC_LINK"
+  connection_id          = aws_apigatewayv2_vpc_link.api[0].id
+  payload_format_version = "1.0"
+
+  request_parameters = {
+    "overwrite:path" = "/$request.path.proxy"
+  }
+}
+
+resource "aws_apigatewayv2_route" "api_cloud_map_canary" {
+  count = var.staging_api_enabled && var.staging_api_cloud_map_enabled ? 1 : 0
+
+  api_id             = aws_apigatewayv2_api.api[0].id
+  route_key          = "ANY /__laje152_canary/{proxy+}"
+  target             = "integrations/${aws_apigatewayv2_integration.api_cloud_map_canary[0].id}"
+  authorization_type = "AWS_IAM"
 }
 
 resource "aws_apigatewayv2_route" "api_default" {

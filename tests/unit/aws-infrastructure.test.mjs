@@ -15,6 +15,7 @@ const originalEnvironment = new Map(
     "AWS_EXPECTED_ACCOUNT_ID",
     "AWS_ECS_CLUSTER",
     "AWS_ECS_SERVICE",
+    "AWS_OPERATION_LOCK_TABLE",
     "AWS_RDS_INSTANCE_IDENTIFIER",
   ].map((name) => [name, process.env[name]]),
 );
@@ -23,6 +24,7 @@ process.env.PATH = `${binaryDirectory}${delimiter}${originalPath ?? ""}`;
 process.env.AWS_EXPECTED_ACCOUNT_ID = "111111111111";
 process.env.AWS_ECS_CLUSTER = "test-cluster";
 process.env.AWS_ECS_SERVICE = "test-service";
+process.env.AWS_OPERATION_LOCK_TABLE = "test-rds-rotation-lock";
 process.env.AWS_RDS_INSTANCE_IDENTIFIER = "test-database";
 process.env.AWS_FIXTURE_STATE_FILE = stateFile;
 
@@ -34,11 +36,14 @@ await writeFile(
 const stateFile = process.env.AWS_FIXTURE_STATE_FILE;
 const state = JSON.parse(readFileSync(stateFile, "utf8"));
 const argumentsList = process.argv.slice(2);
-state.calls.push(argumentsList);
+state.items ??= {};
 
 function saveState() {
   writeFileSync(stateFile, JSON.stringify(state));
 }
+
+state.calls.push(argumentsList);
+saveState();
 
 if (argumentsList[0] === "sts") {
   process.stdout.write(JSON.stringify({ Account: state.account }));
@@ -67,8 +72,91 @@ if (argumentsList[0] === "sts") {
   state.ecsDesiredCount = Number(argumentsList[desiredCountIndex + 1]);
   saveState();
   process.stdout.write(JSON.stringify({}));
+} else if (argumentsList[0] === "ecs" && argumentsList[1] === "list-tasks") {
+  process.stdout.write(
+    JSON.stringify({ taskArns: state.ecsDesiredCount > 0 ? ["arn:aws:ecs:sa-east-1:111111111111:task/test-cluster/task-1"] : [] }),
+  );
+} else if (argumentsList[0] === "ecs" && argumentsList[1] === "describe-tasks") {
+  const tasksIndex = argumentsList.indexOf("--tasks");
+  const nextOptionIndex = argumentsList.findIndex(
+    (value, index) => index > tasksIndex && value.startsWith("--"),
+  );
+  const taskArns = argumentsList.slice(
+    tasksIndex + 1,
+    nextOptionIndex < 0 ? undefined : nextOptionIndex,
+  );
+  process.stdout.write(
+    JSON.stringify({
+      tasks: taskArns.map((taskArn) => ({
+        taskArn,
+        lastStatus: "STOPPED",
+        containers: [{ name: "api", exitCode: state.taskExitCode ?? 0 }],
+      })),
+    }),
+  );
 } else if (argumentsList[0] === "ecs" && argumentsList[1] === "wait") {
   process.stdout.write("");
+} else if (argumentsList[0] === "dynamodb" && argumentsList[1] === "list-tables") {
+  process.stdout.write(JSON.stringify({ TableNames: ["test-rds-rotation-lock"] }));
+} else if (argumentsList[0] === "dynamodb" && argumentsList[1] === "put-item") {
+  const itemIndex = argumentsList.indexOf("--item");
+  const item = JSON.parse(argumentsList[itemIndex + 1]);
+  const lockId = item.LockId.S;
+  const conditionIndex = argumentsList.indexOf("--condition-expression");
+  if (
+    conditionIndex >= 0 &&
+    argumentsList[conditionIndex + 1].includes("attribute_not_exists(LockId)") &&
+    Number(state.items[lockId]?.ExpiresAt?.N ?? 0) >= Math.floor(Date.now() / 1000)
+  ) {
+    process.stderr.write("ConditionalCheckFailedException");
+    process.exitCode = 1;
+  } else {
+    if (lockId === "bracket-preview-worker") item.State = { S: "DRAINED" };
+    state.items[lockId] = item;
+    saveState();
+    process.stdout.write("");
+  }
+} else if (argumentsList[0] === "dynamodb" && argumentsList[1] === "get-item") {
+  const keyIndex = argumentsList.indexOf("--key");
+  const key = JSON.parse(argumentsList[keyIndex + 1]);
+  process.stdout.write(JSON.stringify({ Item: state.items[key.LockId.S] }));
+} else if (argumentsList[0] === "dynamodb" && argumentsList[1] === "update-item") {
+  const keyIndex = argumentsList.indexOf("--key");
+  const key = JSON.parse(argumentsList[keyIndex + 1]);
+  const valuesIndex = argumentsList.indexOf("--expression-attribute-values");
+  const values = JSON.parse(argumentsList[valuesIndex + 1]);
+  const item = state.items[key.LockId.S] ?? { LockId: key.LockId };
+  item.ExpiresAt = values[":expiresAt"] ?? item.ExpiresAt;
+  state.items[key.LockId.S] = item;
+  saveState();
+  process.stdout.write("");
+} else if (argumentsList[0] === "dynamodb" && argumentsList[1] === "delete-item") {
+  const keyIndex = argumentsList.indexOf("--key");
+  const key = JSON.parse(argumentsList[keyIndex + 1]);
+  const lockId = key.LockId.S;
+  const conditionIndex = argumentsList.indexOf("--condition-expression");
+  if (conditionIndex >= 0) {
+    const valuesIndex = argumentsList.indexOf("--expression-attribute-values");
+    const values = JSON.parse(argumentsList[valuesIndex + 1]);
+    const current = state.items[lockId];
+    const expectedHolder = values[":holder"]?.S;
+    const expectedOperation = values[":operationId"]?.S;
+    if (
+      (expectedHolder && current?.Holder?.S !== expectedHolder) ||
+      (expectedOperation && current?.OperationId?.S !== expectedOperation)
+    ) {
+      process.stderr.write("ConditionalCheckFailedException");
+      process.exitCode = 1;
+    } else {
+      delete state.items[lockId];
+      saveState();
+      process.stdout.write("");
+    }
+  } else {
+    delete state.items[lockId];
+    saveState();
+    process.stdout.write("");
+  }
 } else {
   process.stderr.write("Unexpected AWS CLI arguments: " + argumentsList.join(" "));
   process.exitCode = 1;
@@ -79,8 +167,9 @@ const awsExecutable = join(binaryDirectory, "aws");
 await writeFile(awsExecutable, `#!/bin/sh\nexec node "${fakeAws}" "$@"\n`);
 await chmod(awsExecutable, 0o755);
 
-const { startAwsInfrastructure, stopAwsInfrastructure } =
+const { renewManualOverride, startAwsInfrastructure, stopAwsInfrastructure } =
   await import("../../scripts/aws-infrastructure.mjs");
+const { acquireAwsOperationLock } = await import("../../scripts/aws-operation-lock.mjs");
 
 async function setState(state) {
   await writeFile(stateFile, JSON.stringify({ account: "111111111111", calls: [], ...state }));
@@ -108,7 +197,8 @@ test("preserves RDS and ECS resources that were already active", async () => {
   await stopAwsInfrastructure(resourcesStartedBySession);
   const state = await getState();
 
-  assert.deepEqual(resourcesStartedBySession, { ecs: false, rds: false });
+  assert.equal(resourcesStartedBySession.ecs, false);
+  assert.equal(resourcesStartedBySession.rds, false);
   assert.equal(state.rdsStatus, "available");
   assert.equal(state.ecsDesiredCount, 2);
   assert.equal(
@@ -121,16 +211,101 @@ test("preserves RDS and ECS resources that were already active", async () => {
   );
 });
 
+test("rejects an operation lock held by a different local AWS operation", async () => {
+  await setState({
+    rdsStatus: "available",
+    ecsDesiredCount: 1,
+    ecsExists: true,
+    items: {
+      "test-service": {
+        LockId: { S: "test-service" },
+        Holder: { S: "existing-operation" },
+        ExpiresAt: { N: String(Math.floor(Date.now() / 1_000) + 600) },
+      },
+    },
+  });
+
+  await assert.rejects(
+    acquireAwsOperationLock("test-rds-rotation-lock", "competing-operation", 900, 0),
+    /ConditionalCheckFailedException/,
+  );
+});
+
 test("stops only resources started by the local session", async () => {
-  await setState({ rdsStatus: "stopped", ecsDesiredCount: 0, ecsExists: true });
+  const previousOverride = {
+    LockId: { S: "manual-override" },
+    Holder: { S: "previous-session" },
+    ExpiresAt: { N: String(Math.floor(Date.now() / 1_000) + 6 * 60 * 60) },
+  };
+  await setState({
+    rdsStatus: "stopped",
+    ecsDesiredCount: 0,
+    ecsExists: true,
+    items: { "manual-override": previousOverride },
+  });
 
   const resourcesStartedBySession = await startAwsInfrastructure();
-  assert.deepEqual(resourcesStartedBySession, { ecs: true, rds: true });
+  assert.equal(resourcesStartedBySession.ecs, true);
+  assert.equal(resourcesStartedBySession.rds, true);
+  const activeOverride = (await getState()).items["manual-override"];
+  assert.equal(activeOverride.Holder.S, resourcesStartedBySession.manualOverride.holder);
+  assert.ok(Number(activeOverride.ExpiresAt.N) >= Math.floor(Date.now() / 1_000) + 11 * 60 * 60);
+
+  await renewManualOverride(resourcesStartedBySession.manualOverride.holder);
+  const renewedOverride = (await getState()).items["manual-override"];
+  assert.equal(renewedOverride.Holder.S, resourcesStartedBySession.manualOverride.holder);
+  assert.ok(Number(renewedOverride.ExpiresAt.N) >= Math.floor(Date.now() / 1_000) + 11 * 60 * 60);
+
   await stopAwsInfrastructure(resourcesStartedBySession);
   const state = await getState();
 
   assert.equal(state.rdsStatus, "stopped");
   assert.equal(state.ecsDesiredCount, 0);
+  assert.deepEqual(state.items["manual-override"], previousOverride);
+
+  const drainRequestedIndex = state.calls.findIndex((argumentsList) => {
+    if (argumentsList[0] !== "dynamodb" || argumentsList[1] !== "put-item") return false;
+    const itemIndex = argumentsList.indexOf("--item");
+    return JSON.parse(argumentsList[itemIndex + 1]).LockId.S === "bracket-preview-worker";
+  });
+  const scaleDownIndex = state.calls.findIndex((argumentsList) => {
+    const desiredCountIndex = argumentsList.indexOf("--desired-count");
+    return (
+      argumentsList[0] === "ecs" &&
+      argumentsList[1] === "update-service" &&
+      argumentsList[desiredCountIndex + 1] === "0"
+    );
+  });
+  const stoppedTaskVerificationIndex = state.calls.findIndex(
+    (argumentsList) => argumentsList[0] === "ecs" && argumentsList[1] === "describe-tasks",
+  );
+  const rdsStopIndex = state.calls.findIndex(
+    (argumentsList) => argumentsList[0] === "rds" && argumentsList[1] === "stop-db-instance",
+  );
+
+  assert.ok(drainRequestedIndex >= 0);
+  assert.ok(drainRequestedIndex < scaleDownIndex);
+  assert.ok(scaleDownIndex < stoppedTaskVerificationIndex);
+  assert.ok(stoppedTaskVerificationIndex < rdsStopIndex);
+});
+
+test("keeps RDS running when an ECS task does not exit gracefully", async () => {
+  await setState({ rdsStatus: "stopped", ecsDesiredCount: 0, ecsExists: true, taskExitCode: 137 });
+
+  const resourcesStartedBySession = await startAwsInfrastructure();
+
+  await assert.rejects(
+    stopAwsInfrastructure(resourcesStartedBySession),
+    /não encerrou de forma graciosa/i,
+  );
+  const state = await getState();
+
+  assert.equal(state.rdsStatus, "available");
+  assert.equal(state.ecsDesiredCount, 0);
+  assert.equal(
+    state.calls.some((argumentsList) => argumentsList[1] === "stop-db-instance"),
+    false,
+  );
 });
 
 test("cleans up the RDS after a partial ECS startup failure", async () => {

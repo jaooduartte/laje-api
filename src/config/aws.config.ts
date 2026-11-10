@@ -5,6 +5,7 @@ export const awsConfig = Object.freeze({
   region: environment.aws.region,
   secretsPrefix: environment.aws.secretsPrefix,
   bracketPreviewQueueUrl: environment.aws.bracketPreviewQueueUrl,
+  bracketPreviewDrainTable: environment.aws.bracketPreviewDrainTable,
   bracketPreviewWorkerEnabled: environment.aws.bracketPreviewWorkerEnabled,
   bracketPreviewPollWaitSeconds: environment.aws.bracketPreviewPollWaitSeconds,
   bracketPreviewVisibilityTimeoutSeconds: environment.aws.bracketPreviewVisibilityTimeoutSeconds,

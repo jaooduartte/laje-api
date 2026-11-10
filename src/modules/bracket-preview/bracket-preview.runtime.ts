@@ -1,8 +1,9 @@
 import { awsConfig } from "../../config/aws.config.js";
 import { database } from "../../database/index.js";
+import { AwsDynamoDbClient } from "../../integrations/aws/dynamodb.client.js";
 import { AwsSqsClient } from "../../integrations/aws/sqs.client.js";
 import { BracketPreviewService } from "./bracket-preview.service.js";
-import { parseBracketPreviewQueueMessage, type QueueMessage } from "./bracket-preview-message.js";
+import { BracketPreviewQueueWorker } from "./bracket-preview-worker.js";
 
 class BracketPreviewQueue {
   private readonly client: AwsSqsClient | null;
@@ -18,10 +19,7 @@ class BracketPreviewQueue {
     if (!this.client) {
       throw new Error("Bracket preview SQS queue is not configured.");
     }
-    await this.client.sendMessage(
-      JSON.stringify({ type: "PROCESS_PREVIEW", jobId } satisfies QueueMessage),
-      delaySeconds,
-    );
+    await this.client.sendMessage(JSON.stringify({ type: "PROCESS_PREVIEW", jobId }), delaySeconds);
   }
 
   getClient(): AwsSqsClient | null {
@@ -33,86 +31,36 @@ const queue = new BracketPreviewQueue();
 
 export const bracketPreviewService = new BracketPreviewService(database, queue);
 
-let workerRunning = false;
-let stopRequested = false;
-
-async function workerLoop(): Promise<void> {
-  const client = queue.getClient();
-  if (!client) return;
-
-  workerRunning = true;
-  try {
-    while (!stopRequested) {
-      const messages = await client.receiveMessages({
-        waitTimeSeconds: awsConfig.bracketPreviewPollWaitSeconds,
-        visibilityTimeoutSeconds: awsConfig.bracketPreviewVisibilityTimeoutSeconds,
-        maxNumberOfMessages: 5,
-      });
-
-      for (const message of messages) {
-        if (stopRequested) break;
-        try {
-          const payload = parseBracketPreviewQueueMessage(message.body);
-          if (payload.type === "MAINTENANCE") {
-            const requeued = await bracketPreviewService.recoverAndCleanup();
-            console.log(`Bracket preview maintenance completed; requeued=${requeued}.`);
-          } else {
-            const heartbeatIntervalMs = Math.max(
-              15_000,
-              Math.floor((awsConfig.bracketPreviewVisibilityTimeoutSeconds * 1_000) / 3),
-            );
-            const heartbeatTimer = setInterval(() => {
-              void Promise.all([
-                bracketPreviewService.heartbeat(payload.jobId),
-                client.changeMessageVisibility(
-                  message.receiptHandle,
-                  awsConfig.bracketPreviewVisibilityTimeoutSeconds,
-                ),
-              ]).catch((error: unknown) => {
-                console.error(
-                  `Bracket preview heartbeat failed (jobId=${payload.jobId}, messageId=${message.messageId}).`,
-                  error,
-                );
-              });
-            }, heartbeatIntervalMs);
-
-            try {
-              await bracketPreviewService.process(payload.jobId);
-            } finally {
-              clearInterval(heartbeatTimer);
-            }
-          }
-          await client.deleteMessage(message.receiptHandle);
-        } catch (error) {
-          console.error(
-            `Bracket preview SQS message failed (messageId=${message.messageId}, receiveCount=${message.approximateReceiveCount}).`,
-            error,
-          );
-        }
-      }
-    }
-  } finally {
-    workerRunning = false;
-  }
-}
+let worker: BracketPreviewQueueWorker | null = null;
 
 export function startBracketPreviewWorker(): void {
+  const client = queue.getClient();
   if (
-    workerRunning ||
+    worker ||
     !awsConfig.enabled ||
     !awsConfig.bracketPreviewWorkerEnabled ||
-    !queue.getClient()
+    !client ||
+    !awsConfig.region ||
+    !awsConfig.bracketPreviewDrainTable
   ) {
     return;
   }
 
-  stopRequested = false;
-  void workerLoop().catch((error: unknown) => {
-    workerRunning = false;
-    console.error("Bracket preview SQS worker stopped unexpectedly.", error);
-  });
+  worker = new BracketPreviewQueueWorker(
+    client,
+    new AwsDynamoDbClient(awsConfig.region, awsConfig.bracketPreviewDrainTable),
+    bracketPreviewService,
+    {
+      pollWaitSeconds: awsConfig.bracketPreviewPollWaitSeconds,
+      visibilityTimeoutSeconds: awsConfig.bracketPreviewVisibilityTimeoutSeconds,
+    },
+  );
+  worker.start();
 }
 
-export function stopBracketPreviewWorker(): void {
-  stopRequested = true;
+export async function stopBracketPreviewWorker(): Promise<void> {
+  const currentWorker = worker;
+  if (!currentWorker) return;
+  await currentWorker.stop();
+  worker = null;
 }

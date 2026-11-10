@@ -3,7 +3,11 @@ import "dotenv/config";
 import { execFileSync, spawn } from "node:child_process";
 import { createConnection, createServer } from "node:net";
 import { setTimeout as delay } from "node:timers/promises";
-import { startAwsInfrastructure, stopAwsInfrastructure } from "./aws-infrastructure.mjs";
+import {
+  renewManualOverride,
+  startAwsInfrastructure,
+  stopAwsInfrastructure,
+} from "./aws-infrastructure.mjs";
 import { runWithAwsInfrastructure } from "./aws-infrastructure-session.mjs";
 
 const awsRegion = process.env.AWS_REGION || "sa-east-1";
@@ -236,13 +240,30 @@ async function main() {
     await assertLocalPortIsFree(localPort);
     const result = await runWithAwsInfrastructure(
       startAwsInfrastructure,
-      async () => {
-        if (signalState.signal) return { code: 0 };
-        await assertLocalPortIsFree(localPort);
-        if (signalState.signal) return { code: 0 };
-        return startTunnelSession(localPort, signalState, (process) => {
-          tunnelProcess = process;
-        });
+      async (resourcesStartedBySession) => {
+        const overrideHolder = resourcesStartedBySession.manualOverride?.holder;
+        const overrideRenewalTimer = overrideHolder
+          ? setInterval(
+              () => {
+                void renewManualOverride(overrideHolder).catch((error) => {
+                  console.error("Não foi possível renovar o override manual do túnel AWS.", error);
+                });
+              },
+              4 * 60 * 60 * 1_000,
+            )
+          : null;
+        overrideRenewalTimer?.unref();
+
+        try {
+          if (signalState.signal) return { code: 0 };
+          await assertLocalPortIsFree(localPort);
+          if (signalState.signal) return { code: 0 };
+          return startTunnelSession(localPort, signalState, (process) => {
+            tunnelProcess = process;
+          });
+        } finally {
+          if (overrideRenewalTimer) clearInterval(overrideRenewalTimer);
+        }
       },
       stopAwsInfrastructure,
     );

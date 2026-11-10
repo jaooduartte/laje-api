@@ -112,6 +112,49 @@ variable "staging_api_cors_origins" {
   default     = "https://laje-tcc.vercel.app"
 }
 
+variable "staging_api_cloud_map_enabled" {
+  description = "Creates the Cloud Map service discovery canary while retaining the existing ALB integration."
+  type        = bool
+  default     = false
+}
+
+variable "staging_api_use_cloud_map" {
+  description = "Routes the default API Gateway integration through Cloud Map after canary validation."
+  type        = bool
+  default     = false
+
+  validation {
+    condition     = !var.staging_api_use_cloud_map || var.staging_api_cloud_map_enabled
+    error_message = "staging_api_cloud_map_enabled must be true before staging_api_use_cloud_map can be enabled."
+  }
+}
+
+variable "staging_automation_schedules_enabled" {
+  description = "Enables the staging RDS/ECS daily start and stop schedules. Keep false until the academic availability window has ended and the alert email is confirmed."
+  type        = bool
+  default     = false
+
+  validation {
+    condition = !var.staging_automation_schedules_enabled || (
+      length(trimspace(var.staging_automation_alert_email)) > 0 &&
+      var.staging_automation_alert_email_confirmed
+    )
+    error_message = "A confirmed staging_automation_alert_email is required before enabling daily schedules."
+  }
+}
+
+variable "staging_automation_alert_email" {
+  description = "Email address subscribed to staging lifecycle failure alerts."
+  type        = string
+  default     = ""
+}
+
+variable "staging_automation_alert_email_confirmed" {
+  description = "Set true only after AWS SNS confirms the staging automation email subscription."
+  type        = bool
+  default     = false
+}
+
 variable "staging_auth_jwt_secret_name" {
   description = "Secrets Manager name containing the dedicated auth JWT signing secret for staging."
   type        = string

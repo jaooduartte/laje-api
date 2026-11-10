@@ -69,6 +69,21 @@ output "staging_api_ecs_cluster_name" {
   description = "ECS cluster used by staging."
 }
 
+output "staging_api_ecs_service_name" {
+  value       = var.staging_api_enabled ? aws_ecs_service.api[0].name : null
+  description = "ECS service used by the staging API."
+}
+
+output "staging_api_operation_lock_table_name" {
+  value       = try(aws_dynamodb_table.rds_rotation_lock[0].name, "")
+  description = "DynamoDB table shared by staging lifecycle operations and RDS rotation."
+}
+
+output "staging_api_cloud_map_service_arn" {
+  value       = var.staging_api_cloud_map_enabled && var.staging_api_enabled ? aws_service_discovery_service.api[0].arn : null
+  description = "Cloud Map service discovery canary ARN."
+}
+
 output "staging_api_https_url" {
   value       = var.staging_api_enabled ? aws_apigatewayv2_api.api[0].api_endpoint : null
   description = "Public API Gateway HTTPS URL for staging. Null while the billable staging runtime is suspended."
