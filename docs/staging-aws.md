@@ -6,16 +6,16 @@ Este runbook descreve o ambiente AWS que atende o frontend `laje-tcc` e a entreg
 
 ## Estado verificado em 09/11/2026
 
-| Recurso | Estado consultado |
-| --- | --- |
-| Região | `sa-east-1` |
-| API Gateway HTTP API | `rkckaptyaf`, estágio `$default`, endpoint `https://rkckaptyaf.execute-api.sa-east-1.amazonaws.com` |
-| Rota pública | `$default`, integrada como `HTTP_PROXY` pelo VPC Link `jxvnnl` |
-| ALB | `laje-staging-api`, interno |
-| ECS | Serviço `laje-staging-api` ativo, 1 tarefa desejada e em execução, task definition `:36` |
-| RDS | `laje-staging-postgres`, PostgreSQL 17.9, `available`, privado, backup com retenção de um dia, Single-AZ e sem proteção contra exclusão |
-| Origem CORS | `https://laje-tcc.vercel.app` |
-| Logs | CloudWatch Logs, grupo `/laje/staging/api` |
+| Recurso              | Estado consultado                                                                                                                       |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Região               | `sa-east-1`                                                                                                                             |
+| API Gateway HTTP API | `rkckaptyaf`, estágio `$default`, endpoint `https://rkckaptyaf.execute-api.sa-east-1.amazonaws.com`                                     |
+| Rota pública         | `$default`, integrada como `HTTP_PROXY` pelo VPC Link `jxvnnl`                                                                          |
+| ALB                  | `laje-staging-api`, interno                                                                                                             |
+| ECS                  | Serviço `laje-staging-api` ativo, 1 tarefa desejada e em execução, task definition `:36`                                                |
+| RDS                  | `laje-staging-postgres`, PostgreSQL 17.9, `available`, privado, backup com retenção de um dia, Single-AZ e sem proteção contra exclusão |
+| Origem CORS          | `https://laje-tcc.vercel.app`                                                                                                           |
+| Logs                 | CloudWatch Logs, grupo `/laje/staging/api`                                                                                              |
 
 O status acima foi consultado no plano de controle AWS. Para comprovar que uma versão da aplicação está pronta para uso, consulte os health checks e o smoke E2E da execução mais recente de `Deploy AWS`.
 

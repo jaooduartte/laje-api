@@ -20,7 +20,7 @@ Esta auditoria é uma fotografia do ambiente naquela data. Confirme o deployment
 
 ## Registro histórico da auditoria de 15/10/2026
 
-O registro **NO-GO** de 15/10/2026 pertence à proposta de migração da operação permanente `laje` do Supabase para uma infraestrutura AWS de produção separada. A decisão da LAJE-37 de usar `laje-staging-postgres` para o deployment TCC resolve o escopo de hospedagem acadêmica sem criar um segundo RDS; ela não altera o backend Supabase de `laje`, não encerra a avaliação NO-GO daquela migração e não comprova prontidão funcional ou de recuperação do ambiente TCC.
+A auditoria de 15/10/2026 registrou NO-GO para o plano então vigente de publicar o `laje-tcc` em infraestrutura AWS produtiva separada do staging, mantendo o `laje` operacional no Supabase. Posteriormente, foi aprovada a utilização do RDS `laje-staging-postgres` como banco único da entrega acadêmica. Essa decisão elimina a necessidade de outra instância RDS para o escopo atual, mas não substitui validações de funcionamento, backup, recuperação e disponibilidade.
 
 Para declarar a versão TCC pronta para apresentação, valide separadamente a execução de publicação, health checks, smoke funcional dos fluxos apresentados, backups e um ensaio de restauração. A consulta ao estado ECS/RDS, isoladamente, não atende esses critérios. O ensaio de restauração ainda não foi comprovado nesta revisão.
 
