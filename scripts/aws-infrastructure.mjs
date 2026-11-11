@@ -7,6 +7,8 @@ const execFileAsync = promisify(execFile);
 const awsRegion = process.env.AWS_REGION || "sa-east-1";
 const rdsStoppedPollIntervalMs = 15_000;
 const rdsStoppedTimeoutMs = 30 * 60 * 1_000;
+const ecsTaskShutdownPollIntervalMs = 15_000;
+const ecsTaskShutdownMaxRetries = 12;
 
 function requiredEnvironmentValue(name) {
   const value = process.env[name]?.trim();
@@ -263,23 +265,42 @@ async function listRunningEcsTasks() {
 async function verifyGracefulEcsShutdown(taskArns) {
   if (taskArns.length === 0) return;
   const ecsCluster = requiredEnvironmentValue("AWS_ECS_CLUSTER");
-  const response = await runAws(
-    ["ecs", "describe-tasks", "--cluster", ecsCluster, "--tasks", ...taskArns],
-    "validar o encerramento gracioso das tasks ECS",
-    true,
-  );
-  if (response.failures?.length || response.tasks?.length !== taskArns.length) {
-    throw new Error("Não foi possível confirmar o encerramento de todas as tasks ECS.");
-  }
-  const unsafeTask = response.tasks.find(
-    (task) =>
-      task.lastStatus !== "STOPPED" ||
-      task.containers?.some((container) => container.exitCode !== 0),
-  );
-  if (unsafeTask) {
-    throw new Error(
-      `A task ECS ${unsafeTask.taskArn ?? "desconhecida"} não encerrou de forma graciosa; o RDS será mantido ligado.`,
+  let retries = 0;
+
+  while (true) {
+    const response = await runAws(
+      ["ecs", "describe-tasks", "--cluster", ecsCluster, "--tasks", ...taskArns],
+      "validar o encerramento gracioso das tasks ECS",
+      true,
     );
+    if (response.failures?.length || response.tasks?.length !== taskArns.length) {
+      throw new Error("Não foi possível confirmar o encerramento de todas as tasks ECS.");
+    }
+
+    const taskWithFailedContainer = response.tasks.find(
+      (task) =>
+        task.lastStatus === "STOPPED" &&
+        task.containers?.some((container) => container.exitCode !== 0),
+    );
+    if (taskWithFailedContainer) {
+      throw new Error(
+        `A task ECS ${taskWithFailedContainer.taskArn ?? "desconhecida"} não encerrou de forma graciosa; o RDS será mantido ligado.`,
+      );
+    }
+
+    const taskStillStopping = response.tasks.find((task) => task.lastStatus !== "STOPPED");
+    if (!taskStillStopping) return;
+    if (retries >= ecsTaskShutdownMaxRetries) {
+      throw new Error(
+        `A task ECS ${taskStillStopping.taskArn ?? "desconhecida"} não encerrou após ${ecsTaskShutdownMaxRetries} tentativas; o RDS será mantido ligado.`,
+      );
+    }
+
+    console.log(
+      `Aguardando a task ECS ${taskStillStopping.taskArn ?? "desconhecida"} encerrar (${retries + 1}/${ecsTaskShutdownMaxRetries})...`,
+    );
+    retries += 1;
+    await new Promise((resolve) => setTimeout(resolve, ecsTaskShutdownPollIntervalMs));
   }
 }
 

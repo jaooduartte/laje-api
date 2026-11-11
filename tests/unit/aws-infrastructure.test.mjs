@@ -85,12 +85,23 @@ if (argumentsList[0] === "sts") {
     tasksIndex + 1,
     nextOptionIndex < 0 ? undefined : nextOptionIndex,
   );
+  const describeTasksAttempt = state.describeTasksAttempts ?? 0;
+  const taskIsStopping =
+    state.taskDescribeAlwaysStopping === true ||
+    describeTasksAttempt < (state.taskDescribePendingResponses ?? 0);
+  state.describeTasksAttempts = describeTasksAttempt + 1;
+  saveState();
   process.stdout.write(
     JSON.stringify({
       tasks: taskArns.map((taskArn) => ({
         taskArn,
-        lastStatus: "STOPPED",
-        containers: [{ name: "api", exitCode: state.taskExitCode ?? 0 }],
+        lastStatus: taskIsStopping ? "STOPPING" : "STOPPED",
+        containers: [
+          {
+            name: "api",
+            ...(taskIsStopping ? {} : { exitCode: state.taskExitCode ?? 0 }),
+          },
+        ],
       })),
     }),
   );
@@ -177,6 +188,18 @@ async function setState(state) {
 
 async function getState() {
   return JSON.parse(await readFile(stateFile, "utf8"));
+}
+
+async function withImmediateEcsShutdownPolling(action) {
+  const originalSetTimeout = globalThis.setTimeout;
+  globalThis.setTimeout = (callback, delay, ...argumentsList) =>
+    originalSetTimeout(callback, delay === 15_000 ? 0 : delay, ...argumentsList);
+
+  try {
+    return await action();
+  } finally {
+    globalThis.setTimeout = originalSetTimeout;
+  }
 }
 
 after(async () => {
@@ -287,6 +310,51 @@ test("stops only resources started by the local session", async () => {
   assert.ok(drainRequestedIndex < scaleDownIndex);
   assert.ok(scaleDownIndex < stoppedTaskVerificationIndex);
   assert.ok(stoppedTaskVerificationIndex < rdsStopIndex);
+});
+
+test("waits for ECS tasks to stop before stopping RDS", async () => {
+  await setState({
+    rdsStatus: "stopped",
+    ecsDesiredCount: 0,
+    ecsExists: true,
+    taskDescribePendingResponses: 2,
+  });
+
+  const resourcesStartedBySession = await startAwsInfrastructure();
+
+  await withImmediateEcsShutdownPolling(() => stopAwsInfrastructure(resourcesStartedBySession));
+  const state = await getState();
+
+  assert.equal(state.describeTasksAttempts, 3);
+  assert.equal(state.rdsStatus, "stopped");
+  assert.equal(state.ecsDesiredCount, 0);
+});
+
+test("keeps RDS running when an ECS task remains active after bounded retries", async () => {
+  await setState({
+    rdsStatus: "stopped",
+    ecsDesiredCount: 0,
+    ecsExists: true,
+    taskDescribeAlwaysStopping: true,
+  });
+
+  const resourcesStartedBySession = await startAwsInfrastructure();
+
+  await withImmediateEcsShutdownPolling(() =>
+    assert.rejects(
+      stopAwsInfrastructure(resourcesStartedBySession),
+      /não encerrou após 12 tentativas/i,
+    ),
+  );
+  const state = await getState();
+
+  assert.equal(state.describeTasksAttempts, 13);
+  assert.equal(state.rdsStatus, "available");
+  assert.equal(state.ecsDesiredCount, 0);
+  assert.equal(
+    state.calls.some((argumentsList) => argumentsList[1] === "stop-db-instance"),
+    false,
+  );
 });
 
 test("keeps RDS running when an ECS task does not exit gracefully", async () => {
