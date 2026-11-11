@@ -81,6 +81,7 @@
         { "Variable": "$.rds.status", "StringEquals": "available", "Next": "SetEcsDesiredOne" },
         { "Variable": "$.rds.status", "StringEquals": "stopped", "Next": "StartRds" },
         { "Variable": "$.rds.status", "StringEquals": "starting", "Next": "WaitForRdsStart" },
+        { "Variable": "$.rds.status", "StringEquals": "backing-up", "Next": "WaitForRdsStart" },
         {
           "Variable": "$.rds.status",
           "StringEquals": "stopping",
@@ -411,6 +412,14 @@
         }
       },
       "ResultPath": null,
+      "Retry": [
+        {
+          "ErrorEquals": ["Error"],
+          "IntervalSeconds": 15,
+          "BackoffRate": 1,
+          "MaxAttempts": 12
+        }
+      ],
       "Catch": [
         { "ErrorEquals": ["States.ALL"], "ResultPath": "$.failure", "Next": "CleanupFailure" }
       ],
@@ -436,7 +445,8 @@
         { "Variable": "$.rds.status", "StringEquals": "stopped", "Next": "ReleaseLockAfterStop" },
         { "Variable": "$.rds.status", "StringEquals": "available", "Next": "StopRds" },
         { "Variable": "$.rds.status", "StringEquals": "stopping", "Next": "WaitForRdsStop" },
-        { "Variable": "$.rds.status", "StringEquals": "starting", "Next": "WaitForRdsStop" }
+        { "Variable": "$.rds.status", "StringEquals": "starting", "Next": "WaitForRdsStop" },
+        { "Variable": "$.rds.status", "StringEquals": "backing-up", "Next": "WaitForRdsStop" }
       ],
       "Default": "InvalidRdsStopState"
     },
