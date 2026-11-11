@@ -30,6 +30,15 @@ test("LAJE-152 state machine definition has valid state transitions", () => {
   }
 
   assert.equal(stateMachine.States.ChooseDrainOutcome.Choices[0].Next, "SetEcsDesiredZero");
+  assert.deepEqual(stateMachine.States.VerifyStoppedTasks.Retry, [
+    {
+      ErrorEquals: ["Error"],
+      IntervalSeconds: 15,
+      BackoffRate: 1,
+      MaxAttempts: 12,
+    },
+  ]);
+  assert.equal(stateMachine.States.VerifyStoppedTasks.Catch[0].Next, "CleanupFailure");
   assert.equal(stateMachine.States.VerifyStoppedTasks.Next, "ReadRdsForStop");
   assert.equal(stateMachine.States.ReleaseLockAfterStart.Next, "StartSucceeded");
   assert.equal(stateMachine.States.ReleaseLockAfterStop.Next, "StopSucceeded");

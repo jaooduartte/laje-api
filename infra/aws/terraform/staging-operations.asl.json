@@ -411,6 +411,14 @@
         }
       },
       "ResultPath": null,
+      "Retry": [
+        {
+          "ErrorEquals": ["Error"],
+          "IntervalSeconds": 15,
+          "BackoffRate": 1,
+          "MaxAttempts": 12
+        }
+      ],
       "Catch": [
         { "ErrorEquals": ["States.ALL"], "ResultPath": "$.failure", "Next": "CleanupFailure" }
       ],
