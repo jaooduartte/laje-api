@@ -18,7 +18,7 @@ function requiredEnvironmentValue(name) {
   return value;
 }
 
-async function runAws(argumentsList, description, outputJson = false) {
+async function runAws(argumentsList, description, outputJson = false, emptyJsonFallback) {
   assertAwsOperationLockHealthy();
   const options = ["--region", awsRegion, "--no-cli-pager"];
   if (outputJson) options.push("--output", "json");
@@ -27,7 +27,11 @@ async function runAws(argumentsList, description, outputJson = false) {
     const { stdout } = await execFileAsync("aws", [...argumentsList, ...options], {
       encoding: "utf8",
     });
-    return outputJson ? JSON.parse(stdout) : stdout;
+    if (!outputJson) return stdout;
+
+    const jsonOutput = stdout.trim();
+    if (!jsonOutput && emptyJsonFallback !== undefined) return emptyJsonFallback;
+    return JSON.parse(jsonOutput);
   } catch (error) {
     const details = error.stderr?.toString().trim() || error.message;
     throw new Error("AWS CLI falhou ao " + description + ".\n" + details, { cause: error });
@@ -48,6 +52,7 @@ async function getManualOverride(tableName) {
     ],
     "consultar o override manual de operação",
     true,
+    {},
   );
   const item = response.Item;
   if (Number(item?.ExpiresAt?.N ?? 0) <= Math.floor(Date.now() / 1_000)) return null;
@@ -533,16 +538,22 @@ async function clearAnyBracketPreviewWorkerDrain(tableName) {
   );
 }
 
-async function startAwsInfrastructureUnlocked(lock) {
+async function startAwsInfrastructureUnlocked(lock, allowScheduledShutdown) {
   const resourcesStartedBySession = { ecs: false, rds: false, manualOverride: null };
   const tableName = lock?.tableName ?? null;
-  const manualOverrideHolder = randomUUID();
   const previousOverride = await getManualOverride(tableName);
-  resourcesStartedBySession.manualOverride = await setManualOverride(
-    tableName,
-    manualOverrideHolder,
-    previousOverride,
-  );
+  if (allowScheduledShutdown && previousOverride) {
+    throw new Error(
+      "Existe um override manual ativo; encerre a sessão que o criou antes de permitir o desligamento agendado.",
+    );
+  }
+  if (!allowScheduledShutdown) {
+    resourcesStartedBySession.manualOverride = await setManualOverride(
+      tableName,
+      randomUUID(),
+      previousOverride,
+    );
+  }
 
   try {
     await clearAnyBracketPreviewWorkerDrain(tableName);
@@ -612,13 +623,15 @@ async function stopAwsInfrastructureUnlocked(resourcesStartedBySession, lock) {
   );
 }
 
-export async function startAwsInfrastructure() {
+export async function startAwsInfrastructure({ allowScheduledShutdown = false } = {}) {
   await assertExpectedAwsAccount();
   requiredEnvironmentValue("AWS_ECS_CLUSTER");
   requiredEnvironmentValue("AWS_ECS_SERVICE");
   requiredEnvironmentValue("AWS_RDS_INSTANCE_IDENTIFIER");
 
-  return withAwsOperationLock((lock) => startAwsInfrastructureUnlocked(lock));
+  return withAwsOperationLock((lock) =>
+    startAwsInfrastructureUnlocked(lock, allowScheduledShutdown),
+  );
 }
 
 export async function stopAwsInfrastructure(resourcesStartedBySession) {

@@ -172,6 +172,7 @@ A documentação não é montada automaticamente em `test` nem em `production`. 
 | `npm run build` | Compila TypeScript para `dist/` |
 | `npm start` | Inicia a API compilada em `dist/server.js` |
 | `npm run dev:aws` | Inicia os recursos necessários e abre o túnel SSM local |
+| `npm run aws:on -- --allow-scheduled-shutdown` | Inicia os recursos para validar a parada automática sem criar override manual |
 | `npm run typecheck` | Valida tipos sem emitir arquivos |
 | `npm run lint` | Executa ESLint com zero warnings permitidos |
 | `npm run format:check` | Valida formatação com Prettier |

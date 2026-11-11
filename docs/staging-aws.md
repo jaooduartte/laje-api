@@ -110,13 +110,19 @@ Na raiz de `laje-api`, para ligar o RDS se estiver parado, definir uma tarefa EC
 npm run aws:on
 ```
 
+Para preparar uma validação da parada automática, permitindo que a agenda desligue os recursos à meia-noite:
+
+```bash
+npm run aws:on -- --allow-scheduled-shutdown
+```
+
 Para desligar o serviço ECS e parar o RDS:
 
 ```bash
 npm run aws:off
 ```
 
-O script valida a conta AWS configurada. `aws:on` inicia o RDS caso necessário, define `desiredCount=1` no serviço ECS e aguarda estabilização. Ele grava um override manual de 12 horas para impedir que a agenda noturna desligue uma sessão iniciada manualmente. `dev:aws` renova esse override enquanto o túnel estiver ativo. `aws:off` remove o override, sinaliza o worker SQS para parar de buscar novas mensagens, aguarda o trabalho corrente, reduz o ECS a zero e verifica o encerramento das tasks antes de parar o RDS. Se a drenagem ou o encerramento gracioso não forem confirmados, o RDS permanece ligado. O lock DynamoDB compartilhado serializa esses comandos com a rotação de credenciais, o deploy e as agendas.
+O script valida a conta AWS configurada. `aws:on` inicia o RDS caso necessário, define `desiredCount=1` no serviço ECS e aguarda estabilização. Ele grava um override manual de 12 horas para impedir que a agenda noturna desligue uma sessão iniciada manualmente. `dev:aws` renova esse override enquanto o túnel estiver ativo. A opção `--allow-scheduled-shutdown` inicia os recursos sem gravar o override, para validar a parada agendada; ela falha sem alterar recursos se já houver um override ativo. `aws:off` remove o override, sinaliza o worker SQS para parar de buscar novas mensagens, aguarda o trabalho corrente, reduz o ECS a zero e verifica o encerramento das tasks antes de parar o RDS. Se a drenagem ou o encerramento gracioso não forem confirmados, o RDS permanece ligado. O lock DynamoDB compartilhado serializa esses comandos com a rotação de credenciais, o deploy e as agendas.
 
 A API Gateway, o VPC Link, o ALB e outros recursos provisionados permanecem; desligar ECS e RDS não elimina todos os custos AWS. Enquanto o RDS está parado, a AWS continua cobrando armazenamento e backups retidos; consulte a documentação de [parada temporária do RDS](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_StopInstance.html).
 
