@@ -46,6 +46,23 @@ test("LAJE-152 state machine definition has valid state transitions", () => {
     ).Next,
     "WaitForRdsStart",
   );
+  // RDS may briefly enter this state immediately after a scheduled StartDBInstance.
+  // Keep polling until available; do not start ECS early or fail the execution.
+  assert.equal(
+    stateMachine.States.ChooseRdsStartAction.Choices.find(
+      (choice) => choice.StringEquals === "configuring-enhanced-monitoring",
+    ).Next,
+    "WaitForRdsStart",
+  );
+  assert.equal(stateMachine.States.WaitForRdsStart.Seconds, 60);
+  assert.equal(
+    stateMachine.States.WaitForRdsStart.Next,
+    "RenewLockBeforeRdsStartCheck",
+  );
+  assert.equal(
+    stateMachine.States.RenewLockBeforeRdsStartCheck.Next,
+    "ReadRdsForStart",
+  );
   assert.equal(
     stateMachine.States.ChooseRdsStopAction.Choices.find(
       (choice) => choice.StringEquals === "backing-up",
