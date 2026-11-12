@@ -3,6 +3,7 @@ import express from "express";
 
 import { API_PREFIX } from "./common/constants/app.constants.js";
 import { errorHandler } from "./common/middlewares/error-handler.middleware.js";
+import { observeRequests } from "./common/middlewares/observability.middleware.js";
 import { notFoundHandler } from "./common/middlewares/not-found.middleware.js";
 import { appConfig } from "./config/app.config.js";
 import { createOpenApiRouter, isApiDocumentationEnabled } from "./openapi/openapi.routes.js";
@@ -12,6 +13,7 @@ export const app = express();
 
 app.disable("x-powered-by");
 app.set("trust proxy", appConfig.trustProxyHops);
+app.use(observeRequests);
 app.use(
   cors({
     origin: appConfig.corsOrigins,
