@@ -21,14 +21,14 @@ A definição Terraform `infra/aws/terraform/observability.tf` provisiona o pain
 
 ### Interpretação de sinais
 
-| Sinal | Interpretação |
-| --- | --- |
-| `5xx` API Gateway em janela ativa | Investigar falhas de integração ou backend e logs por horário |
-| `4xx` | Pode conter autenticação/validação esperada; não classificar automaticamente como incidente |
-| `HealthyHostCount=0` com ECS/RDS desligados | Estado planejado; não gerar alertas de indisponibilidade |
-| `HealthyHostCount=0` com ECS/RDS ativos | Investigar tasks, logs e healthcheck |
-| DLQ com mensagens | Revisar o processamento correspondente e as causas; não reprocessar cegamente |
-| RDS `stopped` ou ECS `desired=0` fora de sessão | Suspensão intencional, não uptime contínuo |
+| Sinal                                           | Interpretação                                                                               |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `5xx` API Gateway em janela ativa               | Investigar falhas de integração ou backend e logs por horário                               |
+| `4xx`                                           | Pode conter autenticação/validação esperada; não classificar automaticamente como incidente |
+| `HealthyHostCount=0` com ECS/RDS desligados     | Estado planejado; não gerar alertas de indisponibilidade                                    |
+| `HealthyHostCount=0` com ECS/RDS ativos         | Investigar tasks, logs e healthcheck                                                        |
+| DLQ com mensagens                               | Revisar o processamento correspondente e as causas; não reprocessar cegamente               |
+| RDS `stopped` ou ECS `desired=0` fora de sessão | Suspensão intencional, não uptime contínuo                                                  |
 
 Um dashboard de métricas passivas **não mede uptime fim a fim da aplicação pública**: para a fase de avaliação, executar healthchecks reais (incluindo `/api/v1/health/database`) e demonstrar frontend e três fluxos obrigatórios. Canários pagos e novas notificações SNS ficaram fora deste escopo inicial.
 
