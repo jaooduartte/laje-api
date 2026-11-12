@@ -130,7 +130,7 @@ variable "staging_api_use_cloud_map" {
 }
 
 variable "staging_automation_schedules_enabled" {
-  description = "Enables the staging RDS/ECS daily start and stop schedules. Keep false until the academic availability window has ended and the alert email is confirmed."
+  description = "Enables the staging RDS/ECS daily 00:00 stop schedule; the 09:00 start schedule also requires staging_automation_auto_start_enabled. Keep false when the academic availability window requires continuous uptime."
   type        = bool
   default     = false
 
@@ -141,6 +141,12 @@ variable "staging_automation_schedules_enabled" {
     )
     error_message = "A confirmed staging_automation_alert_email is required before enabling daily schedules."
   }
+}
+
+variable "staging_automation_auto_start_enabled" {
+  description = "When daily staging automation is enabled, also start RDS/ECS at 09:00 in America/Sao_Paulo. Keep false for manual-only startup."
+  type        = bool
+  default     = false
 }
 
 variable "staging_automation_alert_email" {
