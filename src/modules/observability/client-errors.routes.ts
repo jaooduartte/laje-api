@@ -1,13 +1,7 @@
 import { Router } from "express";
 import { rateLimit } from "express-rate-limit";
 
-const allowedKinds = new Set([
-  "javascript",
-  "promise",
-  "react-render",
-  "api-network",
-  "api-http",
-]);
+const allowedKinds = new Set(["javascript", "promise", "react-render", "api-network", "api-http"]);
 const allowedFields = new Set(["kind", "status", "code", "requestId"]);
 const errorCodePattern = /^[A-Z][A-Z0-9_]{0,63}$/;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
