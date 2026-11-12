@@ -55,14 +55,8 @@ test("LAJE-152 state machine definition has valid state transitions", () => {
     "WaitForRdsStart",
   );
   assert.equal(stateMachine.States.WaitForRdsStart.Seconds, 60);
-  assert.equal(
-    stateMachine.States.WaitForRdsStart.Next,
-    "RenewLockBeforeRdsStartCheck",
-  );
-  assert.equal(
-    stateMachine.States.RenewLockBeforeRdsStartCheck.Next,
-    "ReadRdsForStart",
-  );
+  assert.equal(stateMachine.States.WaitForRdsStart.Next, "RenewLockBeforeRdsStartCheck");
+  assert.equal(stateMachine.States.RenewLockBeforeRdsStartCheck.Next, "ReadRdsForStart");
   assert.equal(
     stateMachine.States.ChooseRdsStopAction.Choices.find(
       (choice) => choice.StringEquals === "backing-up",
