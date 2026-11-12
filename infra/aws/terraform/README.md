@@ -65,11 +65,11 @@ O workflow Terraform valida formatação e configuração nas mudanças de infra
 
 ## LAJE-152: ciclo de disponibilidade
 
-As agendas de desligamento às 00h e inicialização às 09h usam o fuso `America/Sao_Paulo`, sem janela flexível, e permanecem `DISABLED` enquanto `staging_automation_schedules_enabled=false`. A validação Terraform exige endereço SNS externo e confirmação manual da assinatura antes de habilitar as agendas.
+O desligamento automático às 00h usa o fuso `America/Sao_Paulo`, sem janela flexível, quando `staging_automation_schedules_enabled=true`. A religação automática às 09h fica **desabilitada por padrão**: exige também `staging_automation_auto_start_enabled=true`. O workflow recebe `STAGING_AUTOMATION_AUTO_START_ENABLED` (padrão `false`) para controlar apenas a religação; não desative `STAGING_AUTOMATION_SCHEDULES_ENABLED` para desligar a religação, pois isso também desativaria a parada noturna. A validação Terraform exige endereço SNS externo e confirmação manual da assinatura antes de habilitar a automação.
 
 A máquina de estados usa o item de lock do serviço ECS na tabela DynamoDB existente de rotação. O desligamento grava um pedido de drenagem, aguarda o worker SQS confirmar que não há trabalho corrente, reduz o ECS a zero, valida o encerramento das tasks e só então para o RDS. A inicialização aguarda RDS `available`, uma task ECS estável e os endpoints de health e rota pública segura. Falhas geram notificações SNS e são registradas no CloudWatch.
 
-O desligamento diário causa indisponibilidade planejada entre 00h e 09h. O horário das 09h inicia o processo, não promete que o banco ou a API estarão prontos exatamente nesse instante.
+Com religação automática desabilitada, a API permanece indisponível após a meia-noite até uma inicialização **manual** via `npm run aws:on` (ou fluxo `dev:aws`). Use `npm run aws:off` para encerrar antes da meia-noite se quiser. A tarefa de início às 09h continua provisionada, porém em estado `DISABLED`; se for reabilitada futuramente, 09h apenas inicia a sequência, sem garantir API pronta naquele instante. Manter recursos continuamente ativos durante a janela de disponibilidade pública exigida pelo TCC.
 
 `staging_api_cloud_map_enabled=false` mantém Cloud Map fora do plano padrão. Quando habilitado para canário, a rota AWS IAM é adicional e a rota principal continua no ALB. `staging_api_use_cloud_map` só pode ser considerado após testes funcionais e comparação de custo. O plano desta tarefa não importa nem remove API Gateways sem rotas, VPC Links adicionais ou o ALB.
 
