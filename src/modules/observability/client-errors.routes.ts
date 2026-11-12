@@ -51,7 +51,8 @@ export function createClientErrorsRouter(allowedOrigins: readonly string[]): Rou
         typeof fields.kind !== "string" ||
         !allowedKinds.has(fields.kind) ||
         (fields.status !== undefined &&
-          (!Number.isInteger(fields.status) ||
+          (typeof fields.status !== "number" ||
+            !Number.isInteger(fields.status) ||
             (fields.status as number) < 500 ||
             (fields.status as number) > 599)) ||
         (fields.code !== undefined &&
