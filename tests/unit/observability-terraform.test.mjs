@@ -20,9 +20,22 @@ test("LAJE-40 provisions a dashboard and retains sanitized access logs for 7 day
   assert.match(terraform, /"AWS\/RDS"/);
   assert.match(terraform, /"AWS\/SQS"/);
   assert.match(apiTerraform, /access_log_settings\s+\{/);
-  assert.match(apiTerraform, /destination_arn = aws_cloudwatch_log_group\.api_gateway_access\[0\]\.arn/);
+  assert.match(
+    apiTerraform,
+    /destination_arn = aws_cloudwatch_log_group\.api_gateway_access\[0\]\.arn/,
+  );
   assert.match(apiTerraform, /requestId\s+= "\$context\.requestId"/);
-  for (const prohibited of ["$context.identity.sourceIp", "$context.path", "$context.requestOverride", "$context.authorizer", "$context.requestBody"]) {
-    assert.equal(apiTerraform.includes(prohibited), false, `Forbidden access-log field: ${prohibited}`);
+  for (const prohibited of [
+    "$context.identity.sourceIp",
+    "$context.path",
+    "$context.requestOverride",
+    "$context.authorizer",
+    "$context.requestBody",
+  ]) {
+    assert.equal(
+      apiTerraform.includes(prohibited),
+      false,
+      `Forbidden access-log field: ${prohibited}`,
+    );
   }
 });
