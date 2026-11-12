@@ -663,6 +663,21 @@ resource "aws_apigatewayv2_stage" "api_default" {
   name        = "$default"
   auto_deploy = true
 
+  # LAJE-40: request metadata only (no URL, IP address, headers or request body).
+  access_log_settings {
+    destination_arn = aws_cloudwatch_log_group.api_gateway_access[0].arn
+    format = jsonencode({
+      event              = "api_gateway_access"
+      requestId          = "$context.requestId"
+      requestTime        = "$context.requestTime"
+      method             = "$context.httpMethod"
+      routeKey           = "$context.routeKey"
+      status             = "$context.status"
+      responseLatencyMs    = "$context.responseLatency"
+      integrationLatencyMs = "$context.integrationLatency"
+    })
+  }
+
   default_route_settings {
     detailed_metrics_enabled = false
     throttling_burst_limit   = 100
