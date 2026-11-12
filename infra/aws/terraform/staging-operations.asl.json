@@ -84,6 +84,11 @@
         { "Variable": "$.rds.status", "StringEquals": "backing-up", "Next": "WaitForRdsStart" },
         {
           "Variable": "$.rds.status",
+          "StringEquals": "configuring-enhanced-monitoring",
+          "Next": "WaitForRdsStart"
+        },
+        {
+          "Variable": "$.rds.status",
           "StringEquals": "stopping",
           "Next": "WaitForRdsStoppedBeforeStart"
         }
