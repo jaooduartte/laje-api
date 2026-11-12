@@ -666,7 +666,7 @@ resource "aws_apigatewayv2_stage" "api_default" {
   # LAJE-40: request metadata only (no URL, IP address, headers or request body).
   access_log_settings {
     destination_arn = aws_cloudwatch_log_group.api_gateway_access[0].arn
-    format          = jsonencode({
+    format = jsonencode({
       event                = "api_gateway_access"
       requestId            = "$context.requestId"
       requestTime          = "$context.requestTime"
