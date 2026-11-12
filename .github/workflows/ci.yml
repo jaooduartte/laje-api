@@ -98,8 +98,6 @@ jobs:
         run: |
           npx prettier src/modules/brackets/bracket-operations.routes.ts --write
           git diff -- src/modules/brackets/bracket-operations.routes.ts
-          npx prettier docs/observability.md src/common/middlewares/observability.middleware.ts src/modules/observability/client-errors.routes.ts tests/unit/observability-terraform.test.mjs --write
-          git diff -- docs/observability.md src/common/middlewares/observability.middleware.ts src/modules/observability/client-errors.routes.ts tests/unit/observability-terraform.test.mjs
 
       - name: Check formatting
         run: npm run format:check
