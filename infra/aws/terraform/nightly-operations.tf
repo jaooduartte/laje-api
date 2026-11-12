@@ -334,7 +334,7 @@ resource "aws_scheduler_schedule" "staging_operations_start" {
   name                         = "${local.name_prefix}-operations-start"
   schedule_expression          = "cron(0 9 * * ? *)"
   schedule_expression_timezone = "America/Sao_Paulo"
-  state                        = var.staging_automation_schedules_enabled ? "ENABLED" : "DISABLED"
+  state                        = var.staging_automation_schedules_enabled && var.staging_automation_auto_start_enabled ? "ENABLED" : "DISABLED"
 
   flexible_time_window {
     mode = "OFF"

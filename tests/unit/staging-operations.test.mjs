@@ -67,7 +67,7 @@ test("LAJE-152 state machine definition has valid state transitions", () => {
   assert.equal(stateMachine.States.ReleaseLockAfterStop.Next, "StopSucceeded");
 });
 
-test("LAJE-152 schedules use Sao Paulo time and stay disabled by default", () => {
+test("LAJE-152 keeps scheduled stop enabled independently of optional start", () => {
   assert.match(scheduleTerraform, /schedule_expression\s+= "cron\(0 0 \* \* \? \*\)"/);
   assert.match(scheduleTerraform, /schedule_expression\s+= "cron\(0 9 \* \* \? \*\)"/);
   assert.equal(
@@ -80,11 +80,19 @@ test("LAJE-152 schedules use Sao Paulo time and stay disabled by default", () =>
         /state\s+= var\.staging_automation_schedules_enabled \? "ENABLED" : "DISABLED"/g,
       ) ?? []
     ).length,
-    2,
+    1,
+  );
+  assert.match(
+    scheduleTerraform,
+    /state\s+= var\.staging_automation_schedules_enabled && var\.staging_automation_auto_start_enabled \? "ENABLED" : "DISABLED"/,
   );
   assert.match(
     variableTerraform,
     /variable "staging_automation_schedules_enabled" \{[\s\S]*?default\s+= false/,
+  );
+  assert.match(
+    variableTerraform,
+    /variable "staging_automation_auto_start_enabled" \{[\s\S]*?default\s+= false/,
   );
 });
 

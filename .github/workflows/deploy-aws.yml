@@ -37,6 +37,7 @@ env:
   TF_VAR_staging_co_presidency_email: ${{ vars.STAGING_CO_PRESIDENCY_EMAIL }}
   TF_VAR_staging_app_url: ${{ vars.STAGING_APP_URL || 'https://laje-tcc.vercel.app' }}
   TF_VAR_staging_automation_schedules_enabled: ${{ vars.STAGING_AUTOMATION_SCHEDULES_ENABLED || 'false' }}
+  TF_VAR_staging_automation_auto_start_enabled: ${{ vars.STAGING_AUTOMATION_AUTO_START_ENABLED || 'false' }}
   TF_VAR_staging_automation_alert_email: ${{ vars.STAGING_AUTOMATION_ALERT_EMAIL || '' }}
   TF_VAR_staging_automation_alert_email_confirmed: ${{ vars.STAGING_AUTOMATION_ALERT_EMAIL_CONFIRMED || 'false' }}
   TF_VAR_staging_api_cloud_map_enabled: ${{ vars.STAGING_API_CLOUD_MAP_ENABLED || 'false' }}
@@ -123,6 +124,11 @@ jobs:
           case "${TF_VAR_staging_automation_schedules_enabled}" in
             true|false) ;;
             *) echo "STAGING_AUTOMATION_SCHEDULES_ENABLED must be true or false." >&2; exit 1 ;;
+          esac
+
+          case "${TF_VAR_staging_automation_auto_start_enabled}" in
+            true|false) ;;
+            *) echo "STAGING_AUTOMATION_AUTO_START_ENABLED must be true or false." >&2; exit 1 ;;
           esac
 
           case "${TF_VAR_staging_automation_alert_email_confirmed}" in
