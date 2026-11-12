@@ -130,7 +130,8 @@ if (argumentsList[0] === "sts") {
 } else if (argumentsList[0] === "dynamodb" && argumentsList[1] === "get-item") {
   const keyIndex = argumentsList.indexOf("--key");
   const key = JSON.parse(argumentsList[keyIndex + 1]);
-  process.stdout.write(JSON.stringify({ Item: state.items[key.LockId.S] }));
+  const item = state.items[key.LockId.S];
+  process.stdout.write(item ? JSON.stringify({ Item: item }) : "");
 } else if (argumentsList[0] === "dynamodb" && argumentsList[1] === "update-item") {
   const keyIndex = argumentsList.indexOf("--key");
   const key = JSON.parse(argumentsList[keyIndex + 1]);
@@ -232,6 +233,58 @@ test("preserves RDS and ECS resources that were already active", async () => {
     state.calls.some((argumentsList) => argumentsList[1] === "stop-db-instance"),
     false,
   );
+});
+
+test("starts AWS when the manual override item is absent", async () => {
+  await setState({ rdsStatus: "stopped", ecsDesiredCount: 0, ecsExists: true });
+
+  const resourcesStartedBySession = await startAwsInfrastructure();
+  const state = await getState();
+
+  assert.equal(resourcesStartedBySession.rds, true);
+  assert.equal(resourcesStartedBySession.ecs, true);
+  assert.equal(state.rdsStatus, "available");
+  assert.equal(state.ecsDesiredCount, 1);
+  assert.ok(state.items["manual-override"]);
+});
+
+test("starts AWS without an override when scheduled shutdown is allowed", async () => {
+  await setState({ rdsStatus: "stopped", ecsDesiredCount: 0, ecsExists: true });
+
+  const resourcesStartedBySession = await startAwsInfrastructure({
+    allowScheduledShutdown: true,
+  });
+  const state = await getState();
+
+  assert.equal(resourcesStartedBySession.rds, true);
+  assert.equal(resourcesStartedBySession.ecs, true);
+  assert.equal(state.rdsStatus, "available");
+  assert.equal(state.ecsDesiredCount, 1);
+  assert.equal(state.items["manual-override"], undefined);
+});
+
+test("does not start AWS when a manual override blocks scheduled shutdown", async () => {
+  const activeOverride = {
+    LockId: { S: "manual-override" },
+    Holder: { S: "active-session" },
+    ExpiresAt: { N: String(Math.floor(Date.now() / 1_000) + 600) },
+  };
+  await setState({
+    rdsStatus: "stopped",
+    ecsDesiredCount: 0,
+    ecsExists: true,
+    items: { "manual-override": activeOverride },
+  });
+
+  await assert.rejects(
+    startAwsInfrastructure({ allowScheduledShutdown: true }),
+    /override manual ativo/i,
+  );
+  const state = await getState();
+
+  assert.equal(state.rdsStatus, "stopped");
+  assert.equal(state.ecsDesiredCount, 0);
+  assert.deepEqual(state.items["manual-override"], activeOverride);
 });
 
 test("rejects an operation lock held by a different local AWS operation", async () => {
