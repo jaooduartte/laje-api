@@ -80,7 +80,7 @@ test("LAJE-152 scheduled midnight stop ignores manual override and preserves saf
   assert.equal(stopChoice?.Next, "ListRunningTasks");
   assert.match(
     scheduleTerraform,
-    /resource "aws_scheduler_schedule" "staging_operations_stop" \\{[\\s\\S]*?input\\s+= jsonencode\\(\\{ action = "stop" \\}\\)/,
+    /resource "aws_scheduler_schedule" "staging_operations_stop" \{[\s\S]*?input\s+= jsonencode\(\{ action = "stop" \}\)/,
   );
   assert.equal(stateMachine.States.AcquireLock.Next, "SelectAction");
   assert.equal(stateMachine.States.ListRunningTasks.Next, "ChooseDrainAction");
