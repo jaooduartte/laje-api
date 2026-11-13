@@ -44,7 +44,7 @@
       "Type": "Choice",
       "Choices": [
         { "Variable": "$.action", "StringEquals": "start", "Next": "ClearDrainBeforeStart" },
-        { "Variable": "$.action", "StringEquals": "stop", "Next": "CheckOverride" }
+        { "Variable": "$.action", "StringEquals": "stop", "Next": "ListRunningTasks" }
       ],
       "Default": "InvalidAction"
     },
@@ -226,45 +226,6 @@
       "Next": "StartSucceeded"
     },
     "StartSucceeded": { "Type": "Succeed" },
-    "CheckOverride": {
-      "Type": "Task",
-      "Resource": "arn:aws:states:::lambda:invoke",
-      "Parameters": {
-        "FunctionName": "${staging_operations_lambda_arn}",
-        "Payload": { "action": "checkOverride" }
-      },
-      "ResultSelector": { "active.$": "$.Payload.active" },
-      "ResultPath": "$.override",
-      "Catch": [
-        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.failure", "Next": "CleanupFailure" }
-      ],
-      "Next": "ChooseOverrideAction"
-    },
-    "ChooseOverrideAction": {
-      "Type": "Choice",
-      "Choices": [
-        {
-          "Variable": "$.override.active",
-          "BooleanEquals": true,
-          "Next": "ReleaseLockAfterOverride"
-        }
-      ],
-      "Default": "ListRunningTasks"
-    },
-    "ReleaseLockAfterOverride": {
-      "Type": "Task",
-      "Resource": "arn:aws:states:::lambda:invoke",
-      "Parameters": {
-        "FunctionName": "${staging_operations_lambda_arn}",
-        "Payload": { "action": "releaseLock", "operationId.$": "$$.Execution.Id" }
-      },
-      "ResultPath": null,
-      "Catch": [
-        { "ErrorEquals": ["States.ALL"], "ResultPath": "$.failure", "Next": "CleanupFailure" }
-      ],
-      "Next": "StopSkippedByOverride"
-    },
-    "StopSkippedByOverride": { "Type": "Succeed" },
     "ListRunningTasks": {
       "Type": "Task",
       "Resource": "arn:aws:states:::lambda:invoke",
