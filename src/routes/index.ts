@@ -15,6 +15,8 @@ import { HealthService } from "../modules/health/health.service.js";
 import { createLeagueEventConflictsRouter } from "../modules/league-events/league-event-conflicts.routes.js";
 import { createLeagueEventsRouter } from "../modules/league-events/league-events.routes.js";
 import { createMatchesRouter } from "../modules/matches/matches.routes.js";
+import { createClientErrorsRouter } from "../modules/observability/client-errors.routes.js";
+import { appConfig } from "../config/app.config.js";
 import { createPublicAccessRouter } from "../modules/public-access/public-access.routes.js";
 import { createPublicRuntimeRouter } from "../modules/public-runtime/public-runtime.routes.js";
 import { createRealtimeReadRouter } from "../modules/realtime-read/realtime-read.routes.js";
@@ -40,6 +42,7 @@ apiRouter.get("/", (_request, response) => {
 });
 
 apiRouter.use("/health", createHealthRouter(healthService));
+apiRouter.use("/observability/client-errors", createClientErrorsRouter(appConfig.corsOrigins));
 apiRouter.use("/calendar-subscription-feed", createCalendarSubscriptionRouter());
 apiRouter.use("/bracket-preview-jobs", createGlobalBracketPreviewRouter(authService));
 apiRouter.use("/bracket-operations", createBracketOperationsRouter(authService));

@@ -167,3 +167,7 @@ No Cost Explorer consultado em 11/11/2026, o serviço `Amazon Elastic Load Balan
 - [Publicação](./deployment.md)
 - [Terraform AWS](../infra/aws/terraform/README.md)
 - [Workflow de deploy](../.github/workflows/deploy-aws.yml)
+
+## LAJE-40: observabilidade e custos
+
+A coleta de erros do frontend AWS-only, o painel CloudWatch e os access logs sanitizados do API Gateway estão descritos no [runbook de observabilidade](./observability.md). A definição Terraform precisa de revisão e aplicação específica para entrar em operação; não executar um deployment completo da API somente para ativar um painel. Logs de acesso e dashboards podem gerar custos mesmo fora das janelas de uso; as métricas devem distinguir suspensão planejada de incidente.

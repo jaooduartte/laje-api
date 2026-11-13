@@ -81,3 +81,4 @@ O texto da [LAJE-152](https://joaoduartte.atlassian.net/browse/LAJE-152) registr
 - [Publicação](../../../docs/deployment.md)
 - [Runbook AWS](../../../docs/staging-aws.md)
 - [Workflow de deploy](../../../.github/workflows/deploy-aws.yml)
+- [Painel CloudWatch e investigação de erros (LAJE-40)](../../../docs/observability.md)

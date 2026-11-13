@@ -114,3 +114,8 @@ output "staging_bracket_preview_scheduler_name" {
   value       = aws_scheduler_schedule.bracket_preview_maintenance.name
   description = "EventBridge Scheduler name for preview recovery and cleanup."
 }
+
+output "staging_observability_dashboard_name" {
+  value       = var.staging_api_enabled ? aws_cloudwatch_dashboard.staging_observability[0].dashboard_name : null
+  description = "CloudWatch dashboard for LAJE TCC. Null when staging_api_enabled=false."
+}
