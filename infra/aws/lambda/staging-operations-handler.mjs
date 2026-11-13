@@ -66,17 +66,6 @@ async function loadDependencies() {
             if (error?.name !== "ConditionalCheckFailedException") throw error;
           }
         },
-        async getOverride() {
-          const response = await dynamodb.send(
-            new dynamodbModule.GetItemCommand({
-              TableName: process.env.LOCK_TABLE,
-              Key: { LockId: { S: "manual-override" } },
-              ConsistentRead: true,
-            }),
-          );
-          const expiresAt = Number(response.Item?.ExpiresAt?.N ?? 0);
-          return { active: expiresAt > Math.floor(Date.now() / 1000) };
-        },
         async requestDrain(operationId) {
           const now = Math.floor(Date.now() / 1000);
           await dynamodb.send(
@@ -289,7 +278,6 @@ export async function handler(event) {
   if (event.action === "renewLock") return dependencies.renewLock(operationId);
   if (event.action === "releaseLock") return dependencies.releaseLock(operationId);
   if (event.action === "cleanup") return dependencies.cleanup(operationId);
-  if (event.action === "checkOverride") return dependencies.getOverride();
   if (event.action === "requestDrain") return dependencies.requestDrain(operationId);
   if (event.action === "getDrain") return dependencies.getDrain(operationId);
   if (event.action === "clearDrain") return dependencies.clearDrain(operationId);
