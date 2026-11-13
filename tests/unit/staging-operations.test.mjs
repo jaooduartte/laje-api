@@ -11,6 +11,10 @@ const apiPath = new URL("../../infra/aws/terraform/staging-api.tf", import.meta.
 const variablesPath = new URL("../../infra/aws/terraform/variables.tf", import.meta.url);
 
 const stateMachine = JSON.parse(await readFile(stateMachinePath, "utf8"));
+const operationsLambda = await readFile(
+  new URL("../../infra/aws/lambda/staging-operations-handler.mjs", import.meta.url),
+  "utf8",
+);
 const scheduleTerraform = await readFile(schedulePath, "utf8");
 const apiTerraform = await readFile(apiPath, "utf8");
 const variableTerraform = await readFile(variablesPath, "utf8");
@@ -65,6 +69,46 @@ test("LAJE-152 state machine definition has valid state transitions", () => {
   );
   assert.equal(stateMachine.States.ReleaseLockAfterStart.Next, "StartSucceeded");
   assert.equal(stateMachine.States.ReleaseLockAfterStop.Next, "StopSucceeded");
+});
+
+test("LAJE-152 scheduled midnight stop ignores manual override and preserves safe shutdown", () => {
+  // Regression: the 13/11/2026 00h execution returned SUCCEEDED without stopping
+  // resources because CheckOverride diverted to StopSkippedByOverride.
+  const stopChoice = stateMachine.States.SelectAction.Choices.find(
+    (choice) => choice.StringEquals === "stop",
+  );
+  assert.equal(stopChoice?.Next, "ListRunningTasks");
+  assert.match(
+    scheduleTerraform,
+    /resource "aws_scheduler_schedule" "staging_operations_stop" \\{[\\s\\S]*?input\\s+= jsonencode\\(\\{ action = "stop" \\}\\)/,
+  );
+  assert.equal(stateMachine.States.AcquireLock.Next, "SelectAction");
+  assert.equal(stateMachine.States.ListRunningTasks.Next, "ChooseDrainAction");
+  assert.equal(stateMachine.States.ChooseDrainAction.Choices[0].Next, "RequestWorkerDrain");
+  assert.equal(stateMachine.States.ChooseDrainAction.Default, "SetEcsDesiredZero");
+  assert.equal(stateMachine.States.ChooseDrainOutcome.Choices[0].Next, "SetEcsDesiredZero");
+  assert.equal(stateMachine.States.ChooseDrainOutcome.Default, "WaitForWorkerDrain");
+  assert.equal(stateMachine.States.SetEcsDesiredZero.Parameters.Payload.desiredCount, 0);
+  assert.equal(stateMachine.States.VerifyStoppedTasks.Next, "ReadRdsForStop");
+  assert.equal(
+    stateMachine.States.ChooseRdsStopAction.Choices.find(
+      (choice) => choice.StringEquals === "available",
+    )?.Next,
+    "StopRds",
+  );
+  assert.equal(stateMachine.States.ReleaseLockAfterStop.Next, "StopSucceeded");
+
+  // A stale/renewed session marker must never make a scheduled stop SUCCEEDED
+  // before any ECS/RDS action. The Lambda no longer exposes this dead branch.
+  for (const obsolete of [
+    "CheckOverride",
+    "ChooseOverrideAction",
+    "ReleaseLockAfterOverride",
+    "StopSkippedByOverride",
+  ]) {
+    assert.equal(obsolete in stateMachine.States, false);
+  }
+  assert.doesNotMatch(operationsLambda, /checkOverride|getOverride/);
 });
 
 test("LAJE-152 keeps scheduled stop enabled independently of optional start", () => {
